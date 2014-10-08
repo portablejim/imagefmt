@@ -1194,7 +1194,7 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
 
     let thumbsize = buf[18] as uint * buf[19] as uint * 3;
     if thumbsize != len - 16 {
-        return IFErr!("corrupt tga header");
+        return IFErr!("corrupt jpeg header");
     }
 
     try!(skip(reader, thumbsize));
