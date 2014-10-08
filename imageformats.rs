@@ -70,7 +70,7 @@ pub fn read_image_info(filename: &str) -> IoResult<IFInfo> {
     let readfunc = match extract_extension(filename) {
         Some(".png")                 => read_png_info,
         Some(".tga")                 => read_tga_info,
-        //Some(".jpg") | Some(".jpeg") => read_jpeg_info,   // TODO
+        Some(".jpg") | Some(".jpeg") => read_jpeg_info,
         _ => return IFErr!("extension not recognized"),
     };
     let file = File::open(&Path::new(filename));
@@ -1170,34 +1170,51 @@ struct TgaEncoder<'r, R:'r> {
 // ------------------------------------------------------------
 // Baseline JPEG decoder
 
+pub fn read_jpeg_info<R: Reader>(stream: &mut R) -> IoResult<IFInfo> {
+    try!(read_jfif(stream));
+
+    loop {
+        let mut marker: [u8, ..2] = [0, 0];
+        try!(stream.read_at_least(marker.len(), marker));
+
+        if marker[0] != 0xff { return IFErr!("no marker"); }
+        while marker[1] == 0xff {
+            try!(stream.read_at_least(1, marker[mut 1..2]));
+        }
+
+        match marker[1] {
+            SOF0 | SOF2 => {
+                let mut tmp: [u8, ..8] = [0,0,0,0, 0,0,0,0];
+                try!(stream.read_at_least(tmp.len(), tmp));
+                return Ok(IFInfo {
+                    w: u16_from_be(tmp[5..7]) as uint,
+                    h: u16_from_be(tmp[3..5]) as uint,
+                    c: match tmp[7] {
+                           1 => FmtY,
+                           3 => FmtRGB,
+                           _ => return IFErr!("not valid baseline jpeg")
+                       },
+                });
+            }
+            SOS | EOI => return IFErr!("no frame header"),
+            DRI | DHT | DQT | COM | APP0 ... APPF => {
+                let mut tmp: [u8, ..2] = [0, 0];
+                try!(stream.read_at_least(tmp.len(), tmp));
+                let len = u16_from_be(tmp) - 2;
+                try!(skip(stream, len as uint));
+            }
+            _ => return IFErr!("invalid / unsupported marker"),
+        }
+    }
+}
+
 pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage> {
     let req_fmt = match req_fmt {
         FmtAuto | FmtY | FmtYA | FmtRGB | FmtRGBA => req_fmt,
         _ => return IFErr!("format not supported")
     };
 
-    let mut buf: [u8, ..20] = unsafe { zeroed() }; // SOI, APP0
-    try!(reader.read_at_least(buf.len(), buf));
-
-    let len = u16_from_be(buf[4..6]) as uint;
-
-    if !equal(buf[0..4], [0xff_u8, 0xd8, 0xff, 0xe0]) ||
-       !equal(buf[6..11], b"JFIF\0") || len < 16 {
-        return IFErr!("not JPEG/JFIF");
-    }
-
-    if buf[11] != 1 {
-        return IFErr!("version not supported");
-    }
-
-    // ignore density_unit, -x, -y at 13, 14..16, 16..18
-
-    let thumbsize = buf[18] as uint * buf[19] as uint * 3;
-    if thumbsize != len - 16 {
-        return IFErr!("corrupt jpeg header");
-    }
-
-    try!(skip(reader, thumbsize));
+    try!(read_jfif(reader));
 
     let dc = &mut JpegDecoder {
         stream      : reader,
@@ -1221,13 +1238,11 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
         vmax        : 0,
     };
 
+    try!(read_markers(dc));   // reads until first scan header
+
     for c in range(0, dc.comps.len()) {
         dc.comps[c].data = Vec::from_elem(0, 0u8);
     }
-
-    //println!("reading markers...");
-    try!(read_markers(dc));   // reads until first scan header
-    //println!("markers read");
 
     if dc.eoi_reached {
         return IFErr!("no image data");
@@ -1248,6 +1263,30 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
         c      : dc.tgt_fmt,
         pixels : try!(decode_jpeg(dc))
     })
+}
+
+fn read_jfif<R: Reader>(reader: &mut R) -> IoResult<()> {
+    let mut buf: [u8, ..20] = unsafe { zeroed() }; // SOI, APP0
+    try!(reader.read_at_least(buf.len(), buf));
+
+    let len = u16_from_be(buf[4..6]) as uint;
+
+    if !equal(buf[0..4], [0xff_u8, 0xd8, 0xff, 0xe0]) ||
+       !equal(buf[6..11], b"JFIF\0") || len < 16 {
+        return IFErr!("not JPEG/JFIF");
+    }
+
+    if buf[11] != 1 {
+        return IFErr!("version not supported");
+    }
+
+    // ignore density_unit, -x, -y at 13, 14..16, 16..18
+
+    let thumbsize = buf[18] as uint * buf[19] as uint * 3;
+    if thumbsize != len - 16 {
+        return IFErr!("corrupt jpeg header");
+    }
+    skip(reader, thumbsize)
 }
 
 struct JpegDecoder<'r, R:'r> {
@@ -1345,7 +1384,7 @@ fn read_markers<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
 //static SOI: u8 = 0xd8;     // start of image
 static SOF0: u8 = 0xc0;    // start of frame / baseline DCT
 //static SOF1: u8 = 0xc1;    // start of frame / extended seq.
-//static SOF2: u8 = 0xc2;    // start of frame / progressive DCT
+static SOF2: u8 = 0xc2;    // start of frame / progressive DCT
 //static SOF3: u8 = 0xc3;    // start of frame / lossless
 //static SOF9: u8 = 0xc9;    // start of frame / extended seq., arithmetic
 //static SOF11: u8 = 0xcb;    // start of frame / lossless, arithmetic
