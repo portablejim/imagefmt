@@ -1381,27 +1381,27 @@ fn read_markers<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     Ok(())
 }
 
-//static SOI: u8 = 0xd8;     // start of image
-static SOF0: u8 = 0xc0;    // start of frame / baseline DCT
-//static SOF1: u8 = 0xc1;    // start of frame / extended seq.
-static SOF2: u8 = 0xc2;    // start of frame / progressive DCT
-//static SOF3: u8 = 0xc3;    // start of frame / lossless
-//static SOF9: u8 = 0xc9;    // start of frame / extended seq., arithmetic
-//static SOF11: u8 = 0xcb;    // start of frame / lossless, arithmetic
-static DHT: u8 = 0xc4;     // define huffman tables
-static DQT: u8 = 0xdb;     // define quantization tables
-static DRI: u8 = 0xdd;     // define restart interval
-static SOS: u8 = 0xda;     // start of scan
-//static DNL: u8 = 0xdc;     // define number of lines
-static RST0: u8 = 0xd0;    // restart entropy coded data
+//const SOI: u8 = 0xd8;     // start of image
+const SOF0: u8 = 0xc0;    // start of frame / baseline DCT
+//const SOF1: u8 = 0xc1;    // start of frame / extended seq.
+const SOF2: u8 = 0xc2;    // start of frame / progressive DCT
+//const SOF3: u8 = 0xc3;    // start of frame / lossless
+//const SOF9: u8 = 0xc9;    // start of frame / extended seq., arithmetic
+//const SOF11: u8 = 0xcb;    // start of frame / lossless, arithmetic
+const DHT: u8 = 0xc4;     // define huffman tables
+const DQT: u8 = 0xdb;     // define quantization tables
+const DRI: u8 = 0xdd;     // define restart interval
+const SOS: u8 = 0xda;     // start of scan
+//const DNL: u8 = 0xdc;     // define number of lines
+const RST0: u8 = 0xd0;    // restart entropy coded data
 // ...
-static RST7: u8 = 0xd7;    // restart entropy coded data
-static APP0: u8 = 0xe0;    // application 0 segment
+const RST7: u8 = 0xd7;    // restart entropy coded data
+const APP0: u8 = 0xe0;    // application 0 segment
 // ...
-static APPF: u8 = 0xef;    // application f segment
-//static DAC: u8 = 0xcc;     // define arithmetic conditioning table
-static COM: u8 = 0xfe;     // comment
-static EOI: u8 = 0xd9;     // end of image
+const APPF: u8 = 0xef;    // application f segment
+//const DAC: u8 = 0xcc;     // define arithmetic conditioning table
+const COM: u8 = 0xfe;     // comment
+const EOI: u8 = 0xd9;     // end of image
 
 fn read_huffman_tables<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     let mut buf: [u8, ..17] = unsafe { zeroed() };
