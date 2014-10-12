@@ -2161,7 +2161,7 @@ fn y_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-static y_to_bgr: LineConverter = y_to_rgb;
+const y_to_bgr: LineConverter = y_to_rgb;
 fn y_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0u;
     for s in range(0u, src_line.len()) {
@@ -2172,7 +2172,7 @@ fn y_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-static y_to_bgra: LineConverter = y_to_rgba;
+const y_to_bgra: LineConverter = y_to_rgba;
 fn y_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0u;
     for s in range(0u, src_line.len()) {
@@ -2192,7 +2192,7 @@ fn ya_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-static ya_to_bgr: LineConverter = ya_to_rgb;
+const ya_to_bgr: LineConverter = ya_to_rgb;
 fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0u;
     for s in range_step(0, src_line.len(), 2) {
@@ -2203,7 +2203,7 @@ fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-static ya_to_bgra: LineConverter = ya_to_rgba;
+const ya_to_bgra: LineConverter = ya_to_rgba;
 fn ya_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0u;
     for s in range_step(0, src_line.len(), 2) {
@@ -2287,7 +2287,7 @@ fn bgr_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-static rgb_to_bgr: LineConverter = bgr_to_rgb;
+const rgb_to_bgr: LineConverter = bgr_to_rgb;
 fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0u;
     for s in range_step(0, src_line.len(), 3) {
@@ -2298,7 +2298,7 @@ fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-static rgb_to_bgra: LineConverter = bgr_to_rgba;
+const rgb_to_bgra: LineConverter = bgr_to_rgba;
 fn bgr_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0u;
     for s in range_step(0, src_line.len(), 3) {
@@ -2327,7 +2327,7 @@ fn bgra_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-static rgba_to_bgr: LineConverter = bgra_to_rgb;
+const rgba_to_bgr: LineConverter = bgra_to_rgb;
 fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0u;
     for s in range_step(0, src_line.len(), 4) {
@@ -2338,7 +2338,7 @@ fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-static rgba_to_bgra: LineConverter = bgra_to_rgba;
+const rgba_to_bgra: LineConverter = bgra_to_rgba;
 fn bgra_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0u;
     for s in range_step(0, src_line.len(), 4) {
