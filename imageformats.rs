@@ -20,7 +20,7 @@
     IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
     CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#![allow(non_uppercase_statics)]    // for the static function pointers
+#![allow(non_upper_case_globals)]    // for the static function pointers
 
 extern crate flate;
 use std::io::{File, BufferedReader, BufferedWriter, IoResult, IoError, OtherIoError};
@@ -28,6 +28,7 @@ use std::iter::{range_step};
 use std::cmp::min;
 use std::slice::bytes::{copy_memory};
 use std::mem::{zeroed};
+use std::num::Float;
 use self::flate::{inflate_bytes_zlib, deflate_bytes_zlib};
 
 macro_rules! IFErr(
@@ -51,13 +52,13 @@ pub struct IFInfo {
 
 #[deriving(Show, Eq, PartialEq)]
 pub enum ColFmt {
-    FmtAuto = 0,
-    FmtY = 1,
-    FmtYA,
-    FmtRGB,
-    FmtRGBA,
-    FmtBGR,
-    FmtBGRA,
+    Auto = 0,
+    Y = 1,
+    YA,
+    RGB,
+    RGBA,
+    BGR,
+    BGRA,
 }
 
 /** Returns: basic info about an image file. The color format information does
@@ -107,12 +108,13 @@ pub fn write_image(filename: &str, w: uint, h: uint, data: &[u8], tgt_fmt: ColFm
 
 impl ColFmt {
     fn channels(&self) -> uint {
+        use self::ColFmt::*;
         match *self {
-            FmtAuto           => 0,
-            FmtY              => 1,
-            FmtYA             => 2,
-            FmtRGB  | FmtBGR  => 3,
-            FmtRGBA | FmtBGRA => 4,
+            Auto        => 0,
+            Y           => 1,
+            YA          => 2,
+            RGB  | BGR  => 3,
+            RGBA | BGRA => 4,
         }
     }
 }
@@ -142,10 +144,10 @@ pub fn read_png_info<R: Reader>(reader: &mut R) -> IoResult<IFInfo> {
         None => return IFErr!("unsupported color type"),
     };
     let src_fmt = match ctype.color_channels() {
-        1 => FmtY,
-        2 => FmtYA,
-        3 => FmtRGB,
-        4 => FmtRGBA,
+        1 => ColFmt::Y,
+        2 => ColFmt::YA,
+        3 => ColFmt::RGB,
+        4 => ColFmt::RGBA,
         _ => return IFErr!("internal error"),
     };
 
@@ -160,9 +162,9 @@ pub fn read_png_header<R: Reader>(reader: &mut R) -> IoResult<PngHeader> {
     let mut buf = [0u8, ..33];  // file header + IHDR
     try!(reader.read_at_least(buf.len(), &mut buf));
 
-    if !equal(buf[0..8], PNG_FILE_HEADER) ||
+    if !equal(buf[0..8], PNG_FILE_HEADER[]) ||
        !equal(buf[8..16], b"\0\0\0\x0dIHDR") ||
-       !equal(buf[29..33], crc32be(buf[12..29]))
+       !equal(buf[29..33], crc32be(buf[12..29])[])
     {
         return IFErr!("corrupt png header");
     }
@@ -179,10 +181,10 @@ pub fn read_png_header<R: Reader>(reader: &mut R) -> IoResult<PngHeader> {
 }
 
 pub fn read_png<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage> {
-    let req_fmt = match req_fmt {
-        FmtAuto | FmtY | FmtYA | FmtRGB | FmtRGBA => req_fmt,
+    let req_fmt = { use self::ColFmt::*; match req_fmt {
+        Auto | Y | YA | RGB | RGBA => req_fmt,
         _ => return IFErr!("format not supported")
-    };
+    }};
 
     let hdr = try!(read_png_header(reader));
 
@@ -205,10 +207,10 @@ pub fn read_png<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage>
     };
 
     let src_fmt = match ctype.color_channels() {
-        1 => FmtY,
-        2 => FmtYA,
-        3 => FmtRGB,
-        4 => FmtRGBA,
+        1 => ColFmt::Y,
+        2 => ColFmt::YA,
+        3 => ColFmt::RGB,
+        4 => ColFmt::RGBA,
         _ => return IFErr!("internal error"),
     };
 
@@ -217,9 +219,9 @@ pub fn read_png<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage>
         w           : hdr.width as uint,
         h           : hdr.height as uint,
         ilace       : ilace,
-        src_indexed : ctype == PngTypeIdx,
+        src_indexed : ctype == PngColortype::Idx,
         src_fmt     : src_fmt,
-        tgt_fmt     : if req_fmt == FmtAuto { src_fmt } else { req_fmt },
+        tgt_fmt     : if req_fmt == ColFmt::Auto { src_fmt } else { req_fmt },
         chunkmeta   : unsafe { zeroed() },
         readbuf     : Vec::from_elem(4096, 0u8),
         uc_buf      : Vec::from_elem(0, 0u8),
@@ -260,6 +262,7 @@ enum PngStage {
 }
 
 fn decode_png<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<Vec<u8>> {
+    use self::PngStage::*;
 
     let mut result = Vec::from_elem(0, 0u8);
     let mut stage = IhdrParsed;
@@ -291,7 +294,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<Vec<u8>> {
                 palette = try!(dc.stream.read_exact(len));
                 dc.crc.put(palette[]);
                 try!(dc.stream.read_at_least(4, dc.chunkmeta[mut 0..4]));
-                if !equal(dc.crc.finish_be(), dc.chunkmeta[0..4]) {
+                if !equal(dc.crc.finish_be()[], dc.chunkmeta[0..4]) {
                     return IFErr!("corrupt chunk");
                 }
                 stage = PlteParsed;
@@ -301,7 +304,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<Vec<u8>> {
                     return IFErr!("corrupt chunk stream");
                 }
                 try!(dc.stream.read_at_least(4, dc.chunkmeta[mut 0..4]));
-                if len != 0 || !equal(dc.chunkmeta[0..4], [0xae, 0x42, 0x60, 0x82]) {
+                if len != 0 || !equal(dc.chunkmeta[0..4], &[0xae, 0x42, 0x60, 0x82]) {
                     return IFErr!("corrupt chunk");
                 }
                 break;//stage = IendParsed;
@@ -317,7 +320,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<Vec<u8>> {
                 }
 
                 try!(dc.stream.read_at_least(4, dc.chunkmeta[mut 0..4]));
-                if !equal(dc.crc.finish_be(), dc.chunkmeta[0..4]) {
+                if !equal(dc.crc.finish_be()[], dc.chunkmeta[0..4]) {
                     return IFErr!("corrupt chunk");
                 }
             }
@@ -331,25 +334,26 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<Vec<u8>> {
 
 #[deriving(Eq, PartialEq, FromPrimitive)]
 enum PngInterlace {
-    PngIlaceNone, PngIlaceAdam7
+    None, Adam7
 }
 
 #[deriving(Eq, PartialEq, FromPrimitive)]
 enum PngColortype {
-    PngTypeY    = 0,
-    PngTypeRGB  = 2,
-    PngTypeIdx  = 3,
-    PngTypeYA   = 4,
-    PngTypeRGBA = 6,
+    Y    = 0,
+    RGB  = 2,
+    Idx  = 3,
+    YA   = 4,
+    RGBA = 6,
 }
 
 impl PngColortype {
     fn color_channels(&self) -> i64 {
+        use self::PngColortype::*;
         match *self {
-            PngTypeY                => 1,
-            PngTypeRGB | PngTypeIdx => 3,
-            PngTypeYA               => 2,
-            PngTypeRGBA             => 4,
+            Y         => 1,
+            RGB | Idx => 3,
+            YA        => 2,
+            RGBA      => 4,
         }
     }
 }
@@ -391,7 +395,7 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, mut len: uint, palette: &
 
     try!(fill_uc_buf(dc, &mut len));
 
-    if dc.ilace == PngIlaceNone {
+    if dc.ilace == PngInterlace::None {
         let src_linesize = dc.w * filter_step;
         let mut cline = Vec::from_elem(src_linesize+1, 0u8);  // current line + filter byte
         let mut pline = Vec::from_elem(src_linesize+1, 0u8);  // previous line
@@ -510,7 +514,7 @@ fn fill_uc_buf<R: Reader>(dc: &mut PngDecoder<R>, len: &mut uint) -> IoResult<()
 
         // crc
         try!(dc.stream.read_at_least(4, dc.chunkmeta[mut 0..4]));
-        if !equal(dc.crc.finish_be(), dc.chunkmeta[0..4]) {
+        if !equal(dc.crc.finish_be()[], dc.chunkmeta[0..4]) {
             return IFErr!("corrupt image data");
         }
 
@@ -547,21 +551,21 @@ fn next_uncompressed_line<R: Reader>(dc: &mut PngDecoder<R>, dst: &mut[u8]) {
 }
 
 fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: uint) -> IoResult<()> {
-    let ftype: Option<PngFilterType> = FromPrimitive::from_u8(ftype);
+    let ftype: Option<PngFilter> = FromPrimitive::from_u8(ftype);
     match ftype {
-        Some(PngFilterNone)
+        Some(PngFilter::None)
             => { }
-        Some(PngFilterSub) => {
+        Some(PngFilter::Sub) => {
             for k in range(fstep, cline.len()) {
                 cline[k] += cline[k-fstep];
             }
         }
-        Some(PngFilterUp) => {
+        Some(PngFilter::Up) => {
             for k in range(0, cline.len()) {
                 cline[k] += pline[k];
             }
         }
-        Some(PngFilterAverage) => {
+        Some(PngFilter::Average) => {
             for k in range(0, fstep) {
                 cline[k] += pline[k] / 2;
             }
@@ -570,7 +574,7 @@ fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: uint) -> IoResult<()> 
                     ((cline[k-fstep] as uint + pline[k] as uint) / 2) as u8;
             }
         }
-        Some(PngFilterPaeth) => {
+        Some(PngFilter::Paeth) => {
             for k in range(0, fstep) {
                 cline[k] += paeth(0, pline[k], 0);
             }
@@ -601,12 +605,12 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
 }
 
 #[deriving(FromPrimitive)]
-enum PngFilterType {
-    PngFilterNone = 0,
-    PngFilterSub,
-    PngFilterUp,
-    PngFilterAverage,
-    PngFilterPaeth,
+enum PngFilter {
+    None = 0,
+    Sub,
+    Up,
+    Average,
+    Paeth,
 }
 
 // --------------------------------------------------
@@ -621,16 +625,16 @@ pub fn write_png<W: Writer>(writer: &mut W, w: uint, h: uint, data: &[u8], tgt_f
     }
 
     let src_fmt = match src_chans {
-        1 => FmtY,
-        2 => FmtYA,
-        3 => FmtRGB,
-        4 => FmtRGBA,
+        1 => ColFmt::Y,
+        2 => ColFmt::YA,
+        3 => ColFmt::RGB,
+        4 => ColFmt::RGBA,
         _ => return IFErr!("format not supported"),
     };
 
     let tgt_fmt = match tgt_fmt {
-        FmtAuto                         => src_fmt,
-        FmtY | FmtYA | FmtRGB | FmtRGBA => tgt_fmt,
+        ColFmt::Auto                         => src_fmt,
+        ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA => tgt_fmt,
         _ => return IFErr!("invalid format"),
     };
 
@@ -655,23 +659,23 @@ pub fn write_png<W: Writer>(writer: &mut W, w: uint, h: uint, data: &[u8], tgt_f
 fn write_png_header<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
     let mut hdr: [u8, ..33] = unsafe { zeroed() };
 
-    copy_memory(hdr[mut 0..8], PNG_FILE_HEADER);
+    copy_memory(hdr[mut 0..8], PNG_FILE_HEADER[]);
     copy_memory(hdr[mut 8..16], b"\0\0\0\x0dIHDR");
-    copy_memory(hdr[mut 16..20], u32_to_be(ec.w as u32));
-    copy_memory(hdr[mut 20..24], u32_to_be(ec.h as u32));
+    copy_memory(hdr[mut 16..20], u32_to_be(ec.w as u32)[]);
+    copy_memory(hdr[mut 20..24], u32_to_be(ec.h as u32)[]);
     hdr[24] = 8;    // bit depth
     hdr[25] = match ec.tgt_fmt {    // color type
-        FmtY => PngTypeY,
-        FmtYA => PngTypeYA,
-        FmtRGB => PngTypeRGB,
-        FmtRGBA => PngTypeRGBA,
+        ColFmt::Y => PngColortype::Y,
+        ColFmt::YA => PngColortype::YA,
+        ColFmt::RGB => PngColortype::RGB,
+        ColFmt::RGBA => PngColortype::RGBA,
         _ => return IFErr!("not supported"),
     } as u8;
-    copy_memory(hdr[mut 26..29], [0, 0, 0]);  // compression, filter, interlace
+    copy_memory(hdr[mut 26..29], &[0, 0, 0]);  // compression, filter, interlace
     ec.crc.put(hdr[12..29]);
-    copy_memory(hdr[mut 29..33], ec.crc.finish_be());
+    copy_memory(hdr[mut 29..33], ec.crc.finish_be()[]);
 
-    ec.stream.write(hdr)
+    ec.stream.write(hdr[])
 }
 
 struct PngEncoder<'r, W:'r> {
@@ -708,7 +712,7 @@ fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
                 cline[i] - paeth(cline[i-filter_step], pline[i], pline[i-filter_step])
         }
 
-        filtered_image[mut][ti] = PngFilterPaeth as u8;
+        filtered_image[mut][ti] = PngFilter::Paeth as u8;
 
         let swap = pline;
         pline = cline;
@@ -727,7 +731,7 @@ fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
 
     // TODO split up data into smaller chunks?
     let chunklen = compressed.as_slice().len() as u32;
-    try!(ec.stream.write(u32_to_be(chunklen)));
+    try!(ec.stream.write(u32_to_be(chunklen)[]));
     try!(ec.stream.write(b"IDAT"));
     try!(ec.stream.write(compressed.as_slice()));
     try!(ec.stream.write(crc));
@@ -757,15 +761,17 @@ pub struct TgaHeader {
  * for now (don't rely on it, it's not that way on purpose).
  */
 pub fn read_tga_info<R: Reader>(reader: &mut R) -> IoResult<IFInfo> {
+    use self::ColFmt::*;
+
     let hdr = try!(read_tga_header(reader));
     let TgaInfo { src_chans, src_fmt, rle } = try!(parse_tga_header(&hdr));
     let _src_chans = src_chans; let _rle = rle; // warnings be gone
 
     let reported_fmt = match src_fmt {
-        FmtY => FmtY,
-        FmtYA => FmtYA,
-        FmtBGR => FmtRGB,
-        FmtBGRA => FmtRGBA,
+        ColFmt::Y => ColFmt::Y,
+        ColFmt::YA => ColFmt::YA,
+        ColFmt::BGR => ColFmt::RGB,
+        ColFmt::BGRA => ColFmt::RGBA,
         _ => return IFErr!("source format unknown"),
     };
 
@@ -806,16 +812,19 @@ pub fn read_tga<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage>
 
     let TgaInfo { src_chans, src_fmt, rle } = try!(parse_tga_header(&hdr));
 
-    let tgt_fmt = match req_fmt {
-        FmtY | FmtYA | FmtRGB | FmtRGBA => req_fmt,
-        FmtAuto => match src_fmt {
-            FmtY => FmtY,
-            FmtYA => FmtYA,
-            FmtBGR => FmtRGB,
-            FmtBGRA => FmtRGBA,
-            _ => return IFErr!("not supported"),
-        },
-        _ => return IFErr!("conversion not supported"),
+    let tgt_fmt = {
+        use self::ColFmt::*;
+        match req_fmt {
+            Y | YA | RGB | RGBA => req_fmt,
+            Auto => match src_fmt {
+                Y => Y,
+                YA => YA,
+                BGR => RGB,
+                BGRA => RGBA,
+                _ => return IFErr!("not supported"),
+            },
+            _ => return IFErr!("conversion not supported"),
+        }
     };
 
     try!(skip(reader, hdr.id_length as uint));
@@ -847,6 +856,8 @@ struct TgaInfo {
 
 // Returns: source color format and whether it's RLE compressed
 fn parse_tga_header(hdr: &TgaHeader) -> IoResult<TgaInfo> {
+    use self::TgaDataType::*;
+
     let mut rle = false;
     let datatype: Option<TgaDataType> = FromPrimitive::from_u8(hdr.data_type);
     let attr_bits_pp = hdr.flags & 0xf;
@@ -866,10 +877,10 @@ fn parse_tga_header(hdr: &TgaHeader) -> IoResult<TgaInfo> {
 
     let src_chans = hdr.bits_pp as uint / 8;
     let src_fmt = match src_chans {
-        1 => FmtY,
-        2 => FmtYA,
-        3 => FmtBGR,
-        4 => FmtBGRA,
+        1 => ColFmt::Y,
+        2 => ColFmt::YA,
+        3 => ColFmt::BGR,
+        4 => ColFmt::BGRA,
         _ => return IFErr!("not supported"),
     };
 
@@ -971,6 +982,7 @@ enum TgaDataType {
 /// For tgt_fmt, accepts FmtRGB/A but not FmtBGR/A; will encode as BGR/A.
 pub fn write_tga<W: Writer>(writer: &mut W, w: uint, h: uint, data: &[u8],
                                          tgt_fmt: ColFmt) -> IoResult<()> {
+
     if w < 1 || h < 1 || 0xffff < w || 0xffff < h {
         return IFErr!("invalid dimensions");
     }
@@ -981,21 +993,24 @@ pub fn write_tga<W: Writer>(writer: &mut W, w: uint, h: uint, data: &[u8],
     }
 
     let src_fmt = match src_chans {
-        1 => FmtY,
-        2 => FmtYA,
-        3 => FmtRGB,
-        4 => FmtRGBA,
+        1 => ColFmt::Y,
+        2 => ColFmt::YA,
+        3 => ColFmt::RGB,
+        4 => ColFmt::RGBA,
         _ => return IFErr!("format not supported"),
     };
 
-    let tgt_fmt = match (src_fmt, tgt_fmt) {
-        (FmtY, FmtAuto) | (FmtYA, FmtAuto) => src_fmt,
-        (FmtRGB, FmtAuto)                  => FmtBGR,
-        (FmtRGBA, FmtAuto)                 => FmtBGRA,
-        (_, FmtY) | (_, FmtYA)             => tgt_fmt,
-        (_, FmtRGB)                        => FmtBGR,
-        (_, FmtRGBA)                       => FmtBGRA,
-        _ => return IFErr!("invalid format"),
+    let tgt_fmt = {
+        use self::ColFmt::*;
+        match (src_fmt, tgt_fmt) {
+            (Y, Auto) | (YA, Auto) => src_fmt,
+            (RGB, Auto)            => BGR,
+            (RGBA, Auto)           => BGRA,
+            (_, Y) | (_, YA)       => tgt_fmt,
+            (_, RGB)               => BGR,
+            (_, RGBA)              => BGRA,
+            _ => return IFErr!("invalid format"),
+        }
     };
 
     let ec = &mut TgaEncoder {
@@ -1024,6 +1039,7 @@ pub fn write_tga<W: Writer>(writer: &mut W, w: uint, h: uint, data: &[u8],
 }
 
 fn write_tga_header<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
+    use self::TgaDataType::*;
     let (data_type, has_alpha) = match ec.tgt_chans {
         1 => (if ec.rle { GrayRLE      } else { Gray      }, false),
         2 => (if ec.rle { GrayRLE      } else { Gray      }, true),
@@ -1175,7 +1191,7 @@ pub fn read_jpeg_info<R: Reader>(stream: &mut R) -> IoResult<IFInfo> {
 
     loop {
         let mut marker: [u8, ..2] = [0, 0];
-        try!(stream.read_at_least(marker.len(), marker));
+        try!(stream.read_at_least(marker.len(), marker[mut]));
 
         if marker[0] != 0xff { return IFErr!("no marker"); }
         while marker[1] == 0xff {
@@ -1185,13 +1201,13 @@ pub fn read_jpeg_info<R: Reader>(stream: &mut R) -> IoResult<IFInfo> {
         match marker[1] {
             SOF0 | SOF2 => {
                 let mut tmp: [u8, ..8] = [0,0,0,0, 0,0,0,0];
-                try!(stream.read_at_least(tmp.len(), tmp));
+                try!(stream.read_at_least(tmp.len(), tmp[mut]));
                 return Ok(IFInfo {
                     w: u16_from_be(tmp[5..7]) as uint,
                     h: u16_from_be(tmp[3..5]) as uint,
                     c: match tmp[7] {
-                           1 => FmtY,
-                           3 => FmtRGB,
+                           1 => ColFmt::Y,
+                           3 => ColFmt::RGB,
                            _ => return IFErr!("not valid baseline jpeg")
                        },
                 });
@@ -1199,8 +1215,8 @@ pub fn read_jpeg_info<R: Reader>(stream: &mut R) -> IoResult<IFInfo> {
             SOS | EOI => return IFErr!("no frame header"),
             DRI | DHT | DQT | COM | APP0 ... APPF => {
                 let mut tmp: [u8, ..2] = [0, 0];
-                try!(stream.read_at_least(tmp.len(), tmp));
-                let len = u16_from_be(tmp) - 2;
+                try!(stream.read_at_least(tmp.len(), tmp[mut]));
+                let len = u16_from_be(tmp[mut]) - 2;
                 try!(skip(stream, len as uint));
             }
             _ => return IFErr!("invalid / unsupported marker"),
@@ -1209,8 +1225,9 @@ pub fn read_jpeg_info<R: Reader>(stream: &mut R) -> IoResult<IFInfo> {
 }
 
 pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage> {
+    use self::ColFmt::*;
     let req_fmt = match req_fmt {
-        FmtAuto | FmtY | FmtYA | FmtRGB | FmtRGBA => req_fmt,
+        Auto | Y | YA | RGB | RGBA => req_fmt,
         _ => return IFErr!("format not supported")
     };
 
@@ -1248,9 +1265,9 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
         return IFErr!("no image data");
     }
     dc.tgt_fmt =
-        if req_fmt == FmtAuto {
+        if req_fmt == ColFmt::Auto {
             match dc.num_comps {
-                1 => FmtY, 3 => FmtRGB,
+                1 => ColFmt::Y, 3 => ColFmt::RGB,
                 _ => return IFErr!("internal error")
             }
         } else {
@@ -1267,11 +1284,11 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
 
 fn read_jfif<R: Reader>(reader: &mut R) -> IoResult<()> {
     let mut buf: [u8, ..20] = unsafe { zeroed() }; // SOI, APP0
-    try!(reader.read_at_least(buf.len(), buf));
+    try!(reader.read_at_least(buf.len(), buf[mut]));
 
     let len = u16_from_be(buf[4..6]) as uint;
 
-    if !equal(buf[0..4], [0xff_u8, 0xd8, 0xff, 0xe0]) ||
+    if !equal(buf[0..4], &[0xff_u8, 0xd8, 0xff, 0xe0]) ||
        !equal(buf[6..11], b"JFIF\0") || len < 16 {
         return IFErr!("not JPEG/JFIF");
     }
@@ -1341,7 +1358,7 @@ fn read_markers<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     let mut has_next_scan_header = false;
     while !has_next_scan_header && !dc.eoi_reached {
         let mut marker: [u8, ..2] = [0, 0];
-        try!(dc.stream.read_at_least(marker.len(), marker));
+        try!(dc.stream.read_at_least(marker.len(), marker[mut]));
 
         if marker[0] != 0xff { return IFErr!("no marker"); }
         while marker[1] == 0xff {
@@ -1371,8 +1388,8 @@ fn read_markers<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
             APP0 ... APPF | COM => {
                 //println!("skipping unknown marker...");
                 let mut tmp: [u8, ..2] = [0, 0];
-                try!(dc.stream.read_at_least(tmp.len(), tmp));
-                let len = u16_from_be(tmp) - 2;
+                try!(dc.stream.read_at_least(tmp.len(), tmp[mut]));
+                let len = u16_from_be(tmp[mut]) - 2;
                 try!(skip(dc.stream, len as uint));
             }
             _ => return IFErr!("invalid / unsupported marker"),
@@ -1445,7 +1462,7 @@ fn derive_table(table: &mut HuffTab, num_values: &[u8]) {
 
     let mut k = 0;
     for i in range(0, 16) {
-        for j in range(0, num_values[i] as uint) {
+        for _j in range(0, num_values[i] as uint) {
             table.sizes[k] = (i + 1) as u8;
             k += 1;
         }
@@ -1585,7 +1602,7 @@ fn read_frame_header<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
 
 fn read_scan_header<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     let mut buf: [u8, ..3] = [0, 0, 0];
-    try!(dc.stream.read_at_least(buf.len(), buf));
+    try!(dc.stream.read_at_least(buf.len(), buf[mut]));
     let len = u16_from_be(buf[0..2]) as uint;
     let num_scan_comps = buf[2] as uint;
 
@@ -1618,7 +1635,7 @@ fn read_scan_header<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
 
 fn read_restart_interval<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     let mut buf: [u8, ..4] = [0, 0, 0, 0];
-    try!(dc.stream.read_at_least(buf.len(), buf));
+    try!(dc.stream.read_at_least(buf.len(), buf[mut]));
     let len = u16_from_be(buf[0..2]) as uint;
     if len != 4 { return IFErr!("invalid / not supported"); }
     dc.restart_interval = u16_from_be(buf[2..4]) as uint;
@@ -1673,7 +1690,7 @@ fn decode_scan<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
                         let offset = (outy * dst_stride + outx) as int;
                         unsafe {
                             let dst = base.offset(offset);
-                            stbi_idct_block(dst, dst_stride, data);
+                            stbi_idct_block(dst, dst_stride, data[]);
                         }
                     }
                 }
@@ -1709,7 +1726,7 @@ fn decode_scan<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
 
 fn read_restart<R: Reader>(stream: &mut R) -> IoResult<()> {
     let mut buf: [u8, ..2] = [0, 0];
-    try!(stream.read_at_least(buf.len(), buf));
+    try!(stream.read_at_least(buf.len(), buf[mut]));
     if buf[0] != 0xff || buf[1] < RST0 || RST7 < buf[1] {
         return IFErr!("reset marker missing");
     }
@@ -1833,7 +1850,7 @@ fn reconstruct<R: Reader>(dc: &JpegDecoder<R>) -> IoResult<Vec<u8>> {
     let mut result = Vec::from_elem(dc.w * dc.h * tgt_chans, 0u8);
 
     match (dc.num_comps, dc.tgt_fmt) {
-        (3, FmtRGB) | (3, FmtRGBA) => {
+        (3, ColFmt::RGB) | (3, ColFmt::RGBA) => {
             for ref comp in dc.comps.iter() {
                 if comp.sfx != dc.hmax || comp.sfy != dc.vmax {
                     upsample_rgb(dc, result[mut]);
@@ -1851,14 +1868,16 @@ fn reconstruct<R: Reader>(dc: &JpegDecoder<R>) -> IoResult<Vec<u8>> {
                         dc.comps[2].data[si+i],
                     );
                     copy_memory(result[mut di..di+3], pixel[]);
-                    if dc.tgt_fmt == FmtRGBA { *result.get_mut(di+3) = 255; }
+                    if dc.tgt_fmt == ColFmt::RGBA {
+                        *result.get_mut(di+3).unwrap() = 255;
+                    }
                     di += tgt_chans;
                 }
                 si += dc.num_mcu_x * dc.comps[0].sfx * 8;
             }
             return Ok(result);
         },
-        (_, FmtY) | (_, FmtYA) => {
+        (_, ColFmt::Y) | (_, ColFmt::YA) => {
             let comp = &dc.comps[0];
             if comp.sfx != dc.hmax || comp.sfy != dc.vmax {
                 upsample_gray(dc, result[mut]);
@@ -1868,11 +1887,11 @@ fn reconstruct<R: Reader>(dc: &JpegDecoder<R>) -> IoResult<Vec<u8>> {
             // no resampling
             let mut si = 0u;
             let mut di = 0u;
-            if dc.tgt_fmt == FmtYA {
+            if dc.tgt_fmt == ColFmt::YA {
                 for _j in range(0, dc.h) {
                     for i in range(0, dc.w) {
-                        *result.get_mut(di  ) = comp.data[si+i];
-                        *result.get_mut(di+1) = 255;
+                        *result.get_mut(di  ).unwrap() = comp.data[si+i];
+                        *result.get_mut(di+1).unwrap() = 255;
                         di += 2;
                     }
                     si += dc.num_mcu_x * comp.sfx * 8;
@@ -1886,16 +1905,18 @@ fn reconstruct<R: Reader>(dc: &JpegDecoder<R>) -> IoResult<Vec<u8>> {
             }
             return Ok(result);
         },
-        (1, FmtRGB) | (1, FmtRGBA) => {
+        (1, ColFmt::RGB) | (1, ColFmt::RGBA) => {
             let comp = &dc.comps[0];
             let mut si = 0u;
             let mut di = 0u;
             for _j in range(0, dc.h) {
                 for i in range(0, dc.w) {
-                    *result.get_mut(di  ) = comp.data[si+i];
-                    *result.get_mut(di+1) = comp.data[si+i];
-                    *result.get_mut(di+2) = comp.data[si+i];
-                    if dc.tgt_fmt == FmtRGBA { *result.get_mut(di+3) = 255; }
+                    *result.get_mut(di  ).unwrap() = comp.data[si+i];
+                    *result.get_mut(di+1).unwrap() = comp.data[si+i];
+                    *result.get_mut(di+2).unwrap() = comp.data[si+i];
+                    if dc.tgt_fmt == ColFmt::RGBA {
+                        *result.get_mut(di+3).unwrap() = 255;
+                    }
                     di += tgt_chans;
                 }
                 si += dc.num_mcu_x * comp.sfx * 8;
@@ -1917,7 +1938,7 @@ fn upsample_gray<R: Reader>(dc: &JpegDecoder<R>, result: &mut[u8]) {
         let si0 = (j as f64 * si0yratio).floor() as uint * stride0;
         for i in range(0, dc.w) {
             result[di] = dc.comps[0].data[si0 + (i as f64 * si0xratio).floor() as uint];
-            if dc.tgt_fmt == FmtYA { result[di+1] = 255; }
+            if dc.tgt_fmt == ColFmt::YA { result[di+1] = 255; }
             di += tgt_chans;
         }
     }
@@ -1949,7 +1970,7 @@ fn upsample_rgb<R: Reader>(dc: &JpegDecoder<R>, result: &mut[u8]) {
                 dc.comps[2].data[si2 + (i as f64 * si2xratio).floor() as uint],
             );
             copy_memory(result[mut di..di+3], pixel[]);
-            if dc.tgt_fmt == FmtRGBA { result[di+3] = 255; }
+            if dc.tgt_fmt == ColFmt::RGBA { result[di+3] = 255; }
             di += tgt_chans;
         }
     }
@@ -2110,36 +2131,37 @@ fn stbi_idct_1d(t0: &mut int, t1: &mut int, t2: &mut int, t3: &mut int,
 type LineConverter = fn(&[u8], &mut[u8]);
 
 fn get_converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> IoResult<LineConverter> {
+    use self::ColFmt::*;
     match (src_fmt, tgt_fmt) {
         (s, t) if (s == t) => Ok(copy_line),
-        (FmtY, FmtYA)      => Ok(y_to_ya),
-        (FmtY, FmtRGB)     => Ok(y_to_rgb),
-        (FmtY, FmtRGBA)    => Ok(y_to_rgba),
-        (FmtY, FmtBGR)     => Ok(y_to_bgr),
-        (FmtY, FmtBGRA)    => Ok(y_to_bgra),
-        (FmtYA, FmtY)      => Ok(ya_to_y),
-        (FmtYA, FmtRGB)    => Ok(ya_to_rgb),
-        (FmtYA, FmtRGBA)   => Ok(ya_to_rgba),
-        (FmtYA, FmtBGR)    => Ok(ya_to_bgr),
-        (FmtYA, FmtBGRA)   => Ok(ya_to_bgra),
-        (FmtRGB, FmtY)     => Ok(rgb_to_y),
-        (FmtRGB, FmtYA)    => Ok(rgb_to_ya),
-        (FmtRGB, FmtRGBA)  => Ok(rgb_to_rgba),
-        (FmtRGB, FmtBGR)   => Ok(rgb_to_bgr),
-        (FmtRGB, FmtBGRA)  => Ok(rgb_to_bgra),
-        (FmtRGBA, FmtY)    => Ok(rgba_to_y),
-        (FmtRGBA, FmtYA)   => Ok(rgba_to_ya),
-        (FmtRGBA, FmtRGB)  => Ok(rgba_to_rgb),
-        (FmtRGBA, FmtBGR)  => Ok(rgba_to_bgr),
-        (FmtRGBA, FmtBGRA) => Ok(rgba_to_bgra),
-        (FmtBGR, FmtY)     => Ok(bgr_to_y),
-        (FmtBGR, FmtYA)    => Ok(bgr_to_ya),
-        (FmtBGR, FmtRGB)   => Ok(bgr_to_rgb),
-        (FmtBGR, FmtRGBA)  => Ok(bgr_to_rgba),
-        (FmtBGRA, FmtY)    => Ok(bgra_to_y),
-        (FmtBGRA, FmtYA)   => Ok(bgra_to_ya),
-        (FmtBGRA, FmtRGB)  => Ok(bgra_to_rgb),
-        (FmtBGRA, FmtRGBA) => Ok(bgra_to_rgba),
+        (Y, YA)      => Ok(y_to_ya),
+        (Y, RGB)     => Ok(y_to_rgb),
+        (Y, RGBA)    => Ok(y_to_rgba),
+        (Y, BGR)     => Ok(y_to_bgr),
+        (Y, BGRA)    => Ok(y_to_bgra),
+        (YA, Y)      => Ok(ya_to_y),
+        (YA, RGB)    => Ok(ya_to_rgb),
+        (YA, RGBA)   => Ok(ya_to_rgba),
+        (YA, BGR)    => Ok(ya_to_bgr),
+        (YA, BGRA)   => Ok(ya_to_bgra),
+        (RGB, Y)     => Ok(rgb_to_y),
+        (RGB, YA)    => Ok(rgb_to_ya),
+        (RGB, RGBA)  => Ok(rgb_to_rgba),
+        (RGB, BGR)   => Ok(rgb_to_bgr),
+        (RGB, BGRA)  => Ok(rgb_to_bgra),
+        (RGBA, Y)    => Ok(rgba_to_y),
+        (RGBA, YA)   => Ok(rgba_to_ya),
+        (RGBA, RGB)  => Ok(rgba_to_rgb),
+        (RGBA, BGR)  => Ok(rgba_to_bgr),
+        (RGBA, BGRA) => Ok(rgba_to_bgra),
+        (BGR, Y)     => Ok(bgr_to_y),
+        (BGR, YA)    => Ok(bgr_to_ya),
+        (BGR, RGB)   => Ok(bgr_to_rgb),
+        (BGR, RGBA)  => Ok(bgr_to_rgba),
+        (BGRA, Y)    => Ok(bgra_to_y),
+        (BGRA, YA)   => Ok(bgra_to_ya),
+        (BGRA, RGB)  => Ok(bgra_to_rgb),
+        (BGRA, RGBA) => Ok(bgra_to_rgba),
         _ => IFErr!("conversion not supported"),
     }
 }
@@ -2362,7 +2384,7 @@ impl Crc32 {
 
     fn put<'a>(&'a mut self, bytes: &[u8]) -> &'a mut Crc32 {
         for byte in bytes.iter() {
-            let idx = byte ^ (self.r as u8);
+            let idx = *byte ^ (self.r as u8);
             self.r = (self.r >> 8) ^ CRC32_TABLE[idx as uint];
         }
         self
