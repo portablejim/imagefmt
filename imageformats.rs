@@ -143,12 +143,13 @@ pub fn read_png_info<R: Reader>(reader: &mut R) -> IoResult<IFInfo> {
         Some(ct) => ct,
         None => return IFErr!("unsupported color type"),
     };
-    let src_fmt = match ctype.color_channels() {
-        1 => ColFmt::Y,
-        2 => ColFmt::YA,
-        3 => ColFmt::RGB,
-        4 => ColFmt::RGBA,
-        _ => return IFErr!("internal error"),
+
+    let src_fmt = match ctype {
+        PngColortype::Y => ColFmt::Y,
+        PngColortype::YA => ColFmt::YA,
+        PngColortype::RGB => ColFmt::RGB,
+        PngColortype::Idx => ColFmt::RGB,
+        PngColortype::RGBA => ColFmt::RGBA,
     };
 
     Ok(IFInfo {
@@ -194,24 +195,22 @@ pub fn read_png<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage>
         return IFErr!("not supported");
     }
 
-    let ilace: Option<PngInterlace> = FromPrimitive::from_u8(hdr.interlace_method);
-    let ilace = match ilace {
+    let ilace: PngInterlace = match FromPrimitive::from_u8(hdr.interlace_method) {
         Some(im) => im,
         None => return IFErr!("unsupported interlace method"),
     };
 
-    let ctype: Option<PngColortype> = FromPrimitive::from_u8(hdr.color_type);
-    let ctype = match ctype {
+    let ctype: PngColortype = match FromPrimitive::from_u8(hdr.color_type) {
         Some(ct) => ct,
         None => return IFErr!("unsupported color type"),
     };
 
-    let src_fmt = match ctype.color_channels() {
-        1 => ColFmt::Y,
-        2 => ColFmt::YA,
-        3 => ColFmt::RGB,
-        4 => ColFmt::RGBA,
-        _ => return IFErr!("internal error"),
+    let src_fmt = match ctype {
+        PngColortype::Y => ColFmt::Y,
+        PngColortype::YA => ColFmt::YA,
+        PngColortype::RGB => ColFmt::RGB,
+        PngColortype::Idx => ColFmt::RGB,
+        PngColortype::RGBA => ColFmt::RGBA,
     };
 
     let dc = &mut PngDecoder {
@@ -344,18 +343,6 @@ enum PngColortype {
     Idx  = 3,
     YA   = 4,
     RGBA = 6,
-}
-
-impl PngColortype {
-    fn color_channels(&self) -> i64 {
-        use self::PngColortype::*;
-        match *self {
-            Y         => 1,
-            RGB | Idx => 3,
-            YA        => 2,
-            RGBA      => 4,
-        }
-    }
 }
 
 fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, mut len: uint, palette: &Vec<u8>)
@@ -551,8 +538,7 @@ fn next_uncompressed_line<R: Reader>(dc: &mut PngDecoder<R>, dst: &mut[u8]) {
 }
 
 fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: uint) -> IoResult<()> {
-    let ftype: Option<PngFilter> = FromPrimitive::from_u8(ftype);
-    match ftype {
+    match FromPrimitive::from_u8(ftype) {
         Some(PngFilter::None)
             => { }
         Some(PngFilter::Sub) => {
