@@ -24,7 +24,7 @@
 
 extern crate flate;
 use std::io::{File, BufferedReader, BufferedWriter, IoResult, IoError, OtherIoError};
-use std::iter::{repeat, range_step};
+use std::iter::{repeat, range_step, IteratorExt};
 use std::cmp::min;
 use std::slice::bytes::{copy_memory};
 use std::mem::{zeroed};
@@ -209,6 +209,13 @@ pub fn read_png_header<R: Reader>(reader: &mut R) -> IoResult<PngHeader> {
 }
 
 pub fn read_png<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage> {
+    let (image, _) = try!(read_png_chunks(reader, req_fmt, &[]));
+    Ok(image)
+}
+
+pub fn read_png_chunks<R: Reader>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
+                       -> IoResult<(IFImage, Vec<PngCustomChunk>)>
+{
     let req_fmt = { use self::ColFmt::*; match req_fmt {
         Auto | Y | YA | RGB | RGBA => req_fmt,
         _ => return IFErr!("format not supported")
@@ -255,12 +262,13 @@ pub fn read_png<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage>
         crc         : Crc32::new(),
     };
 
-    Ok(IFImage {
+    let (pixels, chunks) = try!(decode_png(dc, chunk_names));
+    Ok((IFImage {
         w      : dc.w,
         h      : dc.h,
         c      : dc.tgt_fmt,
-        pixels : try!(decode_png(dc))
-    })
+        pixels : pixels
+    }, chunks))
 }
 
 struct PngDecoder<'r, R:'r> {
@@ -287,13 +295,16 @@ enum PngStage {
     //IendParsed,
 }
 
-fn decode_png<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<Vec<u8>> {
+fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
+                              -> IoResult<(Vec<u8>, Vec<PngCustomChunk>)>
+{
     use self::PngStage::*;
 
     let mut result = Vec::<u8>::new();
-    let mut stage = IhdrParsed;
-
+    let mut chunks = Vec::<PngCustomChunk>::new();
     let mut palette = Vec::<u8>::new();
+
+    let mut stage = IhdrParsed;
 
     try!(dc.stream.read_at_least(8, &mut dc.chunkmeta[0..8]));
     loop {
@@ -336,13 +347,20 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<Vec<u8>> {
                 break;//stage = IendParsed;
             }
             _ => {
-                // unknown chunk, ignore but check crc... or should crc be ignored?
-                while 0 < len {
-                    let bytes = min(len, dc.readbuf.len());
-                    let got =
-                        try!(dc.stream.read_at_least(bytes, &mut dc.readbuf[0..bytes]));
-                    len -= got;
-                    dc.crc.put(&dc.readbuf[0..got]);
+                if chunk_names.iter().any(|name| &name[] == &dc.chunkmeta[4..8]) {
+                    let name = [dc.chunkmeta[4], dc.chunkmeta[5], dc.chunkmeta[6], dc.chunkmeta[7]];
+                    let data = try!(dc.stream.read_exact(len));
+                    dc.crc.put(&data[]);
+                    chunks.push(PngCustomChunk { name: name, data: data });
+                } else {
+                    // unknown chunk, ignore but check crc... or should crc be ignored?
+                    while 0 < len {
+                        let bytes = min(len, dc.readbuf.len());
+                        let got =
+                            try!(dc.stream.read_at_least(bytes, &mut dc.readbuf[0..bytes]));
+                        len -= got;
+                        dc.crc.put(&dc.readbuf[0..got]);
+                    }
                 }
 
                 try!(dc.stream.read_at_least(4, &mut dc.chunkmeta[0..4]));
@@ -355,7 +373,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<Vec<u8>> {
         try!(dc.stream.read_at_least(8, &mut dc.chunkmeta[0..8]));
     }
 
-    Ok(result)
+    Ok((result, chunks))
 }
 
 #[derive(Eq, PartialEq, FromPrimitive)]
