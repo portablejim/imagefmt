@@ -676,8 +676,21 @@ enum PngFilter {
 // --------------------------------------------------
 // PNG encoder
 
+pub struct PngCustomChunk {
+    pub name: [u8; 4],
+    pub data: Vec<u8>,
+}
+
 pub fn write_png<W: Writer>(writer: &mut W, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
                                                                               -> IoResult<()>
+{
+    write_png_chunks(writer, w, h, data, tgt_fmt, &[])
+}
+
+pub fn write_png_chunks<W: Writer>(writer: &mut W, w: usize, h: usize, data: &[u8],
+                                                                   tgt_fmt: ColFmt,
+                                                         chunks: &[PngCustomChunk])
+                                                                    -> IoResult<()>
 {
     let src_chans = data.len() / w / h;
     if w < 1 || h < 1 || (src_chans * w * h != data.len()) {
@@ -710,6 +723,9 @@ pub fn write_png<W: Writer>(writer: &mut W, w: usize, h: usize, data: &[u8], tgt
     };
 
     try!(write_png_header(ec));
+    for chunk in chunks.iter() {
+        try!(write_custom_chunk(ec, chunk));
+    }
     try!(write_png_image_data(ec));
 
     let iend: &'static[u8] = b"\0\0\0\0IEND\xae\x42\x60\x82";
@@ -736,6 +752,24 @@ fn write_png_header<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
     copy_memory(&mut hdr[29..33], &ec.crc.finish_be()[]);
 
     ec.stream.write(&hdr[])
+}
+
+fn write_custom_chunk<W: Writer>(ec: &mut PngEncoder<W>, chunk: &PngCustomChunk) -> IoResult<()> {
+    if chunk.name[0] < 97 || 122 < chunk.name[0] { return IFErr!("invalid chunk name"); }
+    for b in (&chunk.name[1..]).iter() {
+        if *b < 65 || (90 < *b && *b < 97) || 122 < *b {
+            return IFErr!("invalid chunk name");
+        }
+    }
+    if 0x7fff_ffff < chunk.data.len() { return IFErr!("chunk too long"); }
+
+    try!(ec.stream.write_be_u32(chunk.data.len() as u32));
+    try!(ec.stream.write(&chunk.name[]));
+    try!(ec.stream.write(&chunk.data[]));
+    let mut crc = Crc32::new();
+    crc.put(&chunk.name[]);
+    crc.put(&chunk.data[]);
+    ec.stream.write(&crc.finish_be()[])
 }
 
 struct PngEncoder<'r, W:'r> {
