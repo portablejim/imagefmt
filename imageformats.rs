@@ -308,7 +308,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<Vec<u8>> {
                 }
 
                 // also reads chunkmeta for next chunk
-                result = try!(read_idat_stream(dc, len, &palette));
+                result = try!(read_idat_stream(dc, len, &palette[]));
                 stage = IdatParsed;
                 continue;   // skip reading chunkmeta
             }
@@ -372,7 +372,7 @@ enum PngColortype {
     RGBA = 6,
 }
 
-fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, mut len: usize, palette: &Vec<u8>)
+fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, mut len: usize, palette: &[u8])
                                                                     -> IoResult<Vec<u8>>
 {
     let filter_step = if dc.src_indexed { 1 } else { dc.src_fmt.channels() };
