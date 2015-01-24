@@ -483,7 +483,7 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, mut len: usize, palette: 
         let mut linebuf1: Vec<u8> = repeat(0).take(max_scanline_size+1).collect();
         let mut redlinebuf: Vec<u8> = repeat(0).take(dc.w * tgt_bytespp).collect();
 
-        for pass in (0..7) {
+        for pass in (0..7us) {
             let tgt_px: A7IdxTranslator = A7_IDX_TRANSLATORS[pass];   // target pixel
             let src_linesize = redw[pass] * filter_step;
             let mut cline = &mut linebuf0[0 .. src_linesize+1];
@@ -1280,7 +1280,7 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
         cmp_i += copysize;
     }
 
-    cmp_buf.slice(0, cmp_i)
+    &cmp_buf[0 .. cmp_i]
 }
 
 struct TgaEncoder<'r, R:'r> {
@@ -1547,7 +1547,7 @@ fn read_huffman_tables<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
 
         // compute total number of huffman codes
         let mut mt = 0us;
-        for i in (1..17) {
+        for i in (1..17us) {
             mt += buf[i] as usize;
         }
         if 256 < mt {
@@ -1573,7 +1573,7 @@ fn derive_table(table: &mut HuffTab, num_values: &[u8]) {
     let mut codes: [i16; 256] = unsafe { zeroed() };
 
     let mut k = 0;
-    for i in (0..16) {
+    for i in (0..16us) {
         for _j in (0 .. num_values[i]) {
             table.sizes[k] = (i + 1) as u8;
             k += 1;
@@ -1609,14 +1609,14 @@ fn derive_mincode_maxcode_valptr(mincode: &mut[i16; 16], maxcode: &mut[i16; 16],
                                  valptr:  &mut[i16; 16], codes: &[i16; 256],
                                  num_values: &[u8])
 {
-    for i in (0..16) {
+    for i in (0..16us) {
         mincode[i] = -1;
         maxcode[i] = -1;
         valptr[i] = -1;
     }
 
     let mut j = 0us;
-    for i in (0..16) {
+    for i in (0..16us) {
         if num_values[i] != 0 {
             valptr[i] = j as i16;
             mincode[i] = codes[j];
@@ -2129,7 +2129,7 @@ unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
     let mut v: [isize; 64] = zeroed();
 
     // columns
-    for i in (0 .. 8) {
+    for i in (0 .. 8us) {
         if d[i+ 8]==0 && d[i+16]==0 && d[i+24]==0 && d[i+32]==0 &&
            d[i+40]==0 && d[i+48]==0 && d[i+56]==0 {
             let dcterm = (d[i] as isize) << 2;
