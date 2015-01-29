@@ -91,6 +91,7 @@ pub fn read_image_info(filename: &str) -> IoResult<IFInfo> {
 
 /** Paletted images are auto-depaletted.
  */
+#[allow(dead_code)]
 pub fn read_image(filename: &str, req_fmt: ColFmt) -> IoResult<IFImage> {
     let file = File::open(&Path::new(filename));
     let reader = &mut BufferedReader::new(file);
@@ -112,6 +113,7 @@ pub fn read_image(filename: &str, req_fmt: ColFmt) -> IoResult<IFImage> {
     //readfunc(reader, req_fmt)
 }
 
+#[allow(dead_code)]
 pub fn write_image(filename: &str, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
                                                                      -> IoResult<()>
 {
