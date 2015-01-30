@@ -23,7 +23,7 @@
 #![allow(non_upper_case_globals)]    // for the static function pointers
 
 extern crate flate;
-use std::io::{File, BufferedReader, BufferedWriter, IoResult, IoError, OtherIoError};
+use std::old_io::{File, BufferedReader, BufferedWriter, IoResult, IoError, OtherIoError};
 use std::iter::{repeat, range_step, IteratorExt};
 use std::cmp::min;
 use std::slice::bytes::{copy_memory};
@@ -749,7 +749,7 @@ pub fn write_png_chunks<W: Writer>(writer: &mut W, w: usize, h: usize, data: &[u
     try!(write_png_image_data(ec));
 
     let iend: &'static[u8] = b"\0\0\0\0IEND\xae\x42\x60\x82";
-    ec.stream.write(iend)
+    ec.stream.write_all(iend)
 }
 
 fn write_png_header<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
@@ -771,7 +771,7 @@ fn write_png_header<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
     ec.crc.put(&hdr[12..29]);
     copy_memory(&mut hdr[29..33], &ec.crc.finish_be()[]);
 
-    ec.stream.write(&hdr[])
+    ec.stream.write_all(&hdr[])
 }
 
 fn write_custom_chunk<W: Writer>(ec: &mut PngEncoder<W>, chunk: &PngCustomChunk) -> IoResult<()> {
@@ -784,12 +784,12 @@ fn write_custom_chunk<W: Writer>(ec: &mut PngEncoder<W>, chunk: &PngCustomChunk)
     if 0x7fff_ffff < chunk.data.len() { return IFErr!("chunk too long"); }
 
     try!(ec.stream.write_be_u32(chunk.data.len() as u32));
-    try!(ec.stream.write(&chunk.name[]));
-    try!(ec.stream.write(&chunk.data[]));
+    try!(ec.stream.write_all(&chunk.name[]));
+    try!(ec.stream.write_all(&chunk.data[]));
     let mut crc = Crc32::new();
     crc.put(&chunk.name[]);
     crc.put(&chunk.data[]);
-    ec.stream.write(&crc.finish_be()[])
+    ec.stream.write_all(&crc.finish_be()[])
 }
 
 struct PngEncoder<'r, W:'r> {
@@ -845,10 +845,10 @@ fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
 
     // TODO split up data into smaller chunks?
     let chunklen = compressed.as_slice().len() as u32;
-    try!(ec.stream.write(&u32_to_be(chunklen)[]));
-    try!(ec.stream.write(b"IDAT"));
-    try!(ec.stream.write(compressed.as_slice()));
-    try!(ec.stream.write(crc));
+    try!(ec.stream.write_all(&u32_to_be(chunklen)[]));
+    try!(ec.stream.write_all(b"IDAT"));
+    try!(ec.stream.write_all(compressed.as_slice()));
+    try!(ec.stream.write_all(crc));
     Ok(())
 }
 
@@ -1147,7 +1147,7 @@ pub fn write_tga<W: Writer>(writer: &mut W, w: usize, h: usize, data: &[u8], tgt
         b"\x00\x00\x00\x00\
           \x00\x00\x00\x00\
           TRUEVISION-XFILE.\x00";
-    try!(ec.stream.write(ftr));
+    try!(ec.stream.write_all(ftr));
 
     ec.stream.flush()
 }
@@ -1175,7 +1175,7 @@ fn write_tga_header<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
         if has_alpha {8u8} else {0u8},  // flags
     ];
 
-    ec.stream.write(hdr)
+    ec.stream.write_all(hdr)
 }
 
 fn write_tga_image_data<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
@@ -1189,7 +1189,7 @@ fn write_tga_image_data<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
     if !ec.rle {
         for _ in (0 .. ec.h) {
             convert(&ec.data[si..si+src_linesize], &mut tgt_line[]);
-            try!(ec.stream.write(&tgt_line[]));
+            try!(ec.stream.write_all(&tgt_line[]));
             si -= src_linesize; // origin at bottom
         }
         return Ok(());
@@ -1203,7 +1203,7 @@ fn write_tga_image_data<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
     for _ in (0 .. ec.h) {
         convert(&ec.data[si .. si+src_linesize], &mut tgt_line[]);
         let compressed_line = rle_compress(&tgt_line[], &mut cmp_buf[], ec.w, bytes_pp);
-        try!(ec.stream.write(&compressed_line[]));
+        try!(ec.stream.write_all(&compressed_line[]));
         si -= src_linesize;
     }
     return Ok(());
