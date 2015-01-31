@@ -257,7 +257,7 @@ pub fn read_png_chunks<R: Reader>(reader: &mut R, req_fmt: ColFmt, chunk_names: 
         src_indexed : ctype == PngColortype::Idx,
         src_fmt     : src_fmt,
         tgt_fmt     : if req_fmt == ColFmt::Auto { src_fmt } else { req_fmt },
-        chunkmeta   : unsafe { zeroed() },
+        chunkmeta   : [0u8; 12],
         readbuf     : repeat(0u8).take(4096).collect(),
         uc_buf      : Vec::<u8>::new(),
         uc_start    : 0,
@@ -753,7 +753,7 @@ pub fn write_png_chunks<W: Writer>(writer: &mut W, w: usize, h: usize, data: &[u
 }
 
 fn write_png_header<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
-    let mut hdr: [u8; 33] = unsafe { zeroed() };
+    let mut hdr: [u8; 33] = [0; 33];
 
     copy_memory(&mut hdr[0..8], &PNG_FILE_HEADER[]);
     copy_memory(&mut hdr[8..16], b"\0\0\0\x0dIHDR");
@@ -1354,7 +1354,7 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
         tgt_fmt     : req_fmt,
         eoi_reached : false,
         has_frame_header : false,
-        qtables     : unsafe { zeroed() },
+        qtables     : [[0; 64]; 4],
         ac_tables   : unsafe { zeroed() },
         dc_tables   : unsafe { zeroed() },
         cb          : 0,
@@ -1397,7 +1397,7 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
 }
 
 fn read_jfif<R: Reader>(reader: &mut R) -> IoResult<()> {
-    let mut buf: [u8; 20] = unsafe { zeroed() }; // SOI, APP0
+    let mut buf = [0u8; 20]; // SOI, APP0
     try!(reader.read_at_least(buf.len(), &mut buf[]));
 
     let len = u16_from_be(&buf[4..6]) as usize;
@@ -1535,7 +1535,7 @@ const COM: u8 = 0xfe;     // comment
 const EOI: u8 = 0xd9;     // end of image
 
 fn read_huffman_tables<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
-    let mut buf: [u8; 17] = unsafe { zeroed() };
+    let mut buf = [0u8; 17];
     try!(dc.stream.read_at_least(2, &mut buf[0..2]));
     let mut len = u16_from_be(&buf[0..2]) as isize -2;
 
@@ -1572,7 +1572,7 @@ fn read_huffman_tables<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
 fn derive_table(table: &mut HuffTab, num_values: &[u8]) {
     assert!(num_values.len() == 16);
 
-    let mut codes: [i16; 256] = unsafe { zeroed() };
+    let mut codes: [i16; 256] = [0; 256];
 
     let mut k = 0;
     for i in (0..16us) {
@@ -1630,7 +1630,7 @@ fn derive_mincode_maxcode_valptr(mincode: &mut[i16; 16], maxcode: &mut[i16; 16],
 }
 
 fn read_quantization_tables<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
-    let mut buf: [u8; 2] = unsafe { zeroed() };
+    let mut buf = [0u8; 2];
     try!(dc.stream.read_at_least(2, &mut buf[0..2]));
     let mut len = u16_from_be(&buf[0..2]) as usize -2;
     if len % 65 != 0 {
@@ -1651,7 +1651,7 @@ fn read_quantization_tables<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> 
 }
 
 fn read_frame_header<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
-    let mut buf: [u8; 9] = unsafe { zeroed() };
+    let mut buf = [0u8; 9];
     try!(dc.stream.read_at_least(8, &mut buf[0..8]));
     let len = u16_from_be(&buf[0..2]) as usize;
     let precision = buf[2];
@@ -1867,7 +1867,7 @@ fn decode_block<R: Reader>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx:
     //let comp = &mut dc.comps[comp_idx];
     //let qtable = &dc.qtables[qtable_idx];
 
-    let mut res: [i16; 64] = unsafe { zeroed() };
+    let mut res: [i16; 64] = [0; 64];
     //let t = try!(decode_huff(dc, dc.dc_tables[comp.dc_table]));
     let dc_table_idx = dc.comps[comp_idx].dc_table;
     let ac_table_idx = dc.comps[comp_idx].ac_table;
@@ -2128,7 +2128,7 @@ fn clamp_to_u8(x: f32) -> u8 {
 // idct and level-shift
 unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
     let d = data;
-    let mut v: [isize; 64] = zeroed();
+    let mut v: [isize; 64] = [0; 64];
 
     // columns
     for i in (0 .. 8us) {
@@ -2625,7 +2625,7 @@ fn equal(a: &[u8], b: &[u8]) -> bool {
 }
 
 fn skip<R: Reader>(stream: &mut R, mut bytes: usize) -> IoResult<()> {
-    let mut buf: [u8; 1024] = unsafe { zeroed() };
+    let mut buf = [0u8; 1024];
     while 0 < bytes {
         let n = min(bytes, buf.len());
         try!(stream.read_at_least(n, &mut buf[0..n]));
