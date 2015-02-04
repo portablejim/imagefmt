@@ -5,9 +5,9 @@ My first Rust thing. PNG, TGA, JPEG.
 * Use `grep -rn 'pub fn' imageformats.rs` to find out more
 
 ```Rust
-#![feature(globs, macro_rules, slicing_syntax)]
+#![feature(slicing_syntax)]
 
-use std::io::{IoResult};
+use std::old_io::{IoResult};
 use imageformats::*;
 mod imageformats;
 
@@ -22,10 +22,10 @@ fn do_image_io() -> IoResult<()> {
     let pic = try!(read_image("marbles.tga", ColFmt::Auto));
 
     // write image out as grayscale
-    try!(write_image("out.png", pic.w, pic.h, pic.pixels[], ColFmt::Y));
+    try!(write_image("out.png", pic.w, pic.h, &pic.pixels[], ColFmt::Y));
 
     // print width, heigth and color format (of what you get with ColFmt::Auto)
-    println!("{}", read_image_info("hiisi.png"));
+    println!("{:?}", read_image_info("hiisi.png"));
 
     Ok(())
 }
