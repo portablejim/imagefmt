@@ -231,7 +231,8 @@ pub fn read_png_chunks<R: Reader>(reader: &mut R, req_fmt: ColFmt, chunk_names: 
         src_indexed : ctype == PngColortype::Idx,
         src_fmt     : src_fmt,
         tgt_fmt     : if req_fmt == ColFmt::Auto { src_fmt } else { req_fmt },
-        chunkmeta   : [0u8; 12],
+        chunk_lentype : [0u8; 8],
+        chunk_crc   : [0u8; 4],
         readbuf     : repeat(0u8).take(4096).collect(),
         uc_buf      : Vec::<u8>::new(),
         uc_start    : 0,
@@ -256,7 +257,8 @@ struct PngDecoder<'r, R:'r> {
     src_fmt       : ColFmt,
     tgt_fmt       : ColFmt,
 
-    chunkmeta: [u8; 12],   // for reading len, type, crc
+    chunk_lentype: [u8; 8],   // for reading len, type
+    chunk_crc: [u8; 4],     // for reading crc
     readbuf: Vec<u8>,
     uc_buf: Vec<u8>,
     uc_start: usize,
@@ -272,10 +274,10 @@ enum PngStage {
 }
 
 fn read_chunkmeta<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<usize> {
-    try!(dc.stream.read_at_least(8, &mut dc.chunkmeta[0..8]));
-    let mut len = u32_from_be(&dc.chunkmeta[0..4]) as usize;
+    try!(dc.stream.read_at_least(8, &mut dc.chunk_lentype[0..8]));
+    let mut len = u32_from_be(&dc.chunk_lentype[0..4]) as usize;
     if 0x7fff_ffff < len { return IFErr!("chunk too long"); }
-    dc.crc.put(&dc.chunkmeta[4..8]);   // type
+    dc.crc.put(&dc.chunk_lentype[4..8]);   // type
     Ok(len)
 }
 
@@ -293,16 +295,16 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
     let mut len = try!(read_chunkmeta(dc));
 
     loop {
-        match &dc.chunkmeta[4..8] {
+        match &dc.chunk_lentype[4..8] {
             b"IDAT" => {
                 if !(stage == IhdrParsed || (stage == PlteParsed && dc.src_indexed)) {
                     return IFErr!("corrupt chunk stream");
                 }
 
-                // also reads chunkmeta for next chunk
+                // also reads chunk_lentype for next chunk
                 result = try!(read_idat_stream(dc, &mut len, &palette[]));
                 stage = IdatParsed;
-                continue;   // skip reading chunkmeta
+                continue;   // skip reading chunk_lentype
             }
             b"PLTE" => {
                 let entries = len / 3;
@@ -311,8 +313,8 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                 }
                 palette = try!(dc.stream.read_exact(len));
                 dc.crc.put(&palette[]);
-                try!(dc.stream.read_at_least(4, &mut dc.chunkmeta[0..4]));
-                if &dc.crc.finish_be()[] != &dc.chunkmeta[0..4] {
+                try!(dc.stream.read_at_least(4, &mut dc.chunk_crc[0..4]));
+                if &dc.crc.finish_be()[] != &dc.chunk_crc[0..4] {
                     return IFErr!("corrupt chunk");
                 }
                 stage = PlteParsed;
@@ -321,15 +323,15 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                 if stage != IdatParsed {
                     return IFErr!("corrupt chunk stream");
                 }
-                try!(dc.stream.read_at_least(4, &mut dc.chunkmeta[0..4]));
-                if len != 0 || &dc.chunkmeta[0..4] != &[0xae, 0x42, 0x60, 0x82][] {
+                try!(dc.stream.read_at_least(4, &mut dc.chunk_crc[0..4]));
+                if len != 0 || &dc.chunk_crc[0..4] != &[0xae, 0x42, 0x60, 0x82][] {
                     return IFErr!("corrupt chunk");
                 }
                 break;//stage = IendParsed;
             }
             _ => {
-                if chunk_names.iter().any(|name| &name[] == &dc.chunkmeta[4..8]) {
-                    let name = [dc.chunkmeta[4], dc.chunkmeta[5], dc.chunkmeta[6], dc.chunkmeta[7]];
+                if chunk_names.iter().any(|name| &name[] == &dc.chunk_lentype[4..8]) {
+                    let name = [dc.chunk_lentype[4], dc.chunk_lentype[5], dc.chunk_lentype[6], dc.chunk_lentype[7]];
                     let data = try!(dc.stream.read_exact(len));
                     dc.crc.put(&data[]);
                     chunks.push(PngCustomChunk { name: name, data: data });
@@ -344,8 +346,8 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                     }
                 }
 
-                try!(dc.stream.read_at_least(4, &mut dc.chunkmeta[0..4]));
-                if &dc.crc.finish_be()[] != &dc.chunkmeta[0..4] {
+                try!(dc.stream.read_at_least(4, &mut dc.chunk_crc[0..4]));
+                if &dc.crc.finish_be()[] != &dc.chunk_crc[0..4] {
                     return IFErr!("corrupt chunk");
                 }
             }
@@ -573,15 +575,15 @@ fn fill_uc_buf<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize) -> IoResult<(
         totallen += *len;
 
         // crc
-        try!(dc.stream.read_at_least(4, &mut dc.chunkmeta[0..4]));
-        if &dc.crc.finish_be()[] != &dc.chunkmeta[0..4] {
+        try!(dc.stream.read_at_least(4, &mut dc.chunk_crc[0..4]));
+        if &dc.crc.finish_be()[] != &dc.chunk_crc[0..4] {
             return IFErr!("corrupt image data");
         }
 
         // next chunk's len and type
         *len = try!(read_chunkmeta(dc));
 
-        if &dc.chunkmeta[4..8] != b"IDAT" {
+        if &dc.chunk_lentype[4..8] != b"IDAT" {
             break;
         }
     }
