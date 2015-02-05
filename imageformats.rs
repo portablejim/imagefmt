@@ -166,9 +166,9 @@ pub fn read_png_header<R: Reader>(reader: &mut R) -> IoResult<PngHeader> {
     let mut buf = [0u8; 33];  // file header + IHDR
     try!(reader.read_at_least(buf.len(), &mut buf));
 
-    if !equal(&buf[0..8], &PNG_FILE_HEADER[]) ||
-       !equal(&buf[8..16], b"\0\0\0\x0dIHDR") ||
-       !equal(&buf[29..33], &crc32be(&buf[12..29])[])
+    if &buf[0..8] != &PNG_FILE_HEADER[] ||
+       &buf[8..16] != b"\0\0\0\x0dIHDR" ||
+       &buf[29..33] != &crc32be(&buf[12..29])[]
     {
         return IFErr!("corrupt png header");
     }
@@ -307,7 +307,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                 palette = try!(dc.stream.read_exact(len));
                 dc.crc.put(&palette[]);
                 try!(dc.stream.read_at_least(4, &mut dc.chunkmeta[0..4]));
-                if !equal(&dc.crc.finish_be()[], &dc.chunkmeta[0..4]) {
+                if &dc.crc.finish_be()[] != &dc.chunkmeta[0..4] {
                     return IFErr!("corrupt chunk");
                 }
                 stage = PlteParsed;
@@ -317,7 +317,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                     return IFErr!("corrupt chunk stream");
                 }
                 try!(dc.stream.read_at_least(4, &mut dc.chunkmeta[0..4]));
-                if len != 0 || !equal(&dc.chunkmeta[0..4], &[0xae, 0x42, 0x60, 0x82]) {
+                if len != 0 || &dc.chunkmeta[0..4] != &[0xae, 0x42, 0x60, 0x82][] {
                     return IFErr!("corrupt chunk");
                 }
                 break;//stage = IendParsed;
@@ -340,7 +340,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                 }
 
                 try!(dc.stream.read_at_least(4, &mut dc.chunkmeta[0..4]));
-                if !equal(&dc.crc.finish_be()[], &dc.chunkmeta[0..4]) {
+                if &dc.crc.finish_be()[] != &dc.chunkmeta[0..4] {
                     return IFErr!("corrupt chunk");
                 }
             }
@@ -569,7 +569,7 @@ fn fill_uc_buf<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize) -> IoResult<(
 
         // crc
         try!(dc.stream.read_at_least(4, &mut dc.chunkmeta[0..4]));
-        if !equal(&dc.crc.finish_be()[], &dc.chunkmeta[0..4]) {
+        if &dc.crc.finish_be()[] != &dc.chunkmeta[0..4] {
             return IFErr!("corrupt image data");
         }
 
@@ -1197,7 +1197,7 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
     while 0 < pixels_left {
         let mut runlen = 1us;
         px = &line[i-bytes_pp .. i];
-        while i < line.len() && equal(px, &line[i..i+bytes_pp]) && runlen < 128 {
+        while i < line.len() && px == &line[i..i+bytes_pp] && runlen < 128 {
             runlen += 1;
             i += bytes_pp;
         }
@@ -1376,8 +1376,8 @@ fn read_jfif<R: Reader>(reader: &mut R) -> IoResult<()> {
 
     let len = u16_from_be(&buf[4..6]) as usize;
 
-    if !equal(&buf[0..4], &[0xff_u8, 0xd8, 0xff, 0xe0]) ||
-       !equal(&buf[6..11], b"JFIF\0") || len < 16 {
+    if &buf[0..4] != &[0xff_u8, 0xd8, 0xff, 0xe0][] ||
+       &buf[6..11] != b"JFIF\0" || len < 16 {
         return IFErr!("not JPEG/JFIF");
     }
 
@@ -2589,13 +2589,6 @@ fn u32_to_be(x: u32) -> [u8; 4] {
     let buf = [(x >> 24) as u8, (x >> 16) as u8,
                (x >>  8) as u8, (x)       as u8];
     buf
-}
-
-fn equal(a: &[u8], b: &[u8]) -> bool {
-    for i in (0 .. a.len()) {
-        if a[i] != b[i] { return false; }
-    }
-    true
 }
 
 fn skip<R: Reader>(stream: &mut R, mut bytes: usize) -> IoResult<()> {
