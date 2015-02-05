@@ -25,7 +25,7 @@ fn do_image_io() -> IoResult<()> {
     try!(write_image("out.png", pic.w, pic.h, &pic.pixels[], ColFmt::Y));
 
     // print width, heigth and color format (of what you get with ColFmt::Auto)
-    println!("{:?}", read_image_info("hiisi.png"));
+    println!("{:?}", try!(read_image_info("hiisi.png")));
 
     Ok(())
 }
