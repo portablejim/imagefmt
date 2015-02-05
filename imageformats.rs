@@ -64,75 +64,49 @@ pub enum ColFmt {
 /** Returns: basic info about an image file. The color format information does
  * not correspond to the exact format in the file: for BGR/A data the format is
  * reported as RGB/A and for paletted images it might be RGB or RGBA or
- * whatever (paletted images are auto-depaletted by the decoders).
- */
+ * whatever (paletted images are auto-depaletted by the decoders).  */
 #[allow(dead_code)]
 pub fn read_image_info(filename: &str) -> IoResult<IFInfo> {
-    let file = File::open(&Path::new(filename));
-    let reader = &mut BufferedReader::new(file);
-    match extract_extension(filename) {
-        Some(".png")                 => read_png_info(reader),
-        Some(".tga")                 => read_tga_info(reader),
-        Some(".jpg") | Some(".jpeg") => read_jpeg_info(reader),
+    type F = fn(&mut BufferedReader<File>) -> IoResult<IFInfo>;
+    let readfunc: F = match extract_extension(filename) {
+        Some(".png")                 => read_png_info,
+        Some(".tga")                 => read_tga_info,
+        Some(".jpg") | Some(".jpeg") => read_jpeg_info,
         _ => return IFErr!("extension not recognized"),
-    }
-
-    // I'd prefer this, but can't get it to work with latest Rust...
-    //let readfunc = match extract_extension(filename) {
-    //    Some(".png")                 => read_png_info,
-    //    Some(".tga")                 => read_tga_info,
-    //    Some(".jpg") | Some(".jpeg") => read_jpeg_info,
-    //    _ => return IFErr!("extension not recognized"),
-    //};
-    //let file = File::open(&Path::new(filename));
-    //let reader = &mut BufferedReader::new(file);
-    //readfunc(reader)
+    };
+    let file = try!(File::open(&Path::new(filename)));
+    let reader = &mut BufferedReader::new(file);
+    readfunc(reader)
 }
 
-/** Paletted images are auto-depaletted.
- */
+/** Paletted images are auto-depaletted.  */
 #[allow(dead_code)]
 pub fn read_image(filename: &str, req_fmt: ColFmt) -> IoResult<IFImage> {
-    let file = File::open(&Path::new(filename));
-    let reader = &mut BufferedReader::new(file);
-    match extract_extension(filename) {
-        Some(".png")                 => read_png(reader, req_fmt),
-        Some(".tga")                 => read_tga(reader, req_fmt),
-        Some(".jpg") | Some(".jpeg") => read_jpeg(reader, req_fmt),
+    type F = fn(&mut BufferedReader<File>, ColFmt) -> IoResult<IFImage>;
+    let readfunc: F = match extract_extension(filename) {
+        Some(".png")                 => read_png,
+        Some(".tga")                 => read_tga,
+        Some(".jpg") | Some(".jpeg") => read_jpeg,
         _ => return IFErr!("extension not recognized"),
-    }
-
-    //let readfunc = match extract_extension(filename) {
-    //    Some(".png")                 => read_png,
-    //    Some(".tga")                 => read_tga,
-    //    Some(".jpg") | Some(".jpeg") => read_jpeg,
-    //    _ => return IFErr!("extension not recognized"),
-    //};
-    //let file = File::open(&Path::new(filename));
-    //let reader = &mut BufferedReader::new(file);
-    //readfunc(reader, req_fmt)
+    };
+    let file = try!(File::open(&Path::new(filename)));
+    let reader = &mut BufferedReader::new(file);
+    readfunc(reader, req_fmt)
 }
 
 #[allow(dead_code)]
 pub fn write_image(filename: &str, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
                                                                      -> IoResult<()>
 {
-    let file = File::create(&Path::new(filename));
-    let writer = &mut BufferedWriter::new(file);
-    match extract_extension(filename) {
-        Some(".png") => write_png(writer, w, h, data, tgt_fmt),
-        Some(".tga") => write_tga(writer, w, h, data, tgt_fmt),
+    type F = fn(&mut BufferedWriter<File>, usize, usize, &[u8], ColFmt) -> IoResult<()>;
+    let writefunc: F = match extract_extension(filename) {
+        Some(".png") => write_png,
+        Some(".tga") => write_tga,
         _ => return IFErr!("extension not supported for writing"),
-    }
-
-    //let writefunc = match extract_extension(filename) {
-    //    Some(".png") => write_png,
-    //    Some(".tga") => write_tga,
-    //    _ => return IFErr!("extension not supported for writing"),
-    //};
-    //let file = File::create(&Path::new(filename));
-    //let writer = &mut BufferedWriter::new(file);
-    //writefunc(writer, w, h, data, tgt_fmt)
+    };
+    let file = try!(File::create(&Path::new(filename)));
+    let writer = &mut BufferedWriter::new(file);
+    writefunc(writer, w, h, data, tgt_fmt)
 }
 
 impl ColFmt {
