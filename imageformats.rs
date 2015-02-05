@@ -35,7 +35,7 @@ macro_rules! IFErr {
     ($e:expr) => (Err(IoError{kind: OtherIoError, desc: $e, detail: None}))
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct IFImage {
     pub w      : usize,
     pub h      : usize,
@@ -43,14 +43,14 @@ pub struct IFImage {
     pub pixels : Vec<u8>,
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct IFInfo {
     pub w : usize,
     pub h : usize,
     pub c : ColFmt,
 }
 
-#[derive(Copy, Show, Eq, PartialEq)]
+#[derive(Copy, Debug, Eq, PartialEq)]
 pub enum ColFmt {
     Auto = 0,
     Y = 1,
@@ -150,7 +150,7 @@ impl ColFmt {
 
 // ------------------------------------------------------------
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct PngHeader {
     pub width              : u32,
     pub height             : u32,
@@ -854,7 +854,7 @@ fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
 
 // ------------------------------------------------------------
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct TgaHeader {
    pub id_length      : u8,
    pub palette_type   : u8,
