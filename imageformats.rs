@@ -414,136 +414,138 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
 
     try!(fill_uc_buf(dc, len));
 
-    if dc.ilace == PngInterlace::None {
-        let src_linesize = dc.w * filter_step;
-        let mut cline: Vec<u8> = repeat(0).take(src_linesize+1).collect();
-        let mut pline: Vec<u8> = repeat(0).take(src_linesize+1).collect();
+    match dc.ilace {
+        PngInterlace::None => {
+            let src_linesize = dc.w * filter_step;
+            let mut cline: Vec<u8> = repeat(0).take(src_linesize+1).collect();
+            let mut pline: Vec<u8> = repeat(0).take(src_linesize+1).collect();
 
-        let mut ti = 0us;
-        for _j in (0 .. dc.h) {
-            next_uncompressed_line(dc, &mut cline[]);
-            let filter_type: u8 = cline[0];
+            let mut ti = 0us;
+            for _j in (0 .. dc.h) {
+                next_uncompressed_line(dc, &mut cline[]);
+                let filter_type: u8 = cline[0];
 
-            try!(recon(
-                &mut cline[1 .. src_linesize+1], &mut pline[1 .. src_linesize+1],
-                filter_type, filter_step
-            ));
+                try!(recon(
+                    &mut cline[1 .. src_linesize+1], &mut pline[1 .. src_linesize+1],
+                    filter_type, filter_step
+                ));
 
-            // FIXME convert
-            if dc.src_indexed {
-                try!(depalette_convert(&cline[1..], &mut result[ti .. ti+tgt_linesize]));
-            } else {
-                try!(simple_convert(&cline[1..], &mut result[ti .. ti+tgt_linesize]));
-            }
-            //try!(convert(cline[1 .. cline.len()], &mut result[ti .. ti+tgt_linesize]));
-
-            ti += tgt_linesize;
-
-            let swap = pline;
-            pline = cline;
-            cline = swap;
-        }
-    } else {
-        // Adam7 interlacing
-
-        let redw: [usize; 7] = [
-            (dc.w + 7) / 8,
-            (dc.w + 3) / 8,
-            (dc.w + 3) / 4,
-            (dc.w + 1) / 4,
-            (dc.w + 1) / 2,
-            (dc.w + 0) / 2,
-            (dc.w + 0) / 1,
-        ];
-        let redh: [usize; 7] = [
-            (dc.h + 7) / 8,
-            (dc.h + 7) / 8,
-            (dc.h + 3) / 8,
-            (dc.h + 3) / 4,
-            (dc.h + 1) / 4,
-            (dc.h + 1) / 2,
-            (dc.h + 0) / 2,
-        ];
-
-        let max_scanline_size = dc.w * filter_step;
-        let mut linebuf0: Vec<u8> = repeat(0).take(max_scanline_size+1).collect();
-        let mut linebuf1: Vec<u8> = repeat(0).take(max_scanline_size+1).collect();
-        let mut redlinebuf: Vec<u8> = repeat(0).take(dc.w * tgt_bytespp).collect();
-
-        for pass in (0..7us) {
-            let tgt_px: A7IdxTranslator = A7_IDX_TRANSLATORS[pass];   // target pixel
-            let src_linesize = redw[pass] * filter_step;
-            let mut cline = &mut linebuf0[0 .. src_linesize+1];
-            let mut pline = &mut linebuf1[0 .. src_linesize+1];
-
-            //let mut lines = vec![&mut linebuf0[0 .. src_linesize+1],
-            //                     &mut linebuf1[0 .. src_linesize+1]];
-            //let mut ci = 0us;
-            //let mut pi = 1us;
-
-            let mut sel = true;
-
-            for j in (0 .. redh[pass]) {
-                // FIXME clean up this sel mess somehow
-                if sel {
-                    next_uncompressed_line(dc, &mut cline[]);
-                    let filter_type: u8 = cline[0];
-
-                    try!(recon(
-                        &mut cline[1 .. src_linesize+1], &pline[1 .. src_linesize+1],
-                        filter_type, filter_step
-                    ));
-
-                    // FIXME convert
-                    if dc.src_indexed {
-                        try!(depalette_convert(
-                            &cline[1..],
-                            &mut redlinebuf[0..redw[pass] * tgt_bytespp]
-                        ));
-                    } else {
-                        try!(simple_convert(
-                            &cline[1..],
-                            &mut redlinebuf[0..redw[pass] * tgt_bytespp]
-                        ));
-                    }
+                // FIXME convert
+                if dc.src_indexed {
+                    try!(depalette_convert(&cline[1..], &mut result[ti .. ti+tgt_linesize]));
                 } else {
-                    next_uncompressed_line(dc, &mut pline[]);
-                    let filter_type: u8 = pline[0];
-
-                    try!(recon(
-                        &mut pline[1 .. src_linesize+1], &cline[1 .. src_linesize+1],
-                        filter_type, filter_step
-                    ));
-
-                    // FIXME convert
-                    if dc.src_indexed {
-                        try!(depalette_convert(
-                            &pline[1..],
-                            &mut redlinebuf[0..redw[pass] * tgt_bytespp]
-                        ));
-                    } else {
-                        try!(simple_convert(
-                            &pline[1..],
-                            &mut redlinebuf[0..redw[pass] * tgt_bytespp]
-                        ));
-                    }
+                    try!(simple_convert(&cline[1..], &mut result[ti .. ti+tgt_linesize]));
                 }
-                sel = !sel;
+                //try!(convert(cline[1 .. cline.len()], &mut result[ti .. ti+tgt_linesize]));
 
-                let mut redi = 0us;
-                for i in (0 .. redw[pass]) {
-                    let tgt = tgt_px(i, j, dc.w) * tgt_bytespp;
-                    copy_memory(
-                        &mut result[tgt .. tgt+tgt_bytespp],
-                        &redlinebuf[redi .. redi+tgt_bytespp]
-                    );
-                    redi += tgt_bytespp;
-                }
+                ti += tgt_linesize;
 
-                //let swap = pi; pi = ci; ci = swap;
-                //let swap = pline; pline = cline; cline = swap;
+                let swap = pline;
+                pline = cline;
+                cline = swap;
             }
-        }
+        },
+        PngInterlace::Adam7 => {
+
+            let redw: [usize; 7] = [
+                (dc.w + 7) / 8,
+                (dc.w + 3) / 8,
+                (dc.w + 3) / 4,
+                (dc.w + 1) / 4,
+                (dc.w + 1) / 2,
+                (dc.w + 0) / 2,
+                (dc.w + 0) / 1,
+            ];
+            let redh: [usize; 7] = [
+                (dc.h + 7) / 8,
+                (dc.h + 7) / 8,
+                (dc.h + 3) / 8,
+                (dc.h + 3) / 4,
+                (dc.h + 1) / 4,
+                (dc.h + 1) / 2,
+                (dc.h + 0) / 2,
+            ];
+
+            let max_scanline_size = dc.w * filter_step;
+            let mut linebuf0: Vec<u8> = repeat(0).take(max_scanline_size+1).collect();
+            let mut linebuf1: Vec<u8> = repeat(0).take(max_scanline_size+1).collect();
+            let mut redlinebuf: Vec<u8> = repeat(0).take(dc.w * tgt_bytespp).collect();
+
+            for pass in (0..7us) {
+                let tgt_px: A7IdxTranslator = A7_IDX_TRANSLATORS[pass];   // target pixel
+                let src_linesize = redw[pass] * filter_step;
+                let mut cline = &mut linebuf0[0 .. src_linesize+1];
+                let mut pline = &mut linebuf1[0 .. src_linesize+1];
+
+                //let mut lines = vec![&mut linebuf0[0 .. src_linesize+1],
+                //                     &mut linebuf1[0 .. src_linesize+1]];
+                //let mut ci = 0us;
+                //let mut pi = 1us;
+
+                let mut sel = true;
+
+                for j in (0 .. redh[pass]) {
+                    // FIXME clean up this sel mess somehow
+                    if sel {
+                        next_uncompressed_line(dc, &mut cline[]);
+                        let filter_type: u8 = cline[0];
+
+                        try!(recon(
+                            &mut cline[1 .. src_linesize+1], &pline[1 .. src_linesize+1],
+                            filter_type, filter_step
+                        ));
+
+                        // FIXME convert
+                        if dc.src_indexed {
+                            try!(depalette_convert(
+                                &cline[1..],
+                                &mut redlinebuf[0..redw[pass] * tgt_bytespp]
+                            ));
+                        } else {
+                            try!(simple_convert(
+                                &cline[1..],
+                                &mut redlinebuf[0..redw[pass] * tgt_bytespp]
+                            ));
+                        }
+                    } else {
+                        next_uncompressed_line(dc, &mut pline[]);
+                        let filter_type: u8 = pline[0];
+
+                        try!(recon(
+                            &mut pline[1 .. src_linesize+1], &cline[1 .. src_linesize+1],
+                            filter_type, filter_step
+                        ));
+
+                        // FIXME convert
+                        if dc.src_indexed {
+                            try!(depalette_convert(
+                                &pline[1..],
+                                &mut redlinebuf[0..redw[pass] * tgt_bytespp]
+                            ));
+                        } else {
+                            try!(simple_convert(
+                                &pline[1..],
+                                &mut redlinebuf[0..redw[pass] * tgt_bytespp]
+                            ));
+                        }
+                    }
+                    sel = !sel;
+
+                    let mut redi = 0us;
+                    for i in (0 .. redw[pass]) {
+                        let tgt = tgt_px(i, j, dc.w) * tgt_bytespp;
+                        copy_memory(
+                            &mut result[tgt .. tgt+tgt_bytespp],
+                            &redlinebuf[redi .. redi+tgt_bytespp]
+                        );
+                        redi += tgt_bytespp;
+                    }
+
+                    //let swap = pi; pi = ci; ci = swap;
+                    //let swap = pline; pline = cline; cline = swap;
+                }
+            } // for pass
+        } // Adam7
     }
 
     return Ok(result);
