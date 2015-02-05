@@ -2480,13 +2480,16 @@ fn crc32be(data: &[u8]) -> [u8; 4] {
     Crc32::new().put(data).finish_be()
 }
 
-struct Crc32 { r: u32 }
+struct Crc32 {
+    r: u32
+}
+
 impl Crc32 {
     fn new() -> Crc32 { Crc32 { r: 0xffff_ffff } }
 
     fn put<'a>(&'a mut self, bytes: &[u8]) -> &'a mut Crc32 {
-        for byte in bytes.iter() {
-            let idx = *byte ^ (self.r as u8);
+        for &byte in bytes.iter() {
+            let idx = byte ^ (self.r as u8);
             self.r = (self.r >> 8) ^ CRC32_TABLE[idx as usize];
         }
         self
