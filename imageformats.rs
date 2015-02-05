@@ -331,7 +331,8 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
             }
             _ => {
                 if chunk_names.iter().any(|name| &name[] == &dc.chunk_lentype[4..8]) {
-                    let name = [dc.chunk_lentype[4], dc.chunk_lentype[5], dc.chunk_lentype[6], dc.chunk_lentype[7]];
+                    let name = [dc.chunk_lentype[4], dc.chunk_lentype[5],
+                                dc.chunk_lentype[6], dc.chunk_lentype[7]];
                     let data = try!(dc.stream.read_exact(len));
                     dc.crc.put(&data[]);
                     chunks.push(PngCustomChunk { name: name, data: data });
