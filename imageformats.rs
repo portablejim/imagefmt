@@ -388,7 +388,10 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
         Vec::new()
     };
 
-    let chan_convert = try!(get_converter(dc.src_fmt, dc.tgt_fmt));
+    let chan_convert = match get_converter(dc.src_fmt, dc.tgt_fmt) {
+        Some(c) => c,
+        None => return IFErr!("no such converter"),
+    };
 
     let mut depalette_convert = |&mut: src_line: &[u8], tgt_line: &mut[u8]| -> IoResult<()> {
         let mut d = 0us;
@@ -786,7 +789,10 @@ struct PngEncoder<'r, W:'r> {
 }
 
 fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
-    let convert = try!(get_converter(ec.src_fmt, ec.tgt_fmt));
+    let convert = match get_converter(ec.src_fmt, ec.tgt_fmt) {
+        Some(c) => c,
+        None => return IFErr!("no such converter"),
+    };
 
     let filter_step = ec.tgt_fmt.channels();
     let tgt_linesize = ec.w * filter_step + 1;   // +1 for filter type
@@ -1002,7 +1008,10 @@ fn decode_tga<R: Reader>(dc: &mut TgaDecoder<R>) -> IoResult<Vec<u8>> {
             (-tgt_linesize, (dc.h-1) as i64 * tgt_linesize)
         };
 
-    let convert: LineConverter = try!(get_converter(dc.src_fmt, dc.tgt_fmt));
+    let convert: LineConverter = match get_converter(dc.src_fmt, dc.tgt_fmt) {
+        Some(c) => c,
+        None => return IFErr!("no such converter"),
+    };
 
     if !dc.rle {
         for _j in (0 .. dc.h) {
@@ -1166,7 +1175,10 @@ fn write_tga_image_data<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
     let mut tgt_line: Vec<u8> = repeat(0u8).take(tgt_linesize).collect();
     let mut si = (ec.h-1) as usize * src_linesize;
 
-    let convert = try!(get_converter(ec.src_fmt, ec.tgt_fmt));
+    let convert = match get_converter(ec.src_fmt, ec.tgt_fmt) {
+        Some(c) => c,
+        None => return IFErr!("no such converter"),
+    };
 
     if !ec.rle {
         for _ in (0 .. ec.h) {
@@ -2240,39 +2252,39 @@ fn stbi_idct_1d(t0: &mut isize, t1: &mut isize, t2: &mut isize, t3: &mut isize,
 
 type LineConverter = fn(&[u8], &mut[u8]);
 
-fn get_converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> IoResult<LineConverter> {
+fn get_converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> Option<LineConverter> {
     use self::ColFmt::*;
     match (src_fmt, tgt_fmt) {
-        (ref s, ref t) if (*s == *t) => Ok(copy_line),
-        (Y, YA)      => Ok(y_to_ya),
-        (Y, RGB)     => Ok(y_to_rgb),
-        (Y, RGBA)    => Ok(y_to_rgba),
-        (Y, BGR)     => Ok(y_to_bgr),
-        (Y, BGRA)    => Ok(y_to_bgra),
-        (YA, Y)      => Ok(ya_to_y),
-        (YA, RGB)    => Ok(ya_to_rgb),
-        (YA, RGBA)   => Ok(ya_to_rgba),
-        (YA, BGR)    => Ok(ya_to_bgr),
-        (YA, BGRA)   => Ok(ya_to_bgra),
-        (RGB, Y)     => Ok(rgb_to_y),
-        (RGB, YA)    => Ok(rgb_to_ya),
-        (RGB, RGBA)  => Ok(rgb_to_rgba),
-        (RGB, BGR)   => Ok(rgb_to_bgr),
-        (RGB, BGRA)  => Ok(rgb_to_bgra),
-        (RGBA, Y)    => Ok(rgba_to_y),
-        (RGBA, YA)   => Ok(rgba_to_ya),
-        (RGBA, RGB)  => Ok(rgba_to_rgb),
-        (RGBA, BGR)  => Ok(rgba_to_bgr),
-        (RGBA, BGRA) => Ok(rgba_to_bgra),
-        (BGR, Y)     => Ok(bgr_to_y),
-        (BGR, YA)    => Ok(bgr_to_ya),
-        (BGR, RGB)   => Ok(bgr_to_rgb),
-        (BGR, RGBA)  => Ok(bgr_to_rgba),
-        (BGRA, Y)    => Ok(bgra_to_y),
-        (BGRA, YA)   => Ok(bgra_to_ya),
-        (BGRA, RGB)  => Ok(bgra_to_rgb),
-        (BGRA, RGBA) => Ok(bgra_to_rgba),
-        _ => IFErr!("conversion not supported"),
+        (ref s, ref t) if (*s == *t) => Some(copy_line),
+        (Y, YA)      => Some(y_to_ya),
+        (Y, RGB)     => Some(y_to_rgb),
+        (Y, RGBA)    => Some(y_to_rgba),
+        (Y, BGR)     => Some(y_to_bgr),
+        (Y, BGRA)    => Some(y_to_bgra),
+        (YA, Y)      => Some(ya_to_y),
+        (YA, RGB)    => Some(ya_to_rgb),
+        (YA, RGBA)   => Some(ya_to_rgba),
+        (YA, BGR)    => Some(ya_to_bgr),
+        (YA, BGRA)   => Some(ya_to_bgra),
+        (RGB, Y)     => Some(rgb_to_y),
+        (RGB, YA)    => Some(rgb_to_ya),
+        (RGB, RGBA)  => Some(rgb_to_rgba),
+        (RGB, BGR)   => Some(rgb_to_bgr),
+        (RGB, BGRA)  => Some(rgb_to_bgra),
+        (RGBA, Y)    => Some(rgba_to_y),
+        (RGBA, YA)   => Some(rgba_to_ya),
+        (RGBA, RGB)  => Some(rgba_to_rgb),
+        (RGBA, BGR)  => Some(rgba_to_bgr),
+        (RGBA, BGRA) => Some(rgba_to_bgra),
+        (BGR, Y)     => Some(bgr_to_y),
+        (BGR, YA)    => Some(bgr_to_ya),
+        (BGR, RGB)   => Some(bgr_to_rgb),
+        (BGR, RGBA)  => Some(bgr_to_rgba),
+        (BGRA, Y)    => Some(bgra_to_y),
+        (BGRA, YA)   => Some(bgra_to_ya),
+        (BGRA, RGB)  => Some(bgra_to_rgb),
+        (BGRA, RGBA) => Some(bgra_to_rgba),
+        _ => None,
     }
 }
 
