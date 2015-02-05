@@ -579,6 +579,7 @@ fn fill_uc_buf<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize) -> IoResult<(
         if &dc.chunkmeta[4..8] != b"IDAT" {
             break;
         }
+        dc.crc.put(&dc.chunkmeta[4..8]);
     }
 
     let mut alldata: Vec<u8> = repeat(0).take(totallen).collect();
