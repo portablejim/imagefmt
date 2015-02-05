@@ -271,6 +271,14 @@ enum PngStage {
     //IendParsed,
 }
 
+fn read_chunkmeta<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<usize> {
+    try!(dc.stream.read_at_least(8, &mut dc.chunkmeta[0..8]));
+    let mut len = u32_from_be(&dc.chunkmeta[0..4]) as usize;
+    if 0x7fff_ffff < len { return IFErr!("chunk too long"); }
+    dc.crc.put(&dc.chunkmeta[4..8]);   // type
+    Ok(len)
+}
+
 fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                               -> IoResult<(Vec<u8>, Vec<PngCustomChunk>)>
 {
@@ -282,12 +290,9 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
 
     let mut stage = IhdrParsed;
 
-    try!(dc.stream.read_at_least(8, &mut dc.chunkmeta[0..8]));
-    loop {
-        let mut len = u32_from_be(&dc.chunkmeta[0..4]) as usize;
-        if 0x7fff_ffff < len { return IFErr!("chunk too long"); }
+    let mut len = try!(read_chunkmeta(dc));
 
-        dc.crc.put(&dc.chunkmeta[4..8]);   // type
+    loop {
         match &dc.chunkmeta[4..8] {
             b"IDAT" => {
                 if !(stage == IhdrParsed || (stage == PlteParsed && dc.src_indexed)) {
@@ -295,7 +300,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                 }
 
                 // also reads chunkmeta for next chunk
-                result = try!(read_idat_stream(dc, len, &palette[]));
+                result = try!(read_idat_stream(dc, &mut len, &palette[]));
                 stage = IdatParsed;
                 continue;   // skip reading chunkmeta
             }
@@ -346,7 +351,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
             }
         }
 
-        try!(dc.stream.read_at_least(8, &mut dc.chunkmeta[0..8]));
+        len = try!(read_chunkmeta(dc));
     }
 
     Ok((result, chunks))
@@ -366,7 +371,7 @@ enum PngColortype {
     RGBA = 6,
 }
 
-fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, mut len: usize, palette: &[u8])
+fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &[u8])
                                                                     -> IoResult<Vec<u8>>
 {
     let filter_step = if dc.src_indexed { 1 } else { dc.src_fmt.channels() };
@@ -401,7 +406,7 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, mut len: usize, palette: 
 
     //let convert = if dc.src_indexed { depalette_convert } else { simple_convert };    // FIXME
 
-    try!(fill_uc_buf(dc, &mut len));
+    try!(fill_uc_buf(dc, len));
 
     if dc.ilace == PngInterlace::None {
         let src_linesize = dc.w * filter_step;
@@ -574,12 +579,11 @@ fn fill_uc_buf<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize) -> IoResult<(
         }
 
         // next chunk's len and type
-        try!(dc.stream.read_at_least(8, &mut dc.chunkmeta[0..8]));
-        *len = u32_from_be(&dc.chunkmeta[0..4]) as usize;
+        *len = try!(read_chunkmeta(dc));
+
         if &dc.chunkmeta[4..8] != b"IDAT" {
             break;
         }
-        dc.crc.put(&dc.chunkmeta[4..8]);
     }
 
     let mut alldata: Vec<u8> = repeat(0).take(totallen).collect();
