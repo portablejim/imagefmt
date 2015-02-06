@@ -20,7 +20,6 @@
     IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
     CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
-#![allow(non_upper_case_globals)]    // for the static function pointers
 
 extern crate flate;
 use std::old_io::{File, BufferedReader, BufferedWriter, IoResult, IoError, OtherIoError};
@@ -2225,23 +2224,23 @@ fn get_converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> Option<LineConverter> {
         (Y, YA)      => Some(y_to_ya),
         (Y, RGB)     => Some(y_to_rgb),
         (Y, RGBA)    => Some(y_to_rgba),
-        (Y, BGR)     => Some(y_to_bgr),
-        (Y, BGRA)    => Some(y_to_bgra),
+        (Y, BGR)     => Some(Y_TO_BGR),
+        (Y, BGRA)    => Some(Y_TO_BGRA),
         (YA, Y)      => Some(ya_to_y),
         (YA, RGB)    => Some(ya_to_rgb),
         (YA, RGBA)   => Some(ya_to_rgba),
-        (YA, BGR)    => Some(ya_to_bgr),
-        (YA, BGRA)   => Some(ya_to_bgra),
+        (YA, BGR)    => Some(YA_TO_BGR),
+        (YA, BGRA)   => Some(YA_TO_BGRA),
         (RGB, Y)     => Some(rgb_to_y),
         (RGB, YA)    => Some(rgb_to_ya),
         (RGB, RGBA)  => Some(rgb_to_rgba),
-        (RGB, BGR)   => Some(rgb_to_bgr),
-        (RGB, BGRA)  => Some(rgb_to_bgra),
+        (RGB, BGR)   => Some(RGB_TO_BGR),
+        (RGB, BGRA)  => Some(RGB_TO_BGRA),
         (RGBA, Y)    => Some(rgba_to_y),
         (RGBA, YA)   => Some(rgba_to_ya),
         (RGBA, RGB)  => Some(rgba_to_rgb),
-        (RGBA, BGR)  => Some(rgba_to_bgr),
-        (RGBA, BGRA) => Some(rgba_to_bgra),
+        (RGBA, BGR)  => Some(RGBA_TO_BGR),
+        (RGBA, BGRA) => Some(RGBA_TO_BGRA),
         (BGR, Y)     => Some(bgr_to_y),
         (BGR, YA)    => Some(bgr_to_ya),
         (BGR, RGB)   => Some(bgr_to_rgb),
@@ -2271,7 +2270,7 @@ fn y_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-const y_to_bgr: LineConverter = y_to_rgb;
+const Y_TO_BGR: LineConverter = y_to_rgb;
 fn y_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0us;
     for s in (0us .. src_line.len()) {
@@ -2282,7 +2281,7 @@ fn y_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-const y_to_bgra: LineConverter = y_to_rgba;
+const Y_TO_BGRA: LineConverter = y_to_rgba;
 fn y_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0us;
     for s in (0us .. src_line.len()) {
@@ -2302,7 +2301,7 @@ fn ya_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-const ya_to_bgr: LineConverter = ya_to_rgb;
+const YA_TO_BGR: LineConverter = ya_to_rgb;
 fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0us;
     for s in range_step(0, src_line.len(), 2) {
@@ -2313,7 +2312,7 @@ fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-const ya_to_bgra: LineConverter = ya_to_rgba;
+const YA_TO_BGRA: LineConverter = ya_to_rgba;
 fn ya_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0us;
     for s in range_step(0, src_line.len(), 2) {
@@ -2397,7 +2396,7 @@ fn bgr_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-const rgb_to_bgr: LineConverter = bgr_to_rgb;
+const RGB_TO_BGR: LineConverter = bgr_to_rgb;
 fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0us;
     for s in range_step(0, src_line.len(), 3) {
@@ -2408,7 +2407,7 @@ fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-const rgb_to_bgra: LineConverter = bgr_to_rgba;
+const RGB_TO_BGRA: LineConverter = bgr_to_rgba;
 fn bgr_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0us;
     for s in range_step(0, src_line.len(), 3) {
@@ -2437,7 +2436,7 @@ fn bgra_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-const rgba_to_bgr: LineConverter = bgra_to_rgb;
+const RGBA_TO_BGR: LineConverter = bgra_to_rgb;
 fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0us;
     for s in range_step(0, src_line.len(), 4) {
@@ -2448,7 +2447,7 @@ fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-const rgba_to_bgra: LineConverter = bgra_to_rgba;
+const RGBA_TO_BGRA: LineConverter = bgra_to_rgba;
 fn bgra_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0us;
     for s in range_step(0, src_line.len(), 4) {
