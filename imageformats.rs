@@ -1330,10 +1330,6 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
 
     try!(read_markers(dc));   // reads until first scan header
 
-    for c in (0 .. dc.comps.len()) {
-        dc.comps[c].data = Vec::new();
-    }
-
     if dc.eoi_reached {
         return IFErr!("no image data");
     }
@@ -1347,11 +1343,20 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
             req_fmt
         };
 
+    for comp in dc.comps.iter_mut() {
+        comp.data = repeat(0u8).take(dc.num_mcu_x*comp.sfx*8*dc.num_mcu_y*comp.sfy*8).collect();
+    }
+
     Ok(IFImage {
         w      : dc.w,
         h      : dc.h,
         c      : dc.tgt_fmt,
-        pixels : try!(decode_jpeg(dc))
+        pixels : {
+            // progressive images aren't supported so only one scan
+            try!(decode_scan(dc));
+            // throw away fill samples and convert to target format
+            try!(reconstruct(dc))
+        }
     })
 }
 
@@ -1713,19 +1718,6 @@ fn read_restart_interval<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     if len != 4 { return IFErr!("invalid / not supported"); }
     dc.restart_interval = u16_from_be(&buf[2..4]) as usize;
     Ok(())
-}
-
-fn decode_jpeg<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<Vec<u8>> {
-    for i in (0 .. dc.num_comps) {
-        let comp = &mut dc.comps[i];
-        comp.data = repeat(0u8).take(dc.num_mcu_x*comp.sfx*8*dc.num_mcu_y*comp.sfy*8).collect();
-    }
-
-    // progressive images aren't supported so only one scan
-    //println!("decode scan...");
-    try!(decode_scan(dc));
-    // throw away fill samples and convert to target format
-    reconstruct(dc)
 }
 
 fn decode_scan<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
