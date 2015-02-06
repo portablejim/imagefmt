@@ -446,7 +446,6 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
             }
         },
         PngInterlace::Adam7 => {
-
             let redw: [usize; 7] = [
                 (dc.w + 7) / 8,
                 (dc.w + 3) / 8,
@@ -474,35 +473,29 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
             for pass in (0..7us) {
                 let tgt_px: A7IdxTranslator = A7_IDX_TRANSLATORS[pass];   // target pixel
                 let src_linesize = redw[pass] * filter_step;
-                let mut cline = &mut linebuf0[0 .. src_linesize+1];
-                let mut pline = &mut linebuf1[0 .. src_linesize+1];
-
-                let mut sel = true;
 
                 for j in (0 .. redh[pass]) {
-                    // FIXME clean up this sel mess somehow
-                    if sel {
-                        next_uncompressed_line(dc, &mut cline[]);
-                        let filter_type: u8 = cline[0];
-
-                        try!(recon(
-                            &mut cline[1 .. src_linesize+1], &pline[1 .. src_linesize+1],
-                            filter_type, filter_step
-                        ));
-
-                        convert(&cline[1..], &mut redlinebuf[0..redw[pass] * tgt_bytespp], palette, &mut depaletted_line[], chan_convert);
+                    let (cline, pline) = if j % 2 == 0 {
+                        (&mut linebuf0[0 .. src_linesize+1],
+                        &mut linebuf1[0 .. src_linesize+1])
                     } else {
-                        next_uncompressed_line(dc, &mut pline[]);
-                        let filter_type: u8 = pline[0];
+                        (&mut linebuf1[0 .. src_linesize+1],
+                        &mut linebuf0[0 .. src_linesize+1])
+                    };
 
-                        try!(recon(
-                            &mut pline[1 .. src_linesize+1], &cline[1 .. src_linesize+1],
-                            filter_type, filter_step
-                        ));
+                    next_uncompressed_line(dc, &mut cline[]);
+                    let filter_type: u8 = cline[0];
 
-                        convert(&pline[1..], &mut redlinebuf[0..redw[pass] * tgt_bytespp], palette, &mut depaletted_line[], chan_convert);
-                    }
-                    sel = !sel;
+                    try!(recon(
+                        &mut cline[1 .. src_linesize+1], &pline[1 .. src_linesize+1],
+                        filter_type, filter_step
+                    ));
+
+                    convert(&cline[1..],
+                            &mut redlinebuf[0..redw[pass] * tgt_bytespp],
+                            palette,
+                            &mut depaletted_line[],
+                            chan_convert);
 
                     let mut redi = 0us;
                     for i in (0 .. redw[pass]) {
@@ -514,10 +507,8 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
                         redi += tgt_bytespp;
                     }
 
-                    //let swap = pi; pi = ci; ci = swap;
-                    //let swap = pline; pline = cline; cline = swap;
                 }
-            } // for pass
+            }
         } // Adam7
     }
 
