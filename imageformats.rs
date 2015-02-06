@@ -2087,13 +2087,13 @@ fn clamp_to_u8(x: f32) -> u8 {
 // idct and level-shift
 unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
     let d = data;
-    let mut v: [isize; 64] = [0; 64];
+    let mut v: [i32; 64] = [0; 64];
 
     // columns
     for i in (0 .. 8us) {
         if d[i+ 8]==0 && d[i+16]==0 && d[i+24]==0 && d[i+32]==0 &&
            d[i+40]==0 && d[i+48]==0 && d[i+56]==0 {
-            let dcterm = (d[i] as isize) << 2;
+            let dcterm = (d[i] as i32) << 2;
             v[i   ] = dcterm;
             v[i+ 8] = dcterm;
             v[i+16] = dcterm;
@@ -2103,15 +2103,15 @@ unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
             v[i+48] = dcterm;
             v[i+56] = dcterm;
         } else {
-            let mut t0: isize = 0; let mut t1: isize = 0;
-            let mut t2: isize = 0; let mut t3: isize = 0;
-            let mut x0: isize = 0; let mut x1: isize = 0;
-            let mut x2: isize = 0; let mut x3: isize = 0;
+            let mut t0 = 0; let mut t1 = 0;
+            let mut t2 = 0; let mut t3 = 0;
+            let mut x0 = 0; let mut x1 = 0;
+            let mut x2 = 0; let mut x3 = 0;
             stbi_idct_1d(
                 &mut t0, &mut t1, &mut t2, &mut t3,
                 &mut x0, &mut x1, &mut x2, &mut x3,
-                d[i+ 0] as isize, d[i+ 8] as isize, d[i+16] as isize, d[i+24] as isize,
-                d[i+32] as isize, d[i+40] as isize, d[i+48] as isize, d[i+56] as isize
+                d[i+ 0] as i32, d[i+ 8] as i32, d[i+16] as i32, d[i+24] as i32,
+                d[i+32] as i32, d[i+40] as i32, d[i+48] as i32, d[i+56] as i32
             );
 
             // constants scaled things up by 1<<12; let's bring them back
@@ -2129,10 +2129,10 @@ unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
     }
 
     for i in range_step(0, 64, 8) {
-        let mut t0: isize = 0; let mut t1: isize = 0;
-        let mut t2: isize = 0; let mut t3: isize = 0;
-        let mut x0: isize = 0; let mut x1: isize = 0;
-        let mut x2: isize = 0; let mut x3: isize = 0;
+        let mut t0 = 0; let mut t1 = 0;
+        let mut t2 = 0; let mut t3 = 0;
+        let mut x0 = 0; let mut x1 = 0;
+        let mut x2 = 0; let mut x3 = 0;
         stbi_idct_1d(
             &mut t0, &mut t1, &mut t2, &mut t3,
             &mut x0, &mut x1, &mut x2, &mut x3,
@@ -2162,17 +2162,17 @@ unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
     }
 }
 
-fn stbi_clamp(x: isize) -> u8 {
-   if x as usize > 255 {
+fn stbi_clamp(x: i32) -> u8 {
+   if x as u32 > 255 {
       if x < 0 { return 0; }
       if x > 255 { return 255; }
    }
    return x as u8;
 }
 
-fn stbi_idct_1d(t0: &mut isize, t1: &mut isize, t2: &mut isize, t3: &mut isize,
-                 x0: &mut isize, x1: &mut isize, x2: &mut isize, x3: &mut isize,
-        s0: isize, s1: isize, s2: isize, s3: isize, s4: isize, s5: isize, s6: isize, s7: isize)
+fn stbi_idct_1d(t0: &mut i32, t1: &mut i32, t2: &mut i32, t3: &mut i32,
+                 x0: &mut i32, x1: &mut i32, x2: &mut i32, x3: &mut i32,
+        s0: i32, s1: i32, s2: i32, s3: i32, s4: i32, s5: i32, s6: i32, s7: i32)
 {
    let mut p2 = s2;
    let mut p3 = s6;
@@ -2210,8 +2210,8 @@ fn stbi_idct_1d(t0: &mut isize, t1: &mut isize, t2: &mut isize, t3: &mut isize,
    *t0 += p1+p3;
 }
 
-#[inline(always)] fn f2f(x: f32) -> isize { (x * 4096_f32 + 0.5) as isize }
-#[inline(always)] fn fsh(x: isize) -> isize { x << 12 }
+#[inline(always)] fn f2f(x: f32) -> i32 { (x * 4096_f32 + 0.5) as i32 }
+#[inline(always)] fn fsh(x: i32) -> i32 { x << 12 }
 
 // ------------------------------------------------------------
 
