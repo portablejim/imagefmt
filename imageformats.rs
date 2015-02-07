@@ -274,7 +274,7 @@ enum PngStage {
 
 fn read_chunkmeta<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<usize> {
     try!(dc.stream.read_at_least(8, &mut dc.chunk_lentype[0..8]));
-    let mut len = u32_from_be(&dc.chunk_lentype[0..4]) as usize;
+    let len = u32_from_be(&dc.chunk_lentype[0..4]) as usize;
     if 0x7fff_ffff < len { return IFErr!("chunk too long"); }
     dc.crc.put(&dc.chunk_lentype[4..8]);   // type
     Ok(len)
