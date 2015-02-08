@@ -140,8 +140,7 @@ static PNG_FILE_HEADER: [u8; 8] =
 pub fn read_png_info<R: Reader>(reader: &mut R) -> IoResult<IFInfo> {
     let hdr = try!(read_png_header(reader));
 
-    let ctype: Option<PngColortype> = FromPrimitive::from_u8(hdr.color_type);
-    let ctype = match ctype {
+    let ctype: PngColortype = match FromPrimitive::from_u8(hdr.color_type) {
         Some(ct) => ct,
         None => return IFErr!("unsupported color type"),
     };
