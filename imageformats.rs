@@ -557,7 +557,7 @@ fn fill_uc_buf<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize) -> IoResult<(
 
     let mut alldata: Vec<u8> = repeat(0).take(totallen).collect();
     let mut di = 0us;
-    for chunk in chunks.iter() {
+    for chunk in &chunks {
         copy_memory(&mut alldata[di .. di+chunk.len()], &chunk[]);
         di += chunk.len();
     }
@@ -691,7 +691,7 @@ pub fn write_png_chunks<W: Writer>(writer: &mut W, w: usize, h: usize, data: &[u
     };
 
     try!(write_png_header(ec));
-    for chunk in chunks.iter() {
+    for chunk in chunks {
         try!(write_custom_chunk(ec, chunk));
     }
     try!(write_png_image_data(ec));
@@ -724,7 +724,7 @@ fn write_png_header<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
 
 fn write_custom_chunk<W: Writer>(ec: &mut PngEncoder<W>, chunk: &PngCustomChunk) -> IoResult<()> {
     if chunk.name[0] < 97 || 122 < chunk.name[0] { return IFErr!("invalid chunk name"); }
-    for b in (&chunk.name[1..]).iter() {
+    for b in &chunk.name[1..] {
         if *b < 65 || (90 < *b && *b < 97) || 122 < *b {
             return IFErr!("invalid chunk name");
         }
@@ -1929,7 +1929,7 @@ fn reconstruct<R: Reader>(dc: &JpegDecoder<R>) -> IoResult<Vec<u8>> {
 
     match (dc.num_comps, dc.tgt_fmt) {
         (3, ColFmt::RGB) | (3, ColFmt::RGBA) => {
-            for ref comp in dc.comps.iter() {
+            for ref comp in &dc.comps {
                 if comp.sfx != dc.hmax || comp.sfy != dc.vmax {
                     upsample_rgb(dc, &mut result[]);
                     return Ok(result);
@@ -2463,7 +2463,7 @@ impl Crc32 {
     fn new() -> Crc32 { Crc32 { r: 0xffff_ffff } }
 
     fn put<'a>(&'a mut self, bytes: &[u8]) -> &'a mut Crc32 {
-        for &byte in bytes.iter() {
+        for &byte in bytes {
             let idx = byte ^ (self.r as u8);
             self.r = (self.r >> 8) ^ CRC32_TABLE[idx as usize];
         }
