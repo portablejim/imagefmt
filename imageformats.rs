@@ -164,9 +164,9 @@ pub fn read_png_header<R: Reader>(reader: &mut R) -> IoResult<PngHeader> {
     let mut buf = [0u8; 33];  // file header + IHDR
     try!(reader.read_at_least(buf.len(), &mut buf));
 
-    if &buf[0..8] != &PNG_FILE_HEADER[] ||
+    if &buf[0..8] != &PNG_FILE_HEADER[..] ||
        &buf[8..16] != b"\0\0\0\x0dIHDR" ||
-       &buf[29..33] != &crc32be(&buf[12..29])[]
+       &buf[29..33] != &crc32be(&buf[12..29])[..]
     {
         return IFErr!("corrupt png header");
     }
@@ -281,7 +281,7 @@ fn read_chunkmeta<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<usize> {
 fn readcheck_crc<R: Reader>(dc: &mut PngDecoder<R>) -> IoResult<()> {
     let mut tmp = [0u8; 4];
     try!(dc.stream.read_at_least(4, &mut tmp[0..4]));
-    if &dc.crc.finish_be()[] != &tmp[0..4] {
+    if &dc.crc.finish_be()[..] != &tmp[0..4] {
         return IFErr!("corrupt chunk");
     }
     Ok(())
@@ -308,7 +308,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                 }
 
                 // also reads chunk_lentype for next chunk
-                result = try!(read_idat_stream(dc, &mut len, &palette[]));
+                result = try!(read_idat_stream(dc, &mut len, &palette[..]));
                 stage = IdatParsed;
                 continue;   // skip reading chunk_lentype
             }
@@ -318,7 +318,7 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                     return IFErr!("corrupt chunk stream");
                 }
                 palette = try!(dc.stream.read_exact(len));
-                dc.crc.put(&palette[]);
+                dc.crc.put(&palette[..]);
                 try!(readcheck_crc(dc));
                 stage = PlteParsed;
             }
@@ -328,17 +328,17 @@ fn decode_png<R: Reader>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                 }
                 let mut crc = [0u8; 4];
                 try!(dc.stream.read_at_least(4, &mut crc[0..4]));
-                if len != 0 || &crc[0..4] != &[0xae, 0x42, 0x60, 0x82][] {
+                if len != 0 || &crc[0..4] != &[0xae, 0x42, 0x60, 0x82][..] {
                     return IFErr!("corrupt chunk");
                 }
                 break;//stage = IendParsed;
             }
             _ => {
-                if chunk_names.iter().any(|name| &name[] == &dc.chunk_lentype[4..8]) {
+                if chunk_names.iter().any(|name| &name[..] == &dc.chunk_lentype[4..8]) {
                     let name = [dc.chunk_lentype[4], dc.chunk_lentype[5],
                                 dc.chunk_lentype[6], dc.chunk_lentype[7]];
                     let data = try!(dc.stream.read_exact(len));
-                    dc.crc.put(&data[]);
+                    dc.crc.put(&data[..]);
                     chunks.push(PngCustomChunk { name: name, data: data });
                 } else {
                     // unknown chunk, ignore but check crc... or should crc be ignored?
@@ -379,7 +379,7 @@ fn depalette_convert(src_line: &[u8], tgt_line: &mut[u8], palette: &[u8],
                                                depaletted_line: &mut[u8],
                                              chan_convert: LineConverter)
 {
-    let mut d = 0us;
+    let mut d = 0;
     for s in (0 .. src_line.len()) {
         let pidx = src_line[s] as usize * 3;
         copy_memory(&mut depaletted_line[d..d+3], &palette[pidx..pidx+3]);
@@ -427,9 +427,9 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
             let mut cline: Vec<u8> = repeat(0).take(src_linesize+1).collect();
             let mut pline: Vec<u8> = repeat(0).take(src_linesize+1).collect();
 
-            let mut ti = 0us;
+            let mut ti = 0;
             for _j in (0 .. dc.h) {
-                next_uncompressed_line(dc, &mut cline[]);
+                next_uncompressed_line(dc, &mut cline[..]);
                 let filter_type: u8 = cline[0];
 
                 try!(recon(
@@ -437,7 +437,7 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
                     filter_type, filter_step
                 ));
 
-                convert(&cline[1..], &mut result[ti .. ti+tgt_linesize], palette, &mut depaletted_line[], chan_convert);
+                convert(&cline[1..], &mut result[ti .. ti+tgt_linesize], palette, &mut depaletted_line[..], chan_convert);
 
                 ti += tgt_linesize;
 
@@ -471,7 +471,7 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
             let mut linebuf1: Vec<u8> = repeat(0).take(max_scanline_size+1).collect();
             let mut redlinebuf: Vec<u8> = repeat(0).take(dc.w * tgt_bytespp).collect();
 
-            for pass in (0..7us) {
+            for pass in (0..7) {
                 let tgt_px: A7IdxTranslator = A7_IDX_TRANSLATORS[pass];   // target pixel
                 let src_linesize = redw[pass] * filter_step;
 
@@ -484,7 +484,7 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
                         &mut linebuf0[0 .. src_linesize+1])
                     };
 
-                    next_uncompressed_line(dc, &mut cline[]);
+                    next_uncompressed_line(dc, &mut cline[..]);
                     let filter_type: u8 = cline[0];
 
                     try!(recon(
@@ -495,10 +495,10 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
                     convert(&cline[1..],
                             &mut redlinebuf[0..redw[pass] * tgt_bytespp],
                             palette,
-                            &mut depaletted_line[],
+                            &mut depaletted_line[..],
                             chan_convert);
 
-                    let mut redi = 0us;
+                    let mut redi = 0;
                     for i in (0 .. redw[pass]) {
                         let tgt = tgt_px(i, j, dc.w) * tgt_bytespp;
                         copy_memory(
@@ -537,11 +537,11 @@ fn a7_red7_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { (redy*2+1)*dstw
 
 fn fill_uc_buf<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize) -> IoResult<()> {
     let mut chunks: Vec<Vec<u8>> = Vec::new();
-    let mut totallen = 0us;
+    let mut totallen = 0;
     loop {
         let mut fresh: Vec<u8> = repeat(0).take(*len).collect();
-        try!(dc.stream.read_at_least(*len, &mut fresh[]));
-        dc.crc.put(&fresh[]);
+        try!(dc.stream.read_at_least(*len, &mut fresh[..]));
+        dc.crc.put(&fresh[..]);
         chunks.push(fresh);
         totallen += *len;
 
@@ -556,19 +556,19 @@ fn fill_uc_buf<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize) -> IoResult<(
     }
 
     let mut alldata: Vec<u8> = repeat(0).take(totallen).collect();
-    let mut di = 0us;
+    let mut di = 0;
     for chunk in &chunks {
-        copy_memory(&mut alldata[di .. di+chunk.len()], &chunk[]);
+        copy_memory(&mut alldata[di .. di+chunk.len()], &chunk[..]);
         di += chunk.len();
     }
 
-    let inflated = match inflate_bytes_zlib(&alldata[]) {
+    let inflated = match inflate_bytes_zlib(&alldata[..]) {
         Some(cvec) => cvec,
         None => return IFErr!("could not inflate zlib source")
     };
 
     dc.uc_buf = repeat(0u8).take(inflated.as_slice().len()).collect();
-    copy_memory(&mut dc.uc_buf[], inflated.as_slice());
+    copy_memory(&mut dc.uc_buf[..], inflated.as_slice());
 
     Ok(())
 }
@@ -703,10 +703,10 @@ pub fn write_png_chunks<W: Writer>(writer: &mut W, w: usize, h: usize, data: &[u
 fn write_png_header<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
     let mut hdr: [u8; 33] = [0; 33];
 
-    copy_memory(&mut hdr[0..8], &PNG_FILE_HEADER[]);
+    copy_memory(&mut hdr[0..8], &PNG_FILE_HEADER[..]);
     copy_memory(&mut hdr[8..16], b"\0\0\0\x0dIHDR");
-    copy_memory(&mut hdr[16..20], &u32_to_be(ec.w as u32)[]);
-    copy_memory(&mut hdr[20..24], &u32_to_be(ec.h as u32)[]);
+    copy_memory(&mut hdr[16..20], &u32_to_be(ec.w as u32)[..]);
+    copy_memory(&mut hdr[20..24], &u32_to_be(ec.h as u32)[..]);
     hdr[24] = 8;    // bit depth
     hdr[25] = match ec.tgt_fmt {    // color type
         ColFmt::Y => PngColortype::Y,
@@ -717,9 +717,9 @@ fn write_png_header<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
     } as u8;
     copy_memory(&mut hdr[26..29], &[0, 0, 0]);  // compression, filter, interlace
     ec.crc.put(&hdr[12..29]);
-    copy_memory(&mut hdr[29..33], &ec.crc.finish_be()[]);
+    copy_memory(&mut hdr[29..33], &ec.crc.finish_be()[..]);
 
-    ec.stream.write_all(&hdr[])
+    ec.stream.write_all(&hdr[..])
 }
 
 fn write_custom_chunk<W: Writer>(ec: &mut PngEncoder<W>, chunk: &PngCustomChunk) -> IoResult<()> {
@@ -732,12 +732,12 @@ fn write_custom_chunk<W: Writer>(ec: &mut PngEncoder<W>, chunk: &PngCustomChunk)
     if 0x7fff_ffff < chunk.data.len() { return IFErr!("chunk too long"); }
 
     try!(ec.stream.write_be_u32(chunk.data.len() as u32));
-    try!(ec.stream.write_all(&chunk.name[]));
-    try!(ec.stream.write_all(&chunk.data[]));
+    try!(ec.stream.write_all(&chunk.name[..]));
+    try!(ec.stream.write_all(&chunk.data[..]));
     let mut crc = Crc32::new();
-    crc.put(&chunk.name[]);
-    crc.put(&chunk.data[]);
-    ec.stream.write_all(&crc.finish_be()[])
+    crc.put(&chunk.name[..]);
+    crc.put(&chunk.data[..]);
+    ec.stream.write_all(&crc.finish_be()[..])
 }
 
 struct PngEncoder<'r, W:'r> {
@@ -765,7 +765,7 @@ fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
 
     let src_linesize = ec.w * ec.src_chans;
 
-    let mut ti = 0us;
+    let mut ti = 0;
     for si in range_step(0, ec.h * src_linesize, src_linesize) {
         convert(&ec.data[si .. si+src_linesize], &mut cline[1 .. tgt_linesize]);
 
@@ -786,7 +786,7 @@ fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
         ti += tgt_linesize;
     }
 
-    let compressed = match deflate_bytes_zlib(&filtered_image[]) {
+    let compressed = match deflate_bytes_zlib(&filtered_image[..]) {
         Some(cvec) => cvec,
         None => return IFErr!("compression failed"),
     };
@@ -796,7 +796,7 @@ fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
 
     // TODO split up data into smaller chunks?
     let chunklen = compressed.as_slice().len() as u32;
-    try!(ec.stream.write_all(&u32_to_be(chunklen)[]));
+    try!(ec.stream.write_all(&u32_to_be(chunklen)[..]));
     try!(ec.stream.write_all(b"IDAT"));
     try!(ec.stream.write_all(compressed.as_slice()));
     try!(ec.stream.write_all(crc));
@@ -978,8 +978,8 @@ fn decode_tga<R: Reader>(dc: &mut TgaDecoder<R>) -> IoResult<Vec<u8>> {
 
     if !dc.rle {
         for _j in (0 .. dc.h) {
-            try!(dc.stream.read_at_least(src_linesize, &mut src_line[]));
-            convert(&src_line[], &mut result[ti as usize..(ti+tgt_linesize) as usize]);
+            try!(dc.stream.read_at_least(src_linesize, &mut src_line[..]));
+            convert(&src_line[..], &mut result[ti as usize..(ti+tgt_linesize) as usize]);
             ti += tgt_stride;
         }
         return Ok(result);
@@ -989,7 +989,7 @@ fn decode_tga<R: Reader>(dc: &mut TgaDecoder<R>) -> IoResult<Vec<u8>> {
 
     let bytes_pp = dc.src_chans as usize;
     let mut rbuf: Vec<u8> = repeat(0u8).take(src_linesize).collect();
-    let mut plen = 0us;    // packet length
+    let mut plen = 0;    // packet length
     let mut its_rle = false;
 
     for _ in (0 .. dc.h) {
@@ -1016,7 +1016,7 @@ fn decode_tga<R: Reader>(dc: &mut TgaDecoder<R>) -> IoResult<Vec<u8>> {
             plen -= copysize;
         }
 
-        convert(&src_line[], &mut result[ti as usize .. (ti+tgt_linesize) as usize]);
+        convert(&src_line[..], &mut result[ti as usize .. (ti+tgt_linesize) as usize]);
         ti += tgt_stride;
     }
 
@@ -1145,8 +1145,8 @@ fn write_tga_image_data<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
 
     if !ec.rle {
         for _ in (0 .. ec.h) {
-            convert(&ec.data[si..si+src_linesize], &mut tgt_line[]);
-            try!(ec.stream.write_all(&tgt_line[]));
+            convert(&ec.data[si..si+src_linesize], &mut tgt_line[..]);
+            try!(ec.stream.write_all(&tgt_line[..]));
             si -= src_linesize; // origin at bottom
         }
         return Ok(());
@@ -1158,9 +1158,9 @@ fn write_tga_image_data<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
     let max_packets_per_line = (tgt_linesize+127) / 128;
     let mut cmp_buf: Vec<u8> = repeat(0u8).take(tgt_linesize+max_packets_per_line).collect();
     for _ in (0 .. ec.h) {
-        convert(&ec.data[si .. si+src_linesize], &mut tgt_line[]);
-        let compressed_line = rle_compress(&tgt_line[], &mut cmp_buf[], ec.w, bytes_pp);
-        try!(ec.stream.write_all(&compressed_line[]));
+        convert(&ec.data[si .. si+src_linesize], &mut tgt_line[..]);
+        let compressed_line = rle_compress(&tgt_line[..], &mut cmp_buf[..], ec.w, bytes_pp);
+        try!(ec.stream.write_all(&compressed_line[..]));
         si -= src_linesize;
     }
     return Ok(());
@@ -1170,15 +1170,15 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
                                                                     -> &'a [u8]
 {
     let rle_limit = if 1 < bytes_pp { 2 } else { 3 };   // run len worth an RLE packet
-    let mut rawlen = 0us;
-    let mut raw_i = 0us;   // start of raw packet data
-    let mut cmp_i = 0us;
+    let mut rawlen = 0;
+    let mut raw_i = 0;   // start of raw packet data
+    let mut cmp_i = 0;
     let mut pixels_left = w;
     let mut px: &[u8];
 
     let mut i = bytes_pp;
     while 0 < pixels_left {
-        let mut runlen = 1us;
+        let mut runlen = 1;
         px = &line[i-bytes_pp .. i];
         while i < line.len() && px == &line[i..i+bytes_pp] && runlen < 128 {
             runlen += 1;
@@ -1262,7 +1262,7 @@ pub fn read_jpeg_info<R: Reader>(stream: &mut R) -> IoResult<IFInfo> {
 
     loop {
         let mut marker: [u8; 2] = [0, 0];
-        try!(stream.read_at_least(marker.len(), &mut marker[]));
+        try!(stream.read_at_least(marker.len(), &mut marker[..]));
 
         if marker[0] != 0xff { return IFErr!("no marker"); }
         while marker[1] == 0xff {
@@ -1272,7 +1272,7 @@ pub fn read_jpeg_info<R: Reader>(stream: &mut R) -> IoResult<IFInfo> {
         match marker[1] {
             SOF0 | SOF2 => {
                 let mut tmp: [u8; 8] = [0,0,0,0, 0,0,0,0];
-                try!(stream.read_at_least(tmp.len(), &mut tmp[]));
+                try!(stream.read_at_least(tmp.len(), &mut tmp[..]));
                 return Ok(IFInfo {
                     w: u16_from_be(&tmp[5..7]) as usize,
                     h: u16_from_be(&tmp[3..5]) as usize,
@@ -1286,8 +1286,8 @@ pub fn read_jpeg_info<R: Reader>(stream: &mut R) -> IoResult<IFInfo> {
             SOS | EOI => return IFErr!("no frame header"),
             DRI | DHT | DQT | COM | APP0 ... APPF => {
                 let mut tmp: [u8; 2] = [0, 0];
-                try!(stream.read_at_least(tmp.len(), &mut tmp[]));
-                let len = u16_from_be(&mut tmp[]) - 2;
+                try!(stream.read_at_least(tmp.len(), &mut tmp[..]));
+                let len = u16_from_be(&mut tmp[..]) - 2;
                 try!(skip(stream, len as usize));
             }
             _ => return IFErr!("invalid / unsupported marker"),
@@ -1360,11 +1360,11 @@ pub fn read_jpeg<R: Reader>(reader: &mut R, req_fmt: ColFmt) -> IoResult<IFImage
 
 fn read_jfif<R: Reader>(reader: &mut R) -> IoResult<()> {
     let mut buf = [0u8; 20]; // SOI, APP0
-    try!(reader.read_at_least(buf.len(), &mut buf[]));
+    try!(reader.read_at_least(buf.len(), &mut buf[..]));
 
     let len = u16_from_be(&buf[4..6]) as usize;
 
-    if &buf[0..4] != &[0xff_u8, 0xd8, 0xff, 0xe0][] ||
+    if &buf[0..4] != &[0xff_u8, 0xd8, 0xff, 0xe0][..] ||
        &buf[6..11] != b"JFIF\0" || len < 16 {
         return IFErr!("not JPEG/JFIF");
     }
@@ -1434,7 +1434,7 @@ fn read_markers<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     let mut has_next_scan_header = false;
     while !has_next_scan_header && !dc.eoi_reached {
         let mut marker: [u8; 2] = [0, 0];
-        try!(dc.stream.read_at_least(marker.len(), &mut marker[]));
+        try!(dc.stream.read_at_least(marker.len(), &mut marker[..]));
 
         if marker[0] != 0xff { return IFErr!("no marker"); }
         while marker[1] == 0xff {
@@ -1464,8 +1464,8 @@ fn read_markers<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
             APP0 ... APPF | COM => {
                 //println!("skipping unknown marker...");
                 let mut tmp: [u8; 2] = [0, 0];
-                try!(dc.stream.read_at_least(tmp.len(), &mut tmp[]));
-                let len = u16_from_be(&mut tmp[]) - 2;
+                try!(dc.stream.read_at_least(tmp.len(), &mut tmp[..]));
+                let len = u16_from_be(&mut tmp[..]) - 2;
                 try!(skip(dc.stream, len as usize));
             }
             _ => return IFErr!("invalid / unsupported marker"),
@@ -1510,8 +1510,8 @@ fn read_huffman_tables<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
         }
 
         // compute total number of huffman codes
-        let mut mt = 0us;
-        for i in (1..17us) {
+        let mut mt = 0;
+        for i in (1..17) {
             mt += buf[i] as usize;
         }
         if 256 < mt {
@@ -1537,7 +1537,7 @@ fn derive_table(table: &mut HuffTab, num_values: &[u8]) {
     let mut codes: [i16; 256] = [0; 256];
 
     let mut k = 0;
-    for i in (0..16us) {
+    for i in (0..16) {
         for _j in (0 .. num_values[i]) {
             table.sizes[k] = (i + 1) as u8;
             k += 1;
@@ -1573,14 +1573,14 @@ fn derive_mincode_maxcode_valptr(mincode: &mut[i16; 16], maxcode: &mut[i16; 16],
                                  valptr:  &mut[i16; 16], codes: &[i16; 256],
                                  num_values: &[u8])
 {
-    for i in (0..16us) {
+    for i in (0..16) {
         mincode[i] = -1;
         maxcode[i] = -1;
         valptr[i] = -1;
     }
 
-    let mut j = 0us;
-    for i in (0..16us) {
+    let mut j = 0;
+    for i in (0..16) {
         if num_values[i] != 0 {
             valptr[i] = j as i16;
             mincode[i] = codes[j];
@@ -1678,7 +1678,7 @@ fn read_frame_header<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
 
 fn read_scan_header<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     let mut buf: [u8; 3] = [0, 0, 0];
-    try!(dc.stream.read_at_least(buf.len(), &mut buf[]));
+    try!(dc.stream.read_at_least(buf.len(), &mut buf[..]));
     let len = u16_from_be(&buf[0..2]) as usize;
     let num_scan_comps = buf[2] as usize;
 
@@ -1687,7 +1687,7 @@ fn read_scan_header<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     }
 
     let mut compbuf: Vec<u8> = repeat(0u8).take(len-3).collect();
-    try!(dc.stream.read_at_least(compbuf.len(), &mut compbuf[]));
+    try!(dc.stream.read_at_least(compbuf.len(), &mut compbuf[..]));
 
     for i in (0 .. num_scan_comps) {
         let comp_id = compbuf[i*2];
@@ -1711,7 +1711,7 @@ fn read_scan_header<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
 
 fn read_restart_interval<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
     let mut buf: [u8; 4] = [0, 0, 0, 0];
-    try!(dc.stream.read_at_least(buf.len(), &mut buf[]));
+    try!(dc.stream.read_at_least(buf.len(), &mut buf[..]));
     let len = u16_from_be(&buf[0..2]) as usize;
     if len != 4 { return IFErr!("invalid / not supported"); }
     dc.restart_interval = u16_from_be(&buf[2..4]) as usize;
@@ -1752,7 +1752,7 @@ fn decode_scan<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
                         let offset = (outy * dst_stride + outx) as isize;
                         unsafe {
                             let dst = base.offset(offset);
-                            stbi_idct_block(dst, dst_stride, &data[]);
+                            stbi_idct_block(dst, dst_stride, &data[..]);
                         }
                     }
                 }
@@ -1788,7 +1788,7 @@ fn decode_scan<R: Reader>(dc: &mut JpegDecoder<R>) -> IoResult<()> {
 
 fn read_restart<R: Reader>(stream: &mut R) -> IoResult<()> {
     let mut buf: [u8; 2] = [0, 0];
-    try!(stream.read_at_least(buf.len(), &mut buf[]));
+    try!(stream.read_at_least(buf.len(), &mut buf[..]));
     if buf[0] != 0xff || buf[1] < RST0 || RST7 < buf[1] {
         return IFErr!("reset marker missing");
     }
@@ -1826,7 +1826,7 @@ fn decode_block<R: Reader>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx:
     dc.comps[comp_idx].pred += diff;
     res[0] = (dc.comps[comp_idx].pred * dc.qtables[qtable_idx][0] as isize) as i16;
 
-    let mut k = 1us;
+    let mut k = 1;
     while k < 64 {
         //let rs = try!(decode_huff(dc, &dc.ac_tables[comp.ac_table]));
         let rs = try!(decode_huff(dc, ac_table_idx, false));
@@ -1883,7 +1883,7 @@ fn decode_huff<R: Reader>(dc: &mut JpegDecoder<R>, tab_idx: usize, dctab: bool) 
 
 fn receive_and_extend<R: Reader>(dc: &mut JpegDecoder<R>, s: u8) -> IoResult<isize> {
     // receive
-    let mut symbol = 0is;
+    let mut symbol = 0;
     for _ in (0 .. s) {
         let (nb, cb, bits_left) = try!(nextbit(dc.stream, dc.cb, dc.bits_left));
         dc.cb = cb;
@@ -1931,13 +1931,13 @@ fn reconstruct<R: Reader>(dc: &JpegDecoder<R>) -> IoResult<Vec<u8>> {
         (3, ColFmt::RGB) | (3, ColFmt::RGBA) => {
             for ref comp in &dc.comps {
                 if comp.sfx != dc.hmax || comp.sfy != dc.vmax {
-                    upsample_rgb(dc, &mut result[]);
+                    upsample_rgb(dc, &mut result[..]);
                     return Ok(result);
                 }
             }
 
-            let mut si = 0us;
-            let mut di = 0us;
+            let mut si = 0;
+            let mut di = 0;
             for _j in (0 .. dc.h) {
                 for i in (0 .. dc.w) {
                     let pixel = ycbcr_to_rgb(
@@ -1945,7 +1945,7 @@ fn reconstruct<R: Reader>(dc: &JpegDecoder<R>) -> IoResult<Vec<u8>> {
                         dc.comps[1].data[si+i],
                         dc.comps[2].data[si+i],
                     );
-                    copy_memory(&mut result[di..di+3], &pixel[]);
+                    copy_memory(&mut result[di..di+3], &pixel[..]);
                     if dc.tgt_fmt == ColFmt::RGBA {
                         *result.get_mut(di+3).unwrap() = 255;
                     }
@@ -1958,13 +1958,13 @@ fn reconstruct<R: Reader>(dc: &JpegDecoder<R>) -> IoResult<Vec<u8>> {
         (_, ColFmt::Y) | (_, ColFmt::YA) => {
             let comp = &dc.comps[0];
             if comp.sfx != dc.hmax || comp.sfy != dc.vmax {
-                upsample_gray(dc, &mut result[]);
+                upsample_gray(dc, &mut result[..]);
                 return Ok(result);
             }
 
             // no resampling
-            let mut si = 0us;
-            let mut di = 0us;
+            let mut si = 0;
+            let mut di = 0;
             if dc.tgt_fmt == ColFmt::YA {
                 for _j in (0 .. dc.h) {
                     for i in (0 .. dc.w) {
@@ -1985,8 +1985,8 @@ fn reconstruct<R: Reader>(dc: &JpegDecoder<R>) -> IoResult<Vec<u8>> {
         },
         (1, ColFmt::RGB) | (1, ColFmt::RGBA) => {
             let comp = &dc.comps[0];
-            let mut si = 0us;
-            let mut di = 0us;
+            let mut si = 0;
+            let mut di = 0;
             for _j in (0 .. dc.h) {
                 for i in (0 .. dc.w) {
                     *result.get_mut(di  ).unwrap() = comp.data[si+i];
@@ -2009,7 +2009,7 @@ fn upsample_gray<R: Reader>(dc: &JpegDecoder<R>, result: &mut[u8]) {
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     let si0yratio = dc.comps[0].y as f64 / dc.h as f64;
     let si0xratio = dc.comps[0].x as f64 / dc.w as f64;
-    let mut di = 0us;
+    let mut di = 0;
     let tgt_chans = dc.tgt_fmt.channels();
 
     for j in (0 .. dc.h) {
@@ -2033,7 +2033,7 @@ fn upsample_rgb<R: Reader>(dc: &JpegDecoder<R>, result: &mut[u8]) {
     let si1xratio = dc.comps[1].x as f64 / dc.w as f64;
     let si2xratio = dc.comps[2].x as f64 / dc.w as f64;
 
-    let mut di = 0us;
+    let mut di = 0;
     let tgt_chans = dc.tgt_fmt.channels();
 
     for j in (0 .. dc.h) {
@@ -2047,7 +2047,7 @@ fn upsample_rgb<R: Reader>(dc: &JpegDecoder<R>, result: &mut[u8]) {
                 dc.comps[1].data[si1 + (i as f64 * si1xratio).floor() as usize],
                 dc.comps[2].data[si2 + (i as f64 * si2xratio).floor() as usize],
             );
-            copy_memory(&mut result[di..di+3], &pixel[]);
+            copy_memory(&mut result[di..di+3], &pixel[..]);
             if dc.tgt_fmt == ColFmt::RGBA { result[di+3] = 255; }
             di += tgt_chans;
         }
@@ -2080,7 +2080,7 @@ unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
     let mut v: [i32; 64] = [0; 64];
 
     // columns
-    for i in (0 .. 8us) {
+    for i in (0 .. 8) {
         if d[i+ 8]==0 && d[i+16]==0 && d[i+24]==0 && d[i+32]==0 &&
            d[i+40]==0 && d[i+48]==0 && d[i+56]==0 {
             let dcterm = (d[i] as i32) << 2;
@@ -2252,8 +2252,8 @@ fn luminance(r: u8, g: u8, b: u8) -> u8 {
 }
 
 fn y_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
-    for s in (0us .. src_line.len()) {
+    let mut t = 0;
+    for s in (0 .. src_line.len()) {
         tgt_line[t  ] = src_line[s];
         tgt_line[t+1] = 255;
         t += 2;
@@ -2262,8 +2262,8 @@ fn y_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 
 const Y_TO_BGR: LineConverter = y_to_rgb;
 fn y_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
-    for s in (0us .. src_line.len()) {
+    let mut t = 0;
+    for s in (0 .. src_line.len()) {
         tgt_line[t  ] = src_line[s];
         tgt_line[t+1] = src_line[s];
         tgt_line[t+2] = src_line[s];
@@ -2273,8 +2273,8 @@ fn y_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 
 const Y_TO_BGRA: LineConverter = y_to_rgba;
 fn y_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
-    for s in (0us .. src_line.len()) {
+    let mut t = 0;
+    for s in (0 .. src_line.len()) {
         tgt_line[t  ] = src_line[s];
         tgt_line[t+1] = src_line[s];
         tgt_line[t+2] = src_line[s];
@@ -2284,7 +2284,7 @@ fn y_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn ya_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 2) {
         tgt_line[t] = src_line[s];
         t += 1;
@@ -2293,7 +2293,7 @@ fn ya_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 
 const YA_TO_BGR: LineConverter = ya_to_rgb;
 fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 2) {
         tgt_line[t  ] = src_line[s];
         tgt_line[t+1] = src_line[s];
@@ -2304,7 +2304,7 @@ fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 
 const YA_TO_BGRA: LineConverter = ya_to_rgba;
 fn ya_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 2) {
         tgt_line[t  ] = src_line[s];
         tgt_line[t+1] = src_line[s];
@@ -2315,7 +2315,7 @@ fn ya_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn rgb_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 3) {
         tgt_line[t] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         t += 1;
@@ -2323,7 +2323,7 @@ fn rgb_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn rgb_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 3) {
         tgt_line[t  ] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         tgt_line[t+1] = 255;
@@ -2332,7 +2332,7 @@ fn rgb_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn rgb_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 3) {
         tgt_line[t  ] = src_line[s  ];
         tgt_line[t+1] = src_line[s+1];
@@ -2343,7 +2343,7 @@ fn rgb_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn rgba_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 4) {
         tgt_line[t] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         t += 1;
@@ -2351,7 +2351,7 @@ fn rgba_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn rgba_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 4) {
         tgt_line[t  ] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         tgt_line[t+1] = src_line[s+3];
@@ -2360,7 +2360,7 @@ fn rgba_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn rgba_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 4) {
         tgt_line[t  ] = src_line[s  ];
         tgt_line[t+1] = src_line[s+1];
@@ -2370,7 +2370,7 @@ fn rgba_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn bgr_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 3) {
         tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         t += 1;
@@ -2378,7 +2378,7 @@ fn bgr_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn bgr_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 3) {
         tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         tgt_line[t+1] = 255;
@@ -2388,7 +2388,7 @@ fn bgr_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 
 const RGB_TO_BGR: LineConverter = bgr_to_rgb;
 fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 3) {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
@@ -2399,7 +2399,7 @@ fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 
 const RGB_TO_BGRA: LineConverter = bgr_to_rgba;
 fn bgr_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 3) {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
@@ -2410,7 +2410,7 @@ fn bgr_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn bgra_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 4) {
         tgt_line[t] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         t += 1;
@@ -2418,7 +2418,7 @@ fn bgra_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 }
 
 fn bgra_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 4) {
         tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         tgt_line[t+1] = src_line[s+3];
@@ -2428,7 +2428,7 @@ fn bgra_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 
 const RGBA_TO_BGR: LineConverter = bgra_to_rgb;
 fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 4) {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
@@ -2439,7 +2439,7 @@ fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 
 const RGBA_TO_BGRA: LineConverter = bgra_to_rgba;
 fn bgra_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0us;
+    let mut t = 0;
     for s in range_step(0, src_line.len(), 4) {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
