@@ -567,8 +567,8 @@ fn fill_uc_buf<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize) -> IoResult<(
         None => return IFErr!("could not inflate zlib source")
     };
 
-    dc.uc_buf = repeat(0u8).take(inflated.as_slice().len()).collect();
-    copy_memory(&mut dc.uc_buf[..], inflated.as_slice());
+    dc.uc_buf = repeat(0u8).take(inflated[..].len()).collect();
+    copy_memory(&mut dc.uc_buf[..], &inflated[..]);
 
     Ok(())
 }
@@ -791,14 +791,14 @@ fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
         None => return IFErr!("compression failed"),
     };
     ec.crc.put(b"IDAT");
-    ec.crc.put(compressed.as_slice());
+    ec.crc.put(&compressed[..]);
     let crc = &ec.crc.finish_be();
 
     // TODO split up data into smaller chunks?
-    let chunklen = compressed.as_slice().len() as u32;
+    let chunklen = compressed[..].len() as u32;
     try!(ec.stream.write_all(&u32_to_be(chunklen)[..]));
     try!(ec.stream.write_all(b"IDAT"));
-    try!(ec.stream.write_all(compressed.as_slice()));
+    try!(ec.stream.write_all(&compressed[..]));
     try!(ec.stream.write_all(crc));
     Ok(())
 }
