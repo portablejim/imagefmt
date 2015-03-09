@@ -28,6 +28,7 @@ use std::cmp::min;
 use std::slice::bytes::{copy_memory};
 use std::mem::{zeroed};
 use std::num::{Float, FromPrimitive};
+use std::num::wrapping::WrappingOps;
 use self::flate::{inflate_bytes_zlib, deflate_bytes_zlib};
 
 macro_rules! IFErr {
@@ -585,29 +586,29 @@ fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> IoResult<()>
             => { }
         Some(PngFilter::Sub) => {
             for k in (fstep .. cline.len()) {
-                cline[k] += cline[k-fstep];
+                cline[k] = cline[k].wrapping_add(cline[k-fstep]);
             }
         }
         Some(PngFilter::Up) => {
             for k in (0 .. cline.len()) {
-                cline[k] += pline[k];
+                cline[k] = cline[k].wrapping_add(pline[k]);
             }
         }
         Some(PngFilter::Average) => {
             for k in (0 .. fstep) {
-                cline[k] += pline[k] / 2;
+                cline[k] = cline[k].wrapping_add(pline[k] / 2);
             }
             for k in (fstep .. cline.len()) {
-                cline[k] +=
-                    ((cline[k-fstep] as usize + pline[k] as usize) / 2) as u8;
+                cline[k] = cline[k]
+                    .wrapping_add(((cline[k-fstep] as u32 + pline[k] as u32) / 2) as u8);
             }
         }
         Some(PngFilter::Paeth) => {
             for k in (0 .. fstep) {
-                cline[k] += paeth(0, pline[k], 0);
+                cline[k] = cline[k].wrapping_add(paeth(0, pline[k], 0));
             }
             for k in (fstep .. cline.len()) {
-                cline[k] += paeth(cline[k-fstep], pline[k], pline[k-fstep]);
+                cline[k] = cline[k].wrapping_add(paeth(cline[k-fstep], pline[k], pline[k-fstep]));
             }
         }
         None => return IFErr!("filter type not supported"),
@@ -770,11 +771,11 @@ fn write_png_image_data<W: Writer>(ec: &mut PngEncoder<W>) -> IoResult<()> {
         convert(&ec.data[si .. si+src_linesize], &mut cline[1 .. tgt_linesize]);
 
         for i in (1 .. filter_step+1) {
-            filtered_image[ti+i] = cline[i] - paeth(0, pline[i], 0)
+            filtered_image[ti+i] = cline[i].wrapping_sub(paeth(0, pline[i], 0));
         }
         for i in (filter_step+1 .. cline.len()) {
-            filtered_image[ti+i] =
-                cline[i] - paeth(cline[i-filter_step], pline[i], pline[i-filter_step])
+            filtered_image[ti+i] = cline[i]
+                .wrapping_sub(paeth(cline[i-filter_step], pline[i], pline[i-filter_step]));
         }
 
         filtered_image[ti] = PngFilter::Paeth as u8;
@@ -1136,7 +1137,7 @@ fn write_tga_image_data<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
     let src_linesize = (ec.w * ec.src_chans) as usize;
     let tgt_linesize = (ec.w * ec.tgt_chans) as usize;
     let mut tgt_line: Vec<u8> = repeat(0u8).take(tgt_linesize).collect();
-    let mut si = (ec.h-1) as usize * src_linesize;
+    let mut si = ec.h as usize * src_linesize;
 
     let convert = match get_converter(ec.src_fmt, ec.tgt_fmt) {
         Some(c) => c,
@@ -1145,9 +1146,9 @@ fn write_tga_image_data<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
 
     if !ec.rle {
         for _ in (0 .. ec.h) {
+            si -= src_linesize; // origin at bottom
             convert(&ec.data[si..si+src_linesize], &mut tgt_line[..]);
             try!(ec.stream.write_all(&tgt_line[..]));
-            si -= src_linesize; // origin at bottom
         }
         return Ok(());
     }
@@ -1158,10 +1159,10 @@ fn write_tga_image_data<W: Writer>(ec: &mut TgaEncoder<W>) -> IoResult<()> {
     let max_packets_per_line = (tgt_linesize+127) / 128;
     let mut cmp_buf: Vec<u8> = repeat(0u8).take(tgt_linesize+max_packets_per_line).collect();
     for _ in (0 .. ec.h) {
+        si -= src_linesize;
         convert(&ec.data[si .. si+src_linesize], &mut tgt_line[..]);
         let compressed_line = rle_compress(&tgt_line[..], &mut cmp_buf[..], ec.w, bytes_pp);
         try!(ec.stream.write_all(&compressed_line[..]));
-        si -= src_linesize;
     }
     return Ok(());
 }
@@ -1874,7 +1875,7 @@ fn decode_huff<R: Reader>(dc: &mut JpegDecoder<R>, tab_idx: usize, dctab: bool) 
             return IFErr!("corrupt huffman coding");
         }
     }
-    let j = (tab.valptr[i] + code - tab.mincode[i]) as usize;
+    let j = (tab.valptr[i] - tab.mincode[i] + code) as usize;
     if tab.values.len() <= j {
         return IFErr!("corrupt huffman coding")
     }
