@@ -580,40 +580,51 @@ fn next_uncompressed_line<R: Reader>(dc: &mut PngDecoder<R>, dst: &mut[u8]) {
     dc.uc_start += dst.len();
 }
 
+// the ergonomy of get_unchecked and wrapping ops is non-existent!
 fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> IoResult<()> {
-    match FromPrimitive::from_u8(ftype) {
-        Some(PngFilter::None)
-            => { }
-        Some(PngFilter::Sub) => {
-            for k in (fstep .. cline.len()) {
-                cline[k] = cline[k].wrapping_add(cline[k-fstep]);
+    unsafe {
+        match FromPrimitive::from_u8(ftype) {
+            Some(PngFilter::None)
+                => { }
+            Some(PngFilter::Sub) => {
+                for k in (fstep .. cline.len()) {
+                    *cline.get_unchecked_mut(k) =
+                        (*cline.get_unchecked(k)).wrapping_add(*cline.get_unchecked(k-fstep));
+                }
             }
+            Some(PngFilter::Up) => {
+                for k in (0 .. cline.len()) {
+                    *cline.get_unchecked_mut(k) =
+                        (*cline.get_unchecked(k)).wrapping_add(*pline.get_unchecked(k));
+                }
+            }
+            Some(PngFilter::Average) => {
+                for k in (0 .. fstep) {
+                    *cline.get_unchecked_mut(k) =
+                        (*cline.get_unchecked(k)).wrapping_add(*pline.get_unchecked(k) / 2);
+                }
+                for k in (fstep .. cline.len()) {
+                    *cline.get_unchecked_mut(k) = (*cline.get_unchecked(k))
+                        .wrapping_add(((*cline.get_unchecked(k-fstep) as u32
+                                    + *pline.get_unchecked(k) as u32) / 2) as u8);
+                }
+            }
+            Some(PngFilter::Paeth) => {
+                for k in (0 .. fstep) {
+                    *cline.get_unchecked_mut(k) =
+                        (*cline.get_unchecked(k)).wrapping_add(paeth(0, *pline.get_unchecked(k), 0));
+                }
+                for k in (fstep .. cline.len()) {
+                    *cline.get_unchecked_mut(k) = (*cline.get_unchecked(k)).wrapping_add(
+                            paeth(*cline.get_unchecked(k-fstep),
+                                        *pline.get_unchecked(k),
+                                          *pline.get_unchecked(k-fstep)));
+                }
+            }
+            None => return IFErr!("filter type not supported"),
         }
-        Some(PngFilter::Up) => {
-            for k in (0 .. cline.len()) {
-                cline[k] = cline[k].wrapping_add(pline[k]);
-            }
-        }
-        Some(PngFilter::Average) => {
-            for k in (0 .. fstep) {
-                cline[k] = cline[k].wrapping_add(pline[k] / 2);
-            }
-            for k in (fstep .. cline.len()) {
-                cline[k] = cline[k]
-                    .wrapping_add(((cline[k-fstep] as u32 + pline[k] as u32) / 2) as u8);
-            }
-        }
-        Some(PngFilter::Paeth) => {
-            for k in (0 .. fstep) {
-                cline[k] = cline[k].wrapping_add(paeth(0, pline[k], 0));
-            }
-            for k in (fstep .. cline.len()) {
-                cline[k] = cline[k].wrapping_add(paeth(cline[k-fstep], pline[k], pline[k-fstep]));
-            }
-        }
-        None => return IFErr!("filter type not supported"),
+        Ok(())
     }
-    Ok(())
 }
 
 fn paeth(a: u8, b: u8, c: u8) -> u8 {
