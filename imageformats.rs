@@ -83,7 +83,7 @@ impl<R: Read> IFRead for R {
         let mut ready = 0;
         while ready < buf.len() {
             let got = try!(self.read(&mut buf[ready..]));
-            if got == 0 && ready < buf.len() {
+            if got == 0 {
                 return IFErr!("not enough data");
             }
             ready += got;
