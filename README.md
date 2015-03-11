@@ -1,36 +1,30 @@
-My first Rust thing. PNG, TGA, JPEG.
-* Only 8-bit images supported
+**Image loading and saving**
 * Returned data is always 8-bit (Y/YA/RGB/RGBA)
-* Only decoder for JPEG
-* Use `grep -rn 'pub fn' imageformats.rs` to find out more
+
+| Format | Decoder            | Encoder                           |
+| ---    | ---                | ---                               |
+| png    | 8-bit              | 8-bit non-paletted non-interlaced |
+| tga    | 8-bit non-paletted | 8-bit non-paletted                |
+| jpeg   | baseline           | nope                              |
 
 ```Rust
-#![feature(slicing_syntax)]
-
-use std::old_io::{IoResult};
 use imageformats::*;
 mod imageformats;
 
-fn do_image_io() -> IoResult<()> {
-    // last argument defines conversion
-    let _pic = try!(read_image("stars.jpg", ColFmt::RGBA));
+fn main() {
+    // load and convert to rgba
+    let _pic = read_image("stars.jpg", ColFmt::RGBA).unwrap();
 
     // convert to grayscale+alpha
-    let _pic = try!(read_image("advanced.png", ColFmt::YA));
+    let _pic = read_image("advanced.png", ColFmt::YA).unwrap();
 
     // no conversion
-    let pic = try!(read_image("marbles.tga", ColFmt::Auto));
+    let pic = read_image("marbles.tga", ColFmt::Auto).unwrap();
 
     // write image out as grayscale
-    try!(write_image("out.png", pic.w, pic.h, &pic.pixels[], ColFmt::Y));
+    write_image("out.png", pic.w, pic.h, &pic.pixels[], ColFmt::Y).unwrap();
 
-    // print width, heigth and color format (of what you get with ColFmt::Auto)
-    println!("{:?}", try!(read_image_info("hiisi.png")));
-
-    Ok(())
-}
-
-fn main() {
-    do_image_io().unwrap();
+    // print width, heigth and color format
+    println!("{:?}", read_image_info("hiisi.png").unwrap());
 }
 ```
