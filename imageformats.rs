@@ -841,8 +841,7 @@ pub fn read_tga_info<R: Reader>(reader: &mut R) -> IoResult<IFInfo> {
     use self::ColFmt::*;
 
     let hdr = try!(read_tga_header(reader));
-    let TgaInfo { src_chans, src_fmt, rle } = try!(parse_tga_header(&hdr));
-    let _src_chans = src_chans; let _rle = rle; // warnings be gone
+    let TgaInfo { src_fmt, .. } = try!(parse_tga_header(&hdr));
 
     let reported_fmt = match src_fmt {
         ColFmt::Y => ColFmt::Y,
