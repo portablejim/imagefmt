@@ -488,10 +488,7 @@ fn read_idat_stream<R: Reader>(dc: &mut PngDecoder<R>, len: &mut usize, palette:
                     next_uncompressed_line(dc, &mut cline[..]);
                     let filter_type: u8 = cline[0];
 
-                    try!(recon(
-                        &mut cline[1 .. src_linesize+1], &pline[1 .. src_linesize+1],
-                        filter_type, filter_step
-                    ));
+                    try!(recon(&mut cline[1..], &pline[1..], filter_type, filter_step));
 
                     convert(&cline[1..],
                             &mut redlinebuf[0..redw[pass] * tgt_bytespp],
