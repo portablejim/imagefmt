@@ -107,45 +107,45 @@ impl<R: Read> IFRead for R {
  * reported as RGB/A and for paletted images it might be RGB or RGBA or
  * whatever (paletted images are auto-depaletted by the decoders).  */
 #[allow(dead_code)]
-pub fn read_image_info(filename: &str) -> io::Result<IFInfo> {
+pub fn read_image_info(filepath: &Path) -> io::Result<IFInfo> {
     type F = fn(&mut BufReader<File>) -> io::Result<IFInfo>;
-    let readfunc: F = match extract_extension(filename) {
-        Some(".png")                 => read_png_info,
-        Some(".tga")                 => read_tga_info,
-        Some(".jpg") | Some(".jpeg") => read_jpeg_info,
+    let readfunc: F = match extract_extension(filepath) {//.extension() {
+        Some("png")          => read_png_info,
+        Some("tga")          => read_tga_info,
+        Some("jpg") | Some("jpeg") => read_jpeg_info,
         _ => return IFErr!("extension not recognized"),
     };
-    let file = try!(File::open(&Path::new(filename)));
+    let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
     readfunc(reader)
 }
 
 /** Paletted images are auto-depaletted.  */
 #[allow(dead_code)]
-pub fn read_image(filename: &str, req_fmt: ColFmt) -> io::Result<IFImage> {
+pub fn read_image(filepath: &Path, req_fmt: ColFmt) -> io::Result<IFImage> {
     type F = fn(&mut BufReader<File>, ColFmt) -> io::Result<IFImage>;
-    let readfunc: F = match extract_extension(filename) {
-        Some(".png")                 => read_png,
-        Some(".tga")                 => read_tga,
-        Some(".jpg") | Some(".jpeg") => read_jpeg,
+    let readfunc: F = match extract_extension(filepath) {//.extension() {
+        Some("png")         => read_png,
+        Some("tga")         => read_tga,
+        Some("jpg") | Some("jpeg") => read_jpeg,
         _ => return IFErr!("extension not recognized"),
     };
-    let file = try!(File::open(&Path::new(filename)));
+    let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
     readfunc(reader, req_fmt)
 }
 
 #[allow(dead_code)]
-pub fn write_image(filename: &str, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
+pub fn write_image(filepath: &Path, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
                                                                      -> io::Result<()>
 {
     type F = fn(&mut BufWriter<File>, usize, usize, &[u8], ColFmt) -> io::Result<()>;
-    let writefunc: F = match extract_extension(filename) {
-        Some(".png") => write_png,
-        Some(".tga") => write_tga,
+    let writefunc: F = match extract_extension(filepath) {//.extension() {
+        Some("png") => write_png,
+        Some("tga") => write_tga,
         _ => return IFErr!("extension not supported for writing"),
     };
-    let file = try!(File::create(&Path::new(filename)));
+    let file = try!(File::create(filepath));
     let writer = &mut BufWriter::new(file);
     writefunc(writer, w, h, data, tgt_fmt)
 }
@@ -2618,9 +2618,10 @@ fn u32_to_be(x: u32) -> [u8; 4] {
     buf
 }
 
-fn extract_extension(filename: &str) -> Option<&str> {
-    match filename.rfind('.') {
-        Some(i) => Some(&filename[i..]),
+// FIXME the ext.to_str() may not be portable, fix when something else possible
+fn extract_extension(filepath: &Path) -> Option<&str> {
+    match filepath.extension() {
+        Some(ext) => ext.to_str(),
         None => None,
     }
 }
