@@ -24,7 +24,7 @@
 extern crate flate;
 use std::fs::{File};
 use std::io::{self, Read, Write, BufReader, BufWriter, ErrorKind};
-use std::iter::{repeat, range_step, IteratorExt};
+use std::iter::{repeat};
 use std::path::Path;
 use std::cmp::min;
 use std::slice::bytes::{copy_memory};
@@ -603,8 +603,8 @@ fn fill_uc_buf<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<(
     }
 
     let inflated = match inflate_bytes_zlib(&alldata[..]) {
-        Some(cvec) => cvec,
-        None => return IFErr!("could not inflate zlib source")
+        Ok(cvec) => cvec,
+        Err(_) => return IFErr!("could not inflate zlib source")
     };
 
     dc.uc_buf = repeat(0u8).take(inflated[..].len()).collect();
@@ -817,7 +817,7 @@ fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
     let src_linesize = ec.w * ec.src_chans;
 
     let mut ti = 0;
-    for si in range_step(0, ec.h * src_linesize, src_linesize) {
+    for si in (0 .. ec.h * src_linesize).step_by(src_linesize) {
         convert(&ec.data[si .. si+src_linesize], &mut cline[1 .. tgt_linesize]);
 
         for i in (1 .. filter_step+1) {
@@ -837,10 +837,7 @@ fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
         ti += tgt_linesize;
     }
 
-    let compressed = match deflate_bytes_zlib(&filtered_image[..]) {
-        Some(cvec) => cvec,
-        None => return IFErr!("compression failed"),
-    };
+    let compressed: flate::Bytes = deflate_bytes_zlib(&filtered_image[..]);
     ec.crc.put(b"IDAT");
     ec.crc.put(&compressed[..]);
     let crc = &ec.crc.finish_be();
@@ -1055,7 +1052,7 @@ fn decode_tga<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
             let copysize: usize = min(plen, wanted);
             if its_rle {
                 try!(dc.stream.read_exact(&mut rbuf[0..bytes_pp]));
-                for p in range_step(gotten, gotten+copysize, bytes_pp) {
+                for p in (gotten .. gotten+copysize).step_by(bytes_pp) {
                     copy_memory(&mut src_line[p..p+bytes_pp], &rbuf[0..bytes_pp]);
                 }
             } else {    // it's raw
@@ -2167,7 +2164,7 @@ unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
         }
     }
 
-    for i in range_step(0, 64, 8) {
+    for i in (0 .. 64).step_by(8) {
         let mut t0 = 0; let mut t1 = 0;
         let mut t2 = 0; let mut t3 = 0;
         let mut x0 = 0; let mut x1 = 0;
@@ -2334,7 +2331,7 @@ fn y_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn ya_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 2) {
+    for s in (0 .. src_line.len()).step_by(2) {
         tgt_line[t] = src_line[s];
         t += 1;
     }
@@ -2343,7 +2340,7 @@ fn ya_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 const YA_TO_BGR: LineConverter = ya_to_rgb;
 fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 2) {
+    for s in (0 .. src_line.len()).step_by(2) {
         tgt_line[t  ] = src_line[s];
         tgt_line[t+1] = src_line[s];
         tgt_line[t+2] = src_line[s];
@@ -2354,7 +2351,7 @@ fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 const YA_TO_BGRA: LineConverter = ya_to_rgba;
 fn ya_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 2) {
+    for s in (0 .. src_line.len()).step_by(2) {
         tgt_line[t  ] = src_line[s];
         tgt_line[t+1] = src_line[s];
         tgt_line[t+2] = src_line[s];
@@ -2365,7 +2362,7 @@ fn ya_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn rgb_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 3) {
+    for s in (0 .. src_line.len()).step_by(3) {
         tgt_line[t] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         t += 1;
     }
@@ -2373,7 +2370,7 @@ fn rgb_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn rgb_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 3) {
+    for s in (0 .. src_line.len()).step_by(3) {
         tgt_line[t  ] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         tgt_line[t+1] = 255;
         t += 2;
@@ -2382,7 +2379,7 @@ fn rgb_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn rgb_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 3) {
+    for s in (0 .. src_line.len()).step_by(3) {
         tgt_line[t  ] = src_line[s  ];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s+2];
@@ -2393,7 +2390,7 @@ fn rgb_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn rgba_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 4) {
+    for s in (0 .. src_line.len()).step_by(4) {
         tgt_line[t] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         t += 1;
     }
@@ -2401,7 +2398,7 @@ fn rgba_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn rgba_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 4) {
+    for s in (0 .. src_line.len()).step_by(4) {
         tgt_line[t  ] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         tgt_line[t+1] = src_line[s+3];
         t += 2;
@@ -2410,7 +2407,7 @@ fn rgba_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn rgba_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 4) {
+    for s in (0 .. src_line.len()).step_by(4) {
         tgt_line[t  ] = src_line[s  ];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s+2];
@@ -2420,7 +2417,7 @@ fn rgba_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn bgr_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 3) {
+    for s in (0 .. src_line.len()).step_by(3) {
         tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         t += 1;
     }
@@ -2428,7 +2425,7 @@ fn bgr_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn bgr_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 3) {
+    for s in (0 .. src_line.len()).step_by(3) {
         tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         tgt_line[t+1] = 255;
         t += 2;
@@ -2438,7 +2435,7 @@ fn bgr_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 const RGB_TO_BGR: LineConverter = bgr_to_rgb;
 fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 3) {
+    for s in (0 .. src_line.len()).step_by(3) {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s  ];
@@ -2449,7 +2446,7 @@ fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 const RGB_TO_BGRA: LineConverter = bgr_to_rgba;
 fn bgr_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 3) {
+    for s in (0 .. src_line.len()).step_by(3) {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s  ];
@@ -2460,7 +2457,7 @@ fn bgr_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn bgra_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 4) {
+    for s in (0 .. src_line.len()).step_by(4) {
         tgt_line[t] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         t += 1;
     }
@@ -2468,7 +2465,7 @@ fn bgra_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
 
 fn bgra_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 4) {
+    for s in (0 .. src_line.len()).step_by(4) {
         tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         tgt_line[t+1] = src_line[s+3];
         t += 2;
@@ -2478,7 +2475,7 @@ fn bgra_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 const RGBA_TO_BGR: LineConverter = bgra_to_rgb;
 fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 4) {
+    for s in (0 .. src_line.len()).step_by(4) {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s  ];
@@ -2489,7 +2486,7 @@ fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 const RGBA_TO_BGRA: LineConverter = bgra_to_rgba;
 fn bgra_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in range_step(0, src_line.len(), 4) {
+    for s in (0 .. src_line.len()).step_by(4) {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s  ];
