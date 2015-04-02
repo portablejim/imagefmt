@@ -30,11 +30,10 @@ use std::cmp::min;
 use std::slice::bytes::{copy_memory};
 use std::mem::{zeroed};
 use std::num::{Float, FromPrimitive};
-use std::num::wrapping::WrappingOps;
 use self::flate::{inflate_bytes_zlib, deflate_bytes_zlib};
 
 macro_rules! IFErr {
-    ($e:expr) => (Err(io::Error::new(ErrorKind::Other, $e, None)))
+    ($e:expr) => (Err(io::Error::new(ErrorKind::Other, $e)))
 }
 
 #[derive(Debug)]
@@ -425,7 +424,8 @@ fn depalette_convert(src_line: &[u8], tgt_line: &mut[u8], palette: &[u8],
     let mut d = 0;
     for s in (0 .. src_line.len()) {
         let pidx = src_line[s] as usize * 3;
-        copy_memory(&mut depaletted_line[d..d+3], &palette[pidx..pidx+3]);
+        copy_memory(&palette[pidx..pidx+3], &mut depaletted_line[d..d+3]);
+        copy_memory(&palette[pidx..pidx+3], &mut depaletted_line[d..d+3]);
         d += 3;
     }
     chan_convert(&depaletted_line[0 .. src_line.len()*3], tgt_line)
@@ -542,8 +542,8 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                     for i in (0 .. redw[pass]) {
                         let tgt = tgt_px(i, j, dc.w) * tgt_bytespp;
                         copy_memory(
-                            &mut result[tgt .. tgt+tgt_bytespp],
-                            &redlinebuf[redi .. redi+tgt_bytespp]
+                            &redlinebuf[redi .. redi+tgt_bytespp],
+                            &mut result[tgt .. tgt+tgt_bytespp]
                         );
                         redi += tgt_bytespp;
                     }
@@ -598,7 +598,7 @@ fn fill_uc_buf<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<(
     let mut alldata: Vec<u8> = repeat(0).take(totallen).collect();
     let mut di = 0;
     for chunk in &chunks {
-        copy_memory(&mut alldata[di .. di+chunk.len()], &chunk[..]);
+        copy_memory(&chunk[..], &mut alldata[di .. di+chunk.len()]);
         di += chunk.len();
     }
 
@@ -608,14 +608,14 @@ fn fill_uc_buf<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<(
     };
 
     dc.uc_buf = repeat(0u8).take(inflated[..].len()).collect();
-    copy_memory(&mut dc.uc_buf[..], &inflated[..]);
+    copy_memory(&inflated[..], &mut dc.uc_buf[..]);
 
     Ok(())
 }
 
 fn next_uncompressed_line<R: Read>(dc: &mut PngDecoder<R>, dst: &mut[u8]) {
     let dstlen = dst.len();
-    copy_memory(dst, &dc.uc_buf[dc.uc_start .. dc.uc_start + dstlen]);
+    copy_memory(&dc.uc_buf[dc.uc_start .. dc.uc_start + dstlen], dst);
     dc.uc_start += dst.len();
 }
 
@@ -754,10 +754,10 @@ pub fn write_png_chunks<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8
 fn write_png_header<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
     let mut hdr: [u8; 33] = [0; 33];
 
-    copy_memory(&mut hdr[0..8], &PNG_FILE_HEADER[..]);
-    copy_memory(&mut hdr[8..16], b"\0\0\0\x0dIHDR");
-    copy_memory(&mut hdr[16..20], &u32_to_be(ec.w as u32)[..]);
-    copy_memory(&mut hdr[20..24], &u32_to_be(ec.h as u32)[..]);
+    copy_memory(&PNG_FILE_HEADER[..]       , &mut hdr[0..8]  );
+    copy_memory(b"\0\0\0\x0dIHDR"          , &mut hdr[8..16] );
+    copy_memory(&u32_to_be(ec.w as u32)[..], &mut hdr[16..20]);
+    copy_memory(&u32_to_be(ec.h as u32)[..], &mut hdr[20..24]);
     hdr[24] = 8;    // bit depth
     hdr[25] = match ec.tgt_fmt {    // color type
         ColFmt::Y => PngColortype::Y,
@@ -766,9 +766,9 @@ fn write_png_header<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
         ColFmt::RGBA => PngColortype::RGBA,
         _ => return IFErr!("not supported"),
     } as u8;
-    copy_memory(&mut hdr[26..29], &[0, 0, 0]);  // compression, filter, interlace
+    copy_memory(&[0, 0, 0], &mut hdr[26..29]);  // compression, filter, interlace
     ec.crc.put(&hdr[12..29]);
-    copy_memory(&mut hdr[29..33], &ec.crc.finish_be()[..]);
+    copy_memory(&ec.crc.finish_be()[..], &mut hdr[29..33]);
 
     ec.stream.write_all(&hdr[..])
 }
@@ -1053,7 +1053,7 @@ fn decode_tga<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
             if its_rle {
                 try!(dc.stream.read_exact(&mut rbuf[0..bytes_pp]));
                 for p in (gotten .. gotten+copysize).step_by(bytes_pp) {
-                    copy_memory(&mut src_line[p..p+bytes_pp], &rbuf[0..bytes_pp]);
+                    copy_memory(&rbuf[0..bytes_pp], &mut src_line[p..p+bytes_pp]);
                 }
             } else {    // it's raw
                 try!(dc.stream.read_exact(&mut src_line[gotten..gotten+copysize]));
@@ -1239,8 +1239,8 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
                 let copysize = 128 * bytes_pp;
                 cmp_buf[cmp_i] = 0x7f; cmp_i += 1;  // packet header
                 copy_memory(
-                    &mut cmp_buf[cmp_i..cmp_i+copysize],
-                    &line[raw_i..raw_i+copysize]
+                    &line[raw_i..raw_i+copysize],
+                    &mut cmp_buf[cmp_i..cmp_i+copysize]
                 );
                 cmp_i += copysize;
                 raw_i += copysize;
@@ -1254,8 +1254,8 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
                 cmp_buf[cmp_i] = (rawlen-1) as u8;    // packet header
                 cmp_i += 1;
                 copy_memory(
-                    &mut cmp_buf[cmp_i..cmp_i+copysize],
-                    &line[raw_i..raw_i+copysize]
+                    &line[raw_i..raw_i+copysize],
+                    &mut cmp_buf[cmp_i..cmp_i+copysize]
                 );
                 cmp_i += copysize;
                 rawlen = 0;
@@ -1265,8 +1265,8 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
             cmp_buf[cmp_i] = (0x80 | (runlen-1)) as u8;   // packet header
             cmp_i += 1;
             copy_memory(
-                &mut cmp_buf[cmp_i..cmp_i+bytes_pp],
-                &px[0..bytes_pp]
+                &px[0..bytes_pp],
+                &mut cmp_buf[cmp_i..cmp_i+bytes_pp]
             );
             cmp_i += bytes_pp;
             raw_i = i;
@@ -1279,8 +1279,8 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
         cmp_buf[cmp_i] = (rawlen-1) as u8;    // packet header
         cmp_i += 1;
         copy_memory(
-            &mut cmp_buf[cmp_i..cmp_i+copysize],
-            &line[raw_i..raw_i+copysize]
+            &line[raw_i..raw_i+copysize],
+            &mut cmp_buf[cmp_i..cmp_i+copysize]
         );
         cmp_i += copysize;
     }
@@ -1991,7 +1991,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
                         dc.comps[1].data[si+i],
                         dc.comps[2].data[si+i],
                     );
-                    copy_memory(&mut result[di..di+3], &pixel[..]);
+                    copy_memory(&pixel[..], &mut result[di..di+3]);
                     if dc.tgt_fmt == ColFmt::RGBA {
                         *result.get_mut(di+3).unwrap() = 255;
                     }
@@ -2022,7 +2022,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
                 }
             } else {    // FmtY
                 for _j in (0 .. dc.h) {
-                    copy_memory(&mut result[di..di+dc.w], &comp.data[si..si+dc.w]);
+                    copy_memory(&comp.data[si..si+dc.w], &mut result[di..di+dc.w]);
                     si += dc.num_mcu_x * comp.sfx * 8;
                     di += dc.w;
                 }
@@ -2093,7 +2093,7 @@ fn upsample_rgb<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
                 dc.comps[1].data[si1 + (i as f64 * si1xratio).floor() as usize],
                 dc.comps[2].data[si2 + (i as f64 * si2xratio).floor() as usize],
             );
-            copy_memory(&mut result[di..di+3], &pixel[..]);
+            copy_memory(&pixel[..], &mut result[di..di+3]);
             if dc.tgt_fmt == ColFmt::RGBA { result[di+3] = 255; }
             di += tgt_chans;
         }
@@ -2290,7 +2290,7 @@ fn get_converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> Option<LineConverter> {
 }
 
 fn copy_line(src_line: &[u8], tgt_line: &mut[u8]) {
-    copy_memory(tgt_line, src_line);
+    copy_memory(src_line, tgt_line);
 }
 
 fn luminance(r: u8, g: u8, b: u8) -> u8 {
