@@ -51,7 +51,7 @@ pub struct IFInfo {
     pub c : ColFmt,
 }
 
-#[derive(Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColFmt {
     Auto = 0,
     Y = 1,
