@@ -8,9 +8,8 @@
 | jpeg   | baseline           | nope                              |
 
 ```Rust
-#![feature(io)]
-#![feature(path)]
 #![feature(core)]
+#![feature(step_by)]
 #![feature(rustc_private)]
 
 use std::path::Path;

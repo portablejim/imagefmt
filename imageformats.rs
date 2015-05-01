@@ -29,7 +29,6 @@ use std::path::Path;
 use std::cmp::min;
 use std::slice::bytes::{copy_memory};
 use std::mem::{zeroed};
-use std::num::{Float, FromPrimitive};
 use self::flate::{inflate_bytes_zlib, deflate_bytes_zlib};
 
 macro_rules! IFErr {
@@ -181,17 +180,9 @@ static PNG_FILE_HEADER: [u8; 8] =
 pub fn read_png_info<R: Read>(reader: &mut R) -> io::Result<IFInfo> {
     let hdr = try!(read_png_header(reader));
 
-    let ctype: PngColortype = match FromPrimitive::from_u8(hdr.color_type) {
-        Some(ct) => ct,
+    let src_fmt: ColFmt = match png_colortype_and_channels_from_u8(hdr.color_type) {
+        Some((_, cs)) => cs,
         None => return IFErr!("unsupported color type"),
-    };
-
-    let src_fmt = match ctype {
-        PngColortype::Y => ColFmt::Y,
-        PngColortype::YA => ColFmt::YA,
-        PngColortype::RGB => ColFmt::RGB,
-        PngColortype::Idx => ColFmt::RGB,
-        PngColortype::RGBA => ColFmt::RGBA,
     };
 
     Ok(IFInfo {
@@ -244,23 +235,16 @@ pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[
         return IFErr!("not supported");
     }
 
-    let ilace: PngInterlace = match FromPrimitive::from_u8(hdr.interlace_method) {
+    let ilace = match PngInterlace::from_u8(hdr.interlace_method) {
         Some(im) => im,
         None => return IFErr!("unsupported interlace method"),
     };
 
-    let ctype: PngColortype = match FromPrimitive::from_u8(hdr.color_type) {
-        Some(ct) => ct,
-        None => return IFErr!("unsupported color type"),
-    };
-
-    let src_fmt = match ctype {
-        PngColortype::Y => ColFmt::Y,
-        PngColortype::YA => ColFmt::YA,
-        PngColortype::RGB => ColFmt::RGB,
-        PngColortype::Idx => ColFmt::RGB,
-        PngColortype::RGBA => ColFmt::RGBA,
-    };
+    let (ctype, src_fmt): (PngColortype, ColFmt) =
+        match png_colortype_and_channels_from_u8(hdr.color_type) {
+            Some(ctcs) => ctcs,
+            None => return IFErr!("unsupported color type"),
+        };
 
     let dc = &mut PngDecoder {
         stream      : reader,
@@ -403,18 +387,39 @@ fn decode_png<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
     Ok((result, chunks))
 }
 
-#[derive(Eq, PartialEq, FromPrimitive)]
+#[derive(Eq, PartialEq)]
 enum PngInterlace {
     None, Adam7
 }
 
-#[derive(Eq, PartialEq, FromPrimitive)]
+impl PngInterlace {
+    fn from_u8(val: u8) -> Option<PngInterlace> {
+        match val {
+            0 => Some(PngInterlace::None),
+            1 => Some(PngInterlace::Adam7),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Eq, PartialEq)]
 enum PngColortype {
     Y    = 0,
     RGB  = 2,
     Idx  = 3,
     YA   = 4,
     RGBA = 6,
+}
+
+fn png_colortype_and_channels_from_u8(ct: u8) -> Option<(PngColortype, ColFmt)> {
+    match ct {
+        0 => Some((PngColortype::Y, ColFmt::Y)),
+        2 => Some((PngColortype::RGB, ColFmt::RGB)),
+        3 => Some((PngColortype::Idx, ColFmt::RGB)),
+        4 => Some((PngColortype::YA, ColFmt::YA)),
+        6 => Some((PngColortype::RGBA, ColFmt::RGBA)),
+        _ => None,
+    }
 }
 
 fn depalette_convert(src_line: &[u8], tgt_line: &mut[u8], palette: &[u8],
@@ -622,7 +627,7 @@ fn next_uncompressed_line<R: Read>(dc: &mut PngDecoder<R>, dst: &mut[u8]) {
 // the ergonomy of get_unchecked and wrapping ops is non-existent!
 fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> io::Result<()> {
     unsafe {
-        match FromPrimitive::from_u8(ftype) {
+        match PngFilter::from_u8(ftype) {
             Some(PngFilter::None)
                 => { }
             Some(PngFilter::Sub) => {
@@ -683,13 +688,25 @@ fn paeth(a: u8, b: u8, c: u8) -> u8 {
     return c;
 }
 
-#[derive(FromPrimitive)]
 enum PngFilter {
     None = 0,
     Sub,
     Up,
     Average,
     Paeth,
+}
+
+impl PngFilter {
+    fn from_u8(val: u8) -> Option<PngFilter> {
+        match val {
+            0 => Some(PngFilter::None),
+            1 => Some(PngFilter::Sub),
+            2 => Some(PngFilter::Up),
+            3 => Some(PngFilter::Average),
+            4 => Some(PngFilter::Paeth),
+            _ => None,
+        }
+    }
 }
 
 // --------------------------------------------------
@@ -971,7 +988,7 @@ fn parse_tga_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
     use self::TgaDataType::*;
 
     let mut rle = false;
-    let datatype: Option<TgaDataType> = FromPrimitive::from_u8(hdr.data_type);
+    let datatype = TgaDataType::from_u8(hdr.data_type);
     let attr_bits_pp = hdr.flags & 0xf;
     match (datatype, hdr.bits_pp, attr_bits_pp) {
         (Some(TrueColor),    24, 0) => {}
@@ -1080,7 +1097,6 @@ struct TgaDecoder<'r, R:'r> {
     tgt_fmt       : ColFmt,
 }
 
-#[derive(FromPrimitive)]
 enum TgaDataType {
     Idx          = 1,
     TrueColor    = 2,
@@ -1088,6 +1104,20 @@ enum TgaDataType {
     IdxRLE       = 9,
     TrueColorRLE = 10,
     GrayRLE      = 11,
+}
+
+impl TgaDataType {
+    fn from_u8(val: u8) -> Option<TgaDataType> {
+        match val {
+            1 => Some(TgaDataType::Idx),
+            2 => Some(TgaDataType::TrueColor),
+            3 => Some(TgaDataType::Gray),
+            9 => Some(TgaDataType::IdxRLE),
+            10 => Some(TgaDataType::TrueColorRLE),
+            11 => Some(TgaDataType::GrayRLE),
+            _ => None,
+        }
+    }
 }
 
 // --------------------------------------------------
