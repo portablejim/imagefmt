@@ -100,14 +100,12 @@ impl<R: Read> IFRead for R {
     }
 }
 
-/** Returns: basic info about an image file. The color format information does
- * not correspond to the exact format in the file: for BGR/A data the format is
- * reported as RGB/A and for paletted images it might be RGB or RGBA or
- * whatever (paletted images are auto-depaletted by the decoders).  */
-#[allow(dead_code)]
+/// Returns width, height and color channels of the image. For color images, the channels
+/// are reported as RGB/A even if the channels are stored in a different order in the file
+/// (eg. BGR/A) or using a palette.
 pub fn read_image_info(filepath: &Path) -> io::Result<IFInfo> {
     type F = fn(&mut BufReader<File>) -> io::Result<IFInfo>;
-    let readfunc: F = match extract_extension(filepath) {//.extension() {
+    let readfunc: F = match extract_extension(filepath) {
         Some("png")          => read_png_info,
         Some("tga")          => read_tga_info,
         Some("jpg") | Some("jpeg") => read_jpeg_info,
@@ -118,11 +116,10 @@ pub fn read_image_info(filepath: &Path) -> io::Result<IFInfo> {
     readfunc(reader)
 }
 
-/** Paletted images are auto-depaletted.  */
-#[allow(dead_code)]
+/// Paletted images are auto-depaletted.
 pub fn read_image(filepath: &Path, req_fmt: ColFmt) -> io::Result<IFImage> {
     type F = fn(&mut BufReader<File>, ColFmt) -> io::Result<IFImage>;
-    let readfunc: F = match extract_extension(filepath) {//.extension() {
+    let readfunc: F = match extract_extension(filepath) {
         Some("png")         => read_png,
         Some("tga")         => read_tga,
         Some("jpg") | Some("jpeg") => read_jpeg,
@@ -133,12 +130,11 @@ pub fn read_image(filepath: &Path, req_fmt: ColFmt) -> io::Result<IFImage> {
     readfunc(reader, req_fmt)
 }
 
-#[allow(dead_code)]
 pub fn write_image(filepath: &Path, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
                                                                      -> io::Result<()>
 {
     type F = fn(&mut BufWriter<File>, usize, usize, &[u8], ColFmt) -> io::Result<()>;
-    let writefunc: F = match extract_extension(filepath) {//.extension() {
+    let writefunc: F = match extract_extension(filepath) {
         Some("png") => write_png,
         Some("tga") => write_tga,
         _ => return IFErr!("extension not supported for writing"),
@@ -214,6 +210,7 @@ pub fn read_png_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
     })
 }
 
+#[inline]
 pub fn read_png<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<IFImage> {
     let (image, _) = try!(read_png_chunks(reader, req_fmt, &[]));
     Ok(image)
@@ -717,6 +714,7 @@ pub struct PngCustomChunk {
     pub data: Vec<u8>,
 }
 
+#[inline]
 pub fn write_png<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
                                                                               -> io::Result<()>
 {
@@ -886,10 +884,6 @@ pub struct TgaHeader {
    pub flags          : u8,
 }
 
-/** Returns: basic info. NOTE: Even if the file contains BGR/A data it's reported as
- * RGB/A. Returns error if data type is not supported by the decoder, at least
- * for now (don't rely on it, it's not that way on purpose).
- */
 pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<IFInfo> {
     use self::ColFmt::*;
 
@@ -2645,7 +2639,6 @@ fn u32_to_be(x: u32) -> [u8; 4] {
     buf
 }
 
-// FIXME the ext.to_str() may not be portable, fix when something else possible
 fn extract_extension(filepath: &Path) -> Option<&str> {
     match filepath.extension() {
         Some(ext) => ext.to_str(),
