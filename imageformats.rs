@@ -103,7 +103,8 @@ impl<R: Read> IFRead for R {
 /// Returns width, height and color channels of the image. For color images, the channels
 /// are reported as RGB/A even if the channels are stored in a different order in the file
 /// (eg. BGR/A) or using a palette.
-pub fn read_image_info(filepath: &Path) -> io::Result<IFInfo> {
+pub fn read_image_info<P: AsRef<Path>>(filepath: P) -> io::Result<IFInfo> {
+    let filepath: &Path = filepath.as_ref();
     type F = fn(&mut BufReader<File>) -> io::Result<IFInfo>;
     let readfunc: F = match extract_extension(filepath) {
         Some("png")          => read_png_info,
@@ -117,7 +118,8 @@ pub fn read_image_info(filepath: &Path) -> io::Result<IFInfo> {
 }
 
 /// Paletted images are auto-depaletted.
-pub fn read_image(filepath: &Path, req_fmt: ColFmt) -> io::Result<IFImage> {
+pub fn read_image<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<IFImage> {
+    let filepath: &Path = filepath.as_ref();
     type F = fn(&mut BufReader<File>, ColFmt) -> io::Result<IFImage>;
     let readfunc: F = match extract_extension(filepath) {
         Some("png")         => read_png,
@@ -130,9 +132,10 @@ pub fn read_image(filepath: &Path, req_fmt: ColFmt) -> io::Result<IFImage> {
     readfunc(reader, req_fmt)
 }
 
-pub fn write_image(filepath: &Path, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
+pub fn write_image<P: AsRef<Path>>(filepath: P, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
                                                                      -> io::Result<()>
 {
+    let filepath: &Path = filepath.as_ref();
     type F = fn(&mut BufWriter<File>, usize, usize, &[u8], ColFmt) -> io::Result<()>;
     let writefunc: F = match extract_extension(filepath) {
         Some("png") => write_png,

@@ -19,18 +19,18 @@ mod imageformats;
 
 fn main() {
     // load and convert to rgba
-    let _pic = read_image(&Path::new("stars.jpg"), ColFmt::RGBA).unwrap();
+    let _pic = read_image("stars.jpg", ColFmt::RGBA).unwrap();
 
     // convert to grayscale+alpha
-    let _pic = read_image(&Path::new("advanced.png"), ColFmt::YA).unwrap();
+    let _pic = read_image("advanced.png", ColFmt::YA).unwrap();
 
     // no conversion
-    let pic = read_image(&Path::new("marbles.tga"), ColFmt::Auto).unwrap();
+    let pic = read_image("marbles.tga", ColFmt::Auto).unwrap();
 
     // write image out as grayscale
-    write_image(&Path::new("out.png"), pic.w, pic.h, &pic.pixels, ColFmt::Y).unwrap();
+    write_image("out.png") pic.w, pic.h, &pic.pixels, ColFmt::Y).unwrap();
 
     // print width, heigth and color format
-    println!("{:?}", read_image_info(&Path::new("hiisi.png")).unwrap());
+    println!("{:?}", read_image_info("hiisi.png").unwrap());
 }
 ```
