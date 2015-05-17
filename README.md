@@ -10,25 +10,23 @@
 ```Rust
 #![feature(core, step_by, rustc_private)]
 
-use std::path::Path;
-
-use imageformats::*;
-mod imageformats;
+use imagefmt::ColFmt;
+mod imagefmt;
 
 fn main() {
     // load and convert to rgba
-    let _pic = read_image("stars.jpg", ColFmt::RGBA).unwrap();
+    let _pic = imagefmt::read("stars.jpg", ColFmt::RGBA).unwrap();
 
     // convert to grayscale+alpha
-    let _pic = read_image("advanced.png", ColFmt::YA).unwrap();
+    let _pic = imagefmt::read("advanced.png", ColFmt::YA).unwrap();
 
     // no conversion
-    let pic = read_image("marbles.tga", ColFmt::Auto).unwrap();
+    let pic = imagefmt::read("marbles.tga", ColFmt::Auto).unwrap();
 
     // write image out as grayscale
-    write_image("out.png") pic.w, pic.h, &pic.pixels, ColFmt::Y).unwrap();
+    imagefmt::write("out.png", pic.w, pic.h, &pic.pixels, ColFmt::Y).unwrap();
 
     // print width, heigth and color format
-    println!("{:?}", read_image_info("hiisi.png").unwrap());
+    println!("{:?}", imagefmt::read_info("hiisi.png").unwrap());
 }
 ```

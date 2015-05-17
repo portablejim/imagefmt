@@ -31,23 +31,12 @@ use std::slice::bytes::{copy_memory};
 use std::mem::{zeroed};
 use self::flate::{inflate_bytes_zlib, deflate_bytes_zlib};
 
-macro_rules! IFErr {
-    ($e:expr) => (Err(io::Error::new(ErrorKind::Other, $e)))
-}
-
 #[derive(Debug)]
-pub struct IFImage {
+pub struct Image {
     pub w      : usize,
     pub h      : usize,
-    pub c      : ColFmt,
+    pub fmt    : ColFmt,
     pub pixels : Vec<u8>,
-}
-
-#[derive(Debug)]
-pub struct IFInfo {
-    pub w : usize,
-    pub h : usize,
-    pub c : ColFmt,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -59,6 +48,39 @@ pub enum ColFmt {
     RGBA,
     BGR,
     BGRA,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Info {
+    pub w : usize,
+    pub h : usize,
+    pub c : ColType,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ColType {
+    Gray,
+    GrayAlpha,
+    Color,
+    ColorAlpha,
+}
+
+impl From<ColFmt> for ColType {
+    fn from(fmt: ColFmt) -> ColType {
+        match fmt {
+            ColFmt::Y => ColType::Gray,
+            ColFmt::YA => ColType::GrayAlpha,
+            ColFmt::RGB => ColType::Color,
+            ColFmt::RGBA => ColType::ColorAlpha,
+            ColFmt::BGR => ColType::Color,
+            ColFmt::BGRA => ColType::ColorAlpha,
+            ColFmt::Auto => panic!("bug"),
+        }
+    }
+}
+
+macro_rules! IFErr {
+    ($e:expr) => (Err(io::Error::new(ErrorKind::Other, $e)))
 }
 
 trait IFRead {
@@ -103,9 +125,9 @@ impl<R: Read> IFRead for R {
 /// Returns width, height and color channels of the image. For color images, the channels
 /// are reported as RGB/A even if the channels are stored in a different order in the file
 /// (eg. BGR/A) or using a palette.
-pub fn read_image_info<P: AsRef<Path>>(filepath: P) -> io::Result<IFInfo> {
+pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
     let filepath: &Path = filepath.as_ref();
-    type F = fn(&mut BufReader<File>) -> io::Result<IFInfo>;
+    type F = fn(&mut BufReader<File>) -> io::Result<Info>;
     let readfunc: F = match extract_extension(filepath) {
         Some("png")          => read_png_info,
         Some("tga")          => read_tga_info,
@@ -118,9 +140,9 @@ pub fn read_image_info<P: AsRef<Path>>(filepath: P) -> io::Result<IFInfo> {
 }
 
 /// Paletted images are auto-depaletted.
-pub fn read_image<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<IFImage> {
+pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
     let filepath: &Path = filepath.as_ref();
-    type F = fn(&mut BufReader<File>, ColFmt) -> io::Result<IFImage>;
+    type F = fn(&mut BufReader<File>, ColFmt) -> io::Result<Image>;
     let readfunc: F = match extract_extension(filepath) {
         Some("png")         => read_png,
         Some("tga")         => read_tga,
@@ -132,7 +154,7 @@ pub fn read_image<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<IF
     readfunc(reader, req_fmt)
 }
 
-pub fn write_image<P: AsRef<Path>>(filepath: P, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
+pub fn write<P: AsRef<Path>>(filepath: P, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
                                                                      -> io::Result<()>
 {
     let filepath: &Path = filepath.as_ref();
@@ -176,18 +198,20 @@ pub struct PngHeader {
 static PNG_FILE_HEADER: [u8; 8] =
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-pub fn read_png_info<R: Read>(reader: &mut R) -> io::Result<IFInfo> {
+pub fn read_png_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     let hdr = try!(read_png_header(reader));
 
-    let src_fmt: ColFmt = match png_colortype_and_channels_from_u8(hdr.color_type) {
-        Some((_, cs)) => cs,
-        None => return IFErr!("unsupported color type"),
-    };
-
-    Ok(IFInfo {
+    Ok(Info {
         w: hdr.width as usize,
         h: hdr.height as usize,
-        c: src_fmt,
+        c: match hdr.color_type {
+               0 => ColType::Gray,
+               2 => ColType::Color,
+               3 => ColType::Color,   // type of the palette
+               4 => ColType::GrayAlpha,
+               6 => ColType::ColorAlpha,
+               _ => return IFErr!("unsupported color type"),
+           },
     })
 }
 
@@ -214,13 +238,13 @@ pub fn read_png_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
 }
 
 #[inline]
-pub fn read_png<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<IFImage> {
+pub fn read_png<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let (image, _) = try!(read_png_chunks(reader, req_fmt, &[]));
     Ok(image)
 }
 
 pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
-                       -> io::Result<(IFImage, Vec<PngCustomChunk>)>
+                       -> io::Result<(Image, Vec<PngCustomChunk>)>
 {
     let req_fmt = { use self::ColFmt::*; match req_fmt {
         Auto | Y | YA | RGB | RGBA => req_fmt,
@@ -240,18 +264,21 @@ pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[
         None => return IFErr!("unsupported interlace method"),
     };
 
-    let (ctype, src_fmt): (PngColortype, ColFmt) =
-        match png_colortype_and_channels_from_u8(hdr.color_type) {
-            Some(ctcs) => ctcs,
-            None => return IFErr!("unsupported color type"),
-        };
+    let src_fmt = match hdr.color_type {
+        0 => ColFmt::Y,
+        2 => ColFmt::RGB,
+        3 => ColFmt::RGB,   // format of the palette
+        4 => ColFmt::YA,
+        6 => ColFmt::RGBA,
+        _ => return IFErr!("unsupported color type"),
+    };
 
     let dc = &mut PngDecoder {
         stream      : reader,
         w           : hdr.width as usize,
         h           : hdr.height as usize,
         ilace       : ilace,
-        src_indexed : ctype == PngColortype::Idx,
+        src_indexed : hdr.color_type == PngColortype::Idx as u8,
         src_fmt     : src_fmt,
         tgt_fmt     : if req_fmt == ColFmt::Auto { src_fmt } else { req_fmt },
         chunk_lentype : [0u8; 8],
@@ -262,10 +289,10 @@ pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[
     };
 
     let (pixels, chunks) = try!(decode_png(dc, chunk_names));
-    Ok((IFImage {
+    Ok((Image {
         w      : dc.w,
         h      : dc.h,
-        c      : dc.tgt_fmt,
+        fmt    : dc.tgt_fmt,
         pixels : pixels
     }, chunks))
 }
@@ -409,17 +436,6 @@ enum PngColortype {
     Idx  = 3,
     YA   = 4,
     RGBA = 6,
-}
-
-fn png_colortype_and_channels_from_u8(ct: u8) -> Option<(PngColortype, ColFmt)> {
-    match ct {
-        0 => Some((PngColortype::Y, ColFmt::Y)),
-        2 => Some((PngColortype::RGB, ColFmt::RGB)),
-        3 => Some((PngColortype::Idx, ColFmt::RGB)),
-        4 => Some((PngColortype::YA, ColFmt::YA)),
-        6 => Some((PngColortype::RGBA, ColFmt::RGBA)),
-        _ => None,
-    }
 }
 
 fn depalette_convert(src_line: &[u8], tgt_line: &mut[u8], palette: &[u8],
@@ -887,24 +903,22 @@ pub struct TgaHeader {
    pub flags          : u8,
 }
 
-pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<IFInfo> {
+pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     use self::ColFmt::*;
 
     let hdr = try!(read_tga_header(reader));
     let TgaInfo { src_fmt, .. } = try!(parse_tga_header(&hdr));
 
-    let reported_fmt = match src_fmt {
-        ColFmt::Y => ColFmt::Y,
-        ColFmt::YA => ColFmt::YA,
-        ColFmt::BGR => ColFmt::RGB,
-        ColFmt::BGRA => ColFmt::RGBA,
-        _ => return IFErr!("source format unknown"),
-    };
-
-    Ok(IFInfo {
+    Ok(Info {
         w: hdr.width as usize,
         h: hdr.height as usize,
-        c: reported_fmt,
+        c: match src_fmt {
+               ColFmt::Y => ColType::Gray,
+               ColFmt::YA => ColType::GrayAlpha,
+               ColFmt::BGR => ColType::Color,
+               ColFmt::BGRA => ColType::ColorAlpha,
+               _ => return IFErr!("source format unknown"),
+           },
     })
 }
 
@@ -928,7 +942,7 @@ pub fn read_tga_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
     })
 }
 
-pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<IFImage> {
+pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let hdr = try!(read_tga_header(reader));
 
     if 0 < hdr.palette_type { return IFErr!("paletted TGAs not supported"); }
@@ -966,10 +980,10 @@ pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<IFImage>
         tgt_fmt        : tgt_fmt,
     };
 
-    Ok(IFImage {
+    Ok(Image {
         w      : dc.w,
         h      : dc.h,
-        c      : dc.tgt_fmt,
+        fmt    : dc.tgt_fmt,
         pixels : try!(decode_tga(dc))
     })
 }
@@ -1330,7 +1344,7 @@ struct TgaEncoder<'r, R:'r> {
 // ------------------------------------------------------------
 // Baseline JPEG decoder
 
-pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<IFInfo> {
+pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<Info> {
     try!(read_jfif(stream));
 
     loop {
@@ -1346,12 +1360,12 @@ pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<IFInfo> {
             SOF0 | SOF2 => {
                 let mut tmp: [u8; 8] = [0,0,0,0, 0,0,0,0];
                 try!(stream.read_exact(&mut tmp));
-                return Ok(IFInfo {
+                return Ok(Info {
                     w: u16_from_be(&tmp[5..7]) as usize,
                     h: u16_from_be(&tmp[3..5]) as usize,
                     c: match tmp[7] {
-                           1 => ColFmt::Y,
-                           3 => ColFmt::RGB,
+                           1 => ColType::Gray,
+                           3 => ColType::Color,
                            _ => return IFErr!("not valid baseline jpeg")
                        },
                 });
@@ -1368,7 +1382,7 @@ pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<IFInfo> {
     }
 }
 
-pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<IFImage> {
+pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     use self::ColFmt::*;
     let req_fmt = match req_fmt {
         Auto | Y | YA | RGB | RGBA => req_fmt,
@@ -1418,10 +1432,10 @@ pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<IFImage
         comp.data = repeat(0u8).take(dc.num_mcu_x*comp.sfx*8*dc.num_mcu_y*comp.sfy*8).collect();
     }
 
-    Ok(IFImage {
+    Ok(Image {
         w      : dc.w,
         h      : dc.h,
-        c      : dc.tgt_fmt,
+        fmt    : dc.tgt_fmt,
         pixels : {
             // progressive images aren't supported so only one scan
             try!(decode_scan(dc));
