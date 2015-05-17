@@ -1,5 +1,5 @@
 **Image loading and saving**
-* Returned data is always 8-bit (Y/YA/RGB/RGBA)
+* Returned data is always 8-bit (Y/YA/RGB/RGBA/BGR/BGRA)
 
 | Format | Decoder            | Encoder                           |
 | ---    | ---                | ---                               |
