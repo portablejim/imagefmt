@@ -1,5 +1,5 @@
 /*
-    Copyright (c) 2014 Tero Hänninen
+    Copyright (c) 2014-2015 Tero Hänninen
 
     MIT Software License
 
@@ -31,6 +31,7 @@ use std::slice::bytes::{copy_memory};
 use std::mem::{zeroed};
 use self::flate::{inflate_bytes_zlib, deflate_bytes_zlib};
 
+/// Image struct returned from the read functions.
 #[derive(Debug)]
 pub struct Image {
     pub w      : usize,
@@ -39,6 +40,7 @@ pub struct Image {
     pub pixels : Vec<u8>,
 }
 
+/// Color format. Y is gray of course. Auto means automatic/infer/guess.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColFmt {
     Auto,
@@ -50,6 +52,7 @@ pub enum ColFmt {
     BGRA,
 }
 
+/// Holds basic info about an image.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Info {
     pub w : usize,
@@ -57,6 +60,7 @@ pub struct Info {
     pub c : ColType,
 }
 
+/// Color type. Auto means automatic/infer/guess.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColType {
     Auto,
@@ -67,6 +71,7 @@ pub enum ColType {
 }
 
 impl Image {
+    /// Writes an image and converts it to requested color type.
     #[inline]
     pub fn write<P>(&self, filepath: P, tgt_type: ColType) -> io::Result<()>
             where P: AsRef<Path>
@@ -132,15 +137,13 @@ impl<R: Read> IFRead for R {
     }
 }
 
-/// Returns width, height and color channels of the image. For color images, the channels
-/// are reported as RGB/A even if the channels are stored in a different order in the file
-/// (eg. BGR/A) or using a palette.
+/// Returns width, height and color type of the image.
 pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
     let filepath: &Path = filepath.as_ref();
     type F = fn(&mut BufReader<File>) -> io::Result<Info>;
     let readfunc: F = match extract_extension(filepath) {
-        Some("png")          => read_png_info,
-        Some("tga")          => read_tga_info,
+        Some("png")                => read_png_info,
+        Some("tga")                => read_tga_info,
         Some("jpg") | Some("jpeg") => read_jpeg_info,
         _ => return IFErr!("extension not recognized"),
     };
@@ -149,14 +152,14 @@ pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
     readfunc(reader)
 }
 
-/// Using ColFmt::Auto as req_fmt converts the data to one of Y, YA, RGB, RGBA.
-/// Paletted images are auto-depaletted.
+/// Reads an image and converts it to requested format.  Using ColFmt::Auto as req_fmt
+/// converts the data to one of Y, YA, RGB, RGBA.  Paletted images are auto-depaletted.
 pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
     let filepath: &Path = filepath.as_ref();
     type F = fn(&mut BufReader<File>, ColFmt) -> io::Result<Image>;
     let readfunc: F = match extract_extension(filepath) {
-        Some("png")         => read_png,
-        Some("tga")         => read_tga,
+        Some("png")                => read_png,
+        Some("tga")                => read_tga,
         Some("jpg") | Some("jpeg") => read_jpeg,
         _ => return IFErr!("extension not recognized"),
     };
@@ -165,6 +168,7 @@ pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
     readfunc(reader, req_fmt)
 }
 
+/// Writes an image and converts it to requested color type.
 pub fn write<P>(filepath: P, w: usize, h: usize, data: &[u8], src_fmt: ColFmt,
                                                             tgt_type: ColType)
                                                              -> io::Result<()>
@@ -198,6 +202,7 @@ impl ColFmt {
 
 // ------------------------------------------------------------
 
+/// Header of a PNG image.
 #[derive(Debug)]
 pub struct PngHeader {
     pub width              : u32,
@@ -212,6 +217,7 @@ pub struct PngHeader {
 static PNG_FILE_HEADER: [u8; 8] =
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
+/// Returns width, height and color type of the image.
 pub fn read_png_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     let hdr = try!(read_png_header(reader));
 
@@ -229,6 +235,7 @@ pub fn read_png_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     })
 }
 
+/// Reads a PNG header. The fields are not parsed into enums or anything like that.
 pub fn read_png_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
     let mut buf = [0u8; 33];  // file header + IHDR
     try!(reader.read_exact(&mut buf));
@@ -251,12 +258,16 @@ pub fn read_png_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
     })
 }
 
+/// Reads an image and converts it to requested format.  Using ColFmt::Auto as req_fmt
+/// converts the data to one of Y, YA, RGB, RGBA.  Paletted images are auto-depaletted.
 #[inline]
 pub fn read_png<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let (image, _) = try!(read_png_chunks(reader, req_fmt, &[]));
     Ok(image)
 }
 
+/// Like read_png but also returns the data of any requested extension chunks, if they are
+/// present.
 pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
                        -> io::Result<(Image, Vec<PngCustomChunk>)>
 {
@@ -742,11 +753,13 @@ impl PngFilter {
 // --------------------------------------------------
 // PNG encoder
 
+/// PNG extension chunk.
 pub struct PngCustomChunk {
     pub name: [u8; 4],
     pub data: Vec<u8>,
 }
 
+/// Writes an image and converts it to requested color type.
 #[inline]
 pub fn write_png<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
                                                            src_fmt: ColFmt,
@@ -756,6 +769,7 @@ pub fn write_png<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
     write_png_chunks(writer, w, h, data, src_fmt, tgt_type, &[])
 }
 
+/// Like write_png but also writes the given extension chunks into the file.
 pub fn write_png_chunks<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
                                                                   src_fmt: ColFmt,
                                                                 tgt_type: ColType,
@@ -913,6 +927,7 @@ fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
 
 // ------------------------------------------------------------
 
+/// Header of a TGA image.
 #[derive(Debug)]
 pub struct TgaHeader {
    pub id_length      : u8,
@@ -929,6 +944,7 @@ pub struct TgaHeader {
    pub flags          : u8,
 }
 
+/// Returns width, height and color type of the image.
 pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     use self::ColFmt::*;
 
@@ -948,6 +964,7 @@ pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     })
 }
 
+/// Reads a TGA header. The fields are not parsed into enums or anything like that.
 pub fn read_tga_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
     let mut buf = [0u8; 18];
     try!(reader.read_exact(&mut buf));
@@ -968,6 +985,8 @@ pub fn read_tga_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
     })
 }
 
+/// Reads an image and converts it to requested format.  Using ColFmt::Auto as req_fmt
+/// converts the data to one of Y, YA, RGB, RGBA.
 pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let hdr = try!(read_tga_header(reader));
 
@@ -1160,6 +1179,7 @@ impl TgaDataType {
 // --------------------------------------------------
 // TGA Encoder
 
+/// Writes an image and converts it to requested color type.
 pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
                                                            src_fmt: ColFmt,
                                                          tgt_type: ColType)
@@ -1369,6 +1389,7 @@ struct TgaEncoder<'r, R:'r> {
 // ------------------------------------------------------------
 // Baseline JPEG decoder
 
+/// Returns width, height and color type of the image.
 pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<Info> {
     try!(read_jfif(stream));
 
@@ -1407,6 +1428,8 @@ pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<Info> {
     }
 }
 
+/// Reads an image and converts it to requested format.  Using ColFmt::Auto as req_fmt
+/// converts the data to Y or RGB.
 pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     use self::ColFmt::*;
     let req_fmt = match req_fmt {
