@@ -41,8 +41,8 @@ pub struct Image {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColFmt {
-    Auto = 0,
-    Y = 1,
+    Auto,
+    Y,
     YA,
     RGB,
     RGBA,
@@ -59,6 +59,7 @@ pub struct Info {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColType {
+    Auto,
     Gray,
     GrayAlpha,
     Color,
@@ -139,6 +140,7 @@ pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
     readfunc(reader)
 }
 
+/// Using ColFmt::Auto as req_fmt converts the data to one of Y, YA, RGB, RGBA.
 /// Paletted images are auto-depaletted.
 pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
     let filepath: &Path = filepath.as_ref();
@@ -154,11 +156,14 @@ pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
     readfunc(reader, req_fmt)
 }
 
-pub fn write<P: AsRef<Path>>(filepath: P, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
-                                                                     -> io::Result<()>
+pub fn write<P>(filepath: P, w: usize, h: usize, data: &[u8], src_fmt: ColFmt,
+                                                            tgt_type: ColType)
+                                                             -> io::Result<()>
+        where P: AsRef<Path>
 {
     let filepath: &Path = filepath.as_ref();
-    type F = fn(&mut BufWriter<File>, usize, usize, &[u8], ColFmt) -> io::Result<()>;
+    type F = fn(&mut BufWriter<File>, usize, usize, &[u8], ColFmt, ColType)
+                                                         -> io::Result<()>;
     let writefunc: F = match extract_extension(filepath) {
         Some("png") => write_png,
         Some("tga") => write_tga,
@@ -166,7 +171,7 @@ pub fn write<P: AsRef<Path>>(filepath: P, w: usize, h: usize, data: &[u8], tgt_f
     };
     let file = try!(File::create(filepath));
     let writer = &mut BufWriter::new(file);
-    writefunc(writer, w, h, data, tgt_fmt)
+    writefunc(writer, w, h, data, src_fmt, tgt_type)
 }
 
 impl ColFmt {
@@ -247,8 +252,8 @@ pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[
                        -> io::Result<(Image, Vec<PngCustomChunk>)>
 {
     let req_fmt = { use self::ColFmt::*; match req_fmt {
-        Auto | Y | YA | RGB | RGBA => req_fmt,
-        _ => return IFErr!("format not supported")
+        Auto | Y | YA | RGB | RGBA | BGR | BGRA => req_fmt,
+        //_ => return IFErr!("format not supported")
     }};
 
     let hdr = try!(read_png_header(reader));
@@ -734,34 +739,46 @@ pub struct PngCustomChunk {
 }
 
 #[inline]
-pub fn write_png<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
-                                                                              -> io::Result<()>
+pub fn write_png<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
+                                                           src_fmt: ColFmt,
+                                                         tgt_type: ColType)
+                                                          -> io::Result<()>
 {
-    write_png_chunks(writer, w, h, data, tgt_fmt, &[])
+    write_png_chunks(writer, w, h, data, src_fmt, tgt_type, &[])
 }
 
 pub fn write_png_chunks<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
-                                                                   tgt_fmt: ColFmt,
-                                                         chunks: &[PngCustomChunk])
-                                                                    -> io::Result<()>
+                                                                  src_fmt: ColFmt,
+                                                                tgt_type: ColType,
+                                                        chunks: &[PngCustomChunk])
+                                                                 -> io::Result<()>
 {
     let src_chans = data.len() / w / h;
-    if w < 1 || h < 1 || (src_chans * w * h != data.len()) {
+
+    if w < 1 || h < 1
+    || src_chans * w * h != data.len()
+    || src_chans != src_fmt.channels() {
         return IFErr!("invalid dimensions or data length");
     }
 
-    let src_fmt = match src_chans {
-        1 => ColFmt::Y,
-        2 => ColFmt::YA,
-        3 => ColFmt::RGB,
-        4 => ColFmt::RGBA,
-        _ => return IFErr!("format not supported"),
-    };
+    match src_fmt {
+        ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA
+                                             | ColFmt::BGR
+                                             | ColFmt::BGRA => {}
+        ColFmt::Auto => return IFErr!("invalid format"),
+    }
 
-    let tgt_fmt = match tgt_fmt {
-        ColFmt::Auto                         => src_fmt,
-        ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA => tgt_fmt,
-        _ => return IFErr!("invalid format"),
+    let tgt_fmt = match tgt_type {
+        ColType::Gray       => ColFmt::Y,
+        ColType::GrayAlpha  => ColFmt::YA,
+        ColType::Color      => ColFmt::RGB,
+        ColType::ColorAlpha => ColFmt::RGBA,
+        ColType::Auto => match src_fmt {
+            ColFmt::Y    | ColFmt::YA => src_fmt,
+            ColFmt::RGB  | ColFmt::BGR => ColFmt::RGB,
+            ColFmt::RGBA | ColFmt::BGRA => ColFmt::RGBA,
+            ColFmt::Auto => return IFErr!("invalid format"),
+        },
     };
 
     let ec = &mut PngEncoder {
@@ -955,7 +972,7 @@ pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let tgt_fmt = {
         use self::ColFmt::*;
         match req_fmt {
-            Y | YA | RGB | RGBA => req_fmt,
+            Y | YA | RGB | RGBA | BGR | BGRA => req_fmt,
             Auto => match src_fmt {
                 Y => Y,
                 YA => YA,
@@ -963,7 +980,7 @@ pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
                 BGRA => RGBA,
                 _ => return IFErr!("not supported"),
             },
-            _ => return IFErr!("conversion not supported"),
+            //_ => return IFErr!("conversion not supported"),
         }
     };
 
@@ -1134,38 +1151,37 @@ impl TgaDataType {
 // --------------------------------------------------
 // TGA Encoder
 
-/// For tgt_fmt, accepts FmtRGB/A but not FmtBGR/A; will encode as BGR/A.
-pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8], tgt_fmt: ColFmt)
-                                                                              -> io::Result<()>
+pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
+                                                           src_fmt: ColFmt,
+                                                         tgt_type: ColType)
+                                                          -> io::Result<()>
 {
-    if w < 1 || h < 1 || 0xffff < w || 0xffff < h {
-        return IFErr!("invalid dimensions");
-    }
-
     let src_chans = data.len() / w / h;
-    if src_chans * w * h != data.len() {
-        return IFErr!("mismatching dimensions and length");
+
+    if w < 1 || h < 1 || 0xffff < w || 0xffff < h
+    || src_chans * w * h != data.len()
+    || src_chans != src_fmt.channels() {
+        return IFErr!("invalid dimensions or data length");
     }
 
-    let src_fmt = match src_chans {
-        1 => ColFmt::Y,
-        2 => ColFmt::YA,
-        3 => ColFmt::RGB,
-        4 => ColFmt::RGBA,
-        _ => return IFErr!("format not supported"),
-    };
+    match src_fmt {
+        ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA
+                                             | ColFmt::BGR
+                                             | ColFmt::BGRA => {}
+        ColFmt::Auto => return IFErr!("invalid format"),
+    }
 
-    let tgt_fmt = {
-        use self::ColFmt::*;
-        match (src_fmt, tgt_fmt) {
-            (Y, Auto) | (YA, Auto) => src_fmt,
-            (RGB, Auto)            => BGR,
-            (RGBA, Auto)           => BGRA,
-            (_, Y) | (_, YA)       => tgt_fmt,
-            (_, RGB)               => BGR,
-            (_, RGBA)              => BGRA,
-            _ => return IFErr!("invalid format"),
-        }
+    let tgt_fmt = match tgt_type {
+        ColType::Gray       => ColFmt::Y,
+        ColType::GrayAlpha  => ColFmt::YA,
+        ColType::Color      => ColFmt::BGR,
+        ColType::ColorAlpha => ColFmt::BGRA,
+        ColType::Auto => match src_fmt {
+            ColFmt::Y    | ColFmt::YA => src_fmt,
+            ColFmt::RGB  | ColFmt::BGR => ColFmt::BGR,
+            ColFmt::RGBA | ColFmt::BGRA => ColFmt::BGRA,
+            ColFmt::Auto => return IFErr!("invalid format"),
+        },
     };
 
     let ec = &mut TgaEncoder {
