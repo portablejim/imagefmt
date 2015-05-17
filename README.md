@@ -1,5 +1,7 @@
 **Image loading and saving**
 * Returned data is always 8-bit (Y/YA/RGB/RGBA/BGR/BGRA)
+* You can choose to copy just the imagefmt.rs file to your project and avoid all
+dependencies completely. Although I think avoiding deps has gone out of fashion.
 
 | Format | Decoder            | Encoder                           |
 | ---    | ---                | ---                               |
@@ -7,6 +9,7 @@
 | tga    | 8-bit non-paletted | 8-bit non-paletted                |
 | jpeg   | baseline           | nope                              |
 
+If you copy the file, the use is as follows:
 ```Rust
 #![feature(core, step_by, rustc_private)]
 

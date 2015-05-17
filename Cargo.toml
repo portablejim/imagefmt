@@ -1,0 +1,8 @@
+[package]
+name = "imagefmt"
+version = "0.1.0"
+authors = ["Tero Hänninen"]
+
+[lib]
+name = "imagefmt"
+path = "lib.rs"
