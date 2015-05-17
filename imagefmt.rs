@@ -40,7 +40,9 @@ pub struct Image {
     pub pixels : Vec<u8>,
 }
 
-/// Color format. Y is gray of course. Auto means automatic/infer/guess.
+/// Color format.
+///
+/// `Y` is gray of course. `Auto` means automatic/infer/guess.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColFmt {
     Auto,
@@ -60,7 +62,9 @@ pub struct Info {
     pub c : ColType,
 }
 
-/// Color type. Auto means automatic/infer/guess.
+/// Color type.
+///
+/// `Auto` means automatic/infer/guess.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColType {
     Auto,
@@ -152,8 +156,10 @@ pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
     readfunc(reader)
 }
 
-/// Reads an image and converts it to requested format.  Using ColFmt::Auto as req_fmt
-/// converts the data to one of Y, YA, RGB, RGBA.  Paletted images are auto-depaletted.
+/// Reads an image and converts it to requested format.
+///
+/// Passing `ColFmt::Auto` as `req_fmt` converts the data to one of `Y`, `YA`, `RGB`,
+/// `RGBA`.  Paletted images are auto-depaletted.
 pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
     let filepath: &Path = filepath.as_ref();
     type F = fn(&mut BufReader<File>, ColFmt) -> io::Result<Image>;
@@ -235,7 +241,9 @@ pub fn read_png_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     })
 }
 
-/// Reads a PNG header. The fields are not parsed into enums or anything like that.
+/// Reads a PNG header.
+///
+/// The fields are not parsed into enums or anything like that.
 pub fn read_png_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
     let mut buf = [0u8; 33];  // file header + IHDR
     try!(reader.read_exact(&mut buf));
@@ -258,16 +266,19 @@ pub fn read_png_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
     })
 }
 
-/// Reads an image and converts it to requested format.  Using ColFmt::Auto as req_fmt
-/// converts the data to one of Y, YA, RGB, RGBA.  Paletted images are auto-depaletted.
+/// Reads an image and converts it to requested format.
+///
+/// Passing `ColFmt::Auto` as `req_fmt` converts the data to one of `Y`, `YA`, `RGB`,
+/// `RGBA`.  Paletted images are auto-depaletted.
 #[inline]
 pub fn read_png<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let (image, _) = try!(read_png_chunks(reader, req_fmt, &[]));
     Ok(image)
 }
 
-/// Like read_png but also returns the data of any requested extension chunks, if they are
-/// present.
+/// Like read_png but also returns the data of any requested extension chunks.
+///
+/// If the requested chunks are not present they are ignored.
 pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
                        -> io::Result<(Image, Vec<PngCustomChunk>)>
 {
@@ -964,7 +975,9 @@ pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     })
 }
 
-/// Reads a TGA header. The fields are not parsed into enums or anything like that.
+/// Reads a TGA header.
+///
+/// The fields are not parsed into enums or anything like that.
 pub fn read_tga_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
     let mut buf = [0u8; 18];
     try!(reader.read_exact(&mut buf));
@@ -985,8 +998,10 @@ pub fn read_tga_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
     })
 }
 
-/// Reads an image and converts it to requested format.  Using ColFmt::Auto as req_fmt
-/// converts the data to one of Y, YA, RGB, RGBA.
+/// Reads an image and converts it to requested format.
+///
+/// Passing `ColFmt::Auto` as req_fmt converts the data to one of `Y`, `YA`, `RGB`,
+/// `RGBA`.
 pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let hdr = try!(read_tga_header(reader));
 
@@ -1428,8 +1443,9 @@ pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<Info> {
     }
 }
 
-/// Reads an image and converts it to requested format.  Using ColFmt::Auto as req_fmt
-/// converts the data to Y or RGB.
+/// Reads an image and converts it to requested format.
+///
+/// Passing `ColFmt::Auto` as `req_fmt` converts the data to `Y` or `RGB`.
 pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     use self::ColFmt::*;
     let req_fmt = match req_fmt {
