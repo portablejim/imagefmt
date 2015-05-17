@@ -66,6 +66,15 @@ pub enum ColType {
     ColorAlpha,
 }
 
+impl Image {
+    #[inline]
+    pub fn write<P>(&self, filepath: P, tgt_type: ColType) -> io::Result<()>
+            where P: AsRef<Path>
+    {
+        write(filepath, self.w, self.h, &self.pixels, self.fmt, tgt_type)
+    }
+}
+
 impl From<ColFmt> for ColType {
     fn from(fmt: ColFmt) -> ColType {
         match fmt {
