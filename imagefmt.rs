@@ -80,7 +80,7 @@ impl Image {
     pub fn write<P>(&self, filepath: P, tgt_type: ColType) -> io::Result<()>
             where P: AsRef<Path>
     {
-        write(filepath, self.w, self.h, &self.pixels, self.fmt, tgt_type)
+        write(filepath, self.w, self.h, self.fmt, &self.pixels, tgt_type)
     }
 }
 
@@ -176,13 +176,13 @@ pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
 }
 
 /// Writes an image and converts it to requested color type.
-pub fn write<P>(filepath: P, w: usize, h: usize, data: &[u8], src_fmt: ColFmt,
+pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
                                                             tgt_type: ColType)
                                                              -> io::Result<()>
         where P: AsRef<Path>
 {
     let filepath: &Path = filepath.as_ref();
-    type F = fn(&mut BufWriter<File>, usize, usize, &[u8], ColFmt, ColType)
+    type F = fn(&mut BufWriter<File>, usize, usize, ColFmt, &[u8], ColType)
                                                          -> io::Result<()>;
     let writefunc: F = match extract_extension(filepath) {
         Some("png") => write_png,
@@ -191,7 +191,7 @@ pub fn write<P>(filepath: P, w: usize, h: usize, data: &[u8], src_fmt: ColFmt,
     };
     let file = try!(File::create(filepath));
     let writer = &mut BufWriter::new(file);
-    writefunc(writer, w, h, data, src_fmt, tgt_type)
+    writefunc(writer, w, h, src_fmt, data, tgt_type)
 }
 
 impl ColFmt {
@@ -773,20 +773,20 @@ pub struct PngCustomChunk {
 
 /// Writes an image and converts it to requested color type.
 #[inline]
-pub fn write_png<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
-                                                           src_fmt: ColFmt,
-                                                         tgt_type: ColType)
-                                                          -> io::Result<()>
+pub fn write_png<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
+                                                                   data: &[u8],
+                                                             tgt_type: ColType)
+                                                              -> io::Result<()>
 {
-    write_png_chunks(writer, w, h, data, src_fmt, tgt_type, &[])
+    write_png_chunks(writer, w, h, src_fmt, data, tgt_type, &[])
 }
 
 /// Like `write_png` but also writes the given extension chunks.
-pub fn write_png_chunks<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
-                                                                  src_fmt: ColFmt,
-                                                                tgt_type: ColType,
-                                                        chunks: &[PngCustomChunk])
-                                                                 -> io::Result<()>
+pub fn write_png_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
+                                                                          data: &[u8],
+                                                                    tgt_type: ColType,
+                                                            chunks: &[PngCustomChunk])
+                                                                     -> io::Result<()>
 {
     let src_bytespp = data.len() / w / h;
 
@@ -1196,10 +1196,10 @@ impl TgaDataType {
 // TGA Encoder
 
 /// Writes an image and converts it to requested color type.
-pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
-                                                           src_fmt: ColFmt,
-                                                         tgt_type: ColType)
-                                                          -> io::Result<()>
+pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
+                                                                   data: &[u8],
+                                                             tgt_type: ColType)
+                                                              -> io::Result<()>
 {
     let src_bytespp = data.len() / w / h;
 
