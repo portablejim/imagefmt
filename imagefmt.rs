@@ -2420,7 +2420,7 @@ type LineConverter = fn(&[u8], &mut[u8]);
 fn get_converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> Option<LineConverter> {
     use self::ColFmt::*;
     match (src_fmt, tgt_fmt) {
-        (ref s, ref t) if (*s == *t) => Some(copy_line),
+        (ref s, ref t) if (*s == *t) => Some(copy_memory),
         (Y, YA)      => Some(y_to_ya),
         (Y, RGB)     => Some(y_to_rgb),
         (Y, RGBA)    => Some(y_to_rgba),
@@ -2451,10 +2451,6 @@ fn get_converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> Option<LineConverter> {
         (BGRA, RGBA) => Some(bgra_to_rgba),
         _ => None,
     }
-}
-
-fn copy_line(src_line: &[u8], tgt_line: &mut[u8]) {
-    copy_memory(src_line, tgt_line);
 }
 
 fn luminance(r: u8, g: u8, b: u8) -> u8 {
