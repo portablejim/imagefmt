@@ -2445,10 +2445,12 @@ fn get_converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> Option<LineConverter> {
         (BGR, YA)    => Some(bgr_to_ya),
         (BGR, RGB)   => Some(bgr_to_rgb),
         (BGR, RGBA)  => Some(bgr_to_rgba),
+        (BGR, BGRA)  => Some(BGR_TO_BGRA),
         (BGRA, Y)    => Some(bgra_to_y),
         (BGRA, YA)   => Some(bgra_to_ya),
         (BGRA, RGB)  => Some(bgra_to_rgb),
         (BGRA, RGBA) => Some(bgra_to_rgba),
+        (BGRA, BGR)  => Some(BGRA_TO_BGR),
         _ => None,
     }
 }
@@ -2537,6 +2539,7 @@ fn rgb_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
+const BGR_TO_BGRA: LineConverter = rgb_to_rgba;
 fn rgb_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
     for s in (0 .. src_line.len()).step_by(3) {
@@ -2565,6 +2568,7 @@ fn rgba_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
+const BGRA_TO_BGR: LineConverter = rgba_to_rgb;
 fn rgba_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
     for s in (0 .. src_line.len()).step_by(4) {
