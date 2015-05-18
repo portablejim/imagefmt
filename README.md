@@ -9,7 +9,7 @@ dependencies completely. Although I think avoiding deps has gone out of fashion.
 | tga    | 8-bit non-paletted | 8-bit non-paletted                |
 | jpeg   | baseline           | nope                              |
 
-If you copy the file, the use is as follows:
+If you copy the file, the usage is as follows:
 ```Rust
 #![feature(core, step_by, rustc_private)]
 
@@ -30,7 +30,7 @@ fn main() {
     pic.write("out.png", ColType::Gray).unwrap();
 
     // there's also a free function that doesn't require an Image
-    imagefmt::write("out.tga", pic.w, pic.h, &pic.pixels, pic.fmt,
+    imagefmt::write("out.tga", pic.w, pic.h, pic.fmt, &pic.pixels,
                                                     ColType::Gray)
                                                         .unwrap();
 
