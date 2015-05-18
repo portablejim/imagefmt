@@ -62,7 +62,7 @@ pub struct Info {
     pub c : ColType,
 }
 
-/// Color type.
+/// Color type – these are categories of color formats.
 ///
 /// `Auto` means automatic/infer/guess.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -195,7 +195,7 @@ pub fn write<P>(filepath: P, w: usize, h: usize, data: &[u8], src_fmt: ColFmt,
 }
 
 impl ColFmt {
-    fn channels(&self) -> usize {
+    fn bytes_pp(&self) -> usize {
         use self::ColFmt::*;
         match *self {
             Auto        => 0,
@@ -277,7 +277,7 @@ pub fn read_png<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     Ok(image)
 }
 
-/// Like read_png but also returns the data of any requested extension chunks.
+/// Like `read_png` but also returns the requested extension chunks.
 ///
 /// If the requested chunks are not present they are ignored.
 pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
@@ -496,13 +496,13 @@ fn simple_convert(src_line: &[u8], tgt_line: &mut[u8], _: &[u8], _: &mut[u8],
 }
 
 fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &[u8])
-                                                                    -> io::Result<Vec<u8>>
+                                                               -> io::Result<Vec<u8>>
 {
-    let filter_step = if dc.src_indexed { 1 } else { dc.src_fmt.channels() };
-    let tgt_bytespp = dc.tgt_fmt.channels() as usize;
+    let filter_step = if dc.src_indexed { 1 } else { dc.src_fmt.bytes_pp() };
+    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
     let tgt_linesize = dc.w as usize * tgt_bytespp;
 
-    let mut result: Vec<u8> = repeat(0).take(dc.w as usize * dc.h as usize * tgt_bytespp).collect();
+    let mut result: Vec<u8> = repeat(0).take(dc.w * dc.h * tgt_bytespp).collect();
     let mut depaletted_line: Vec<u8> = if dc.src_indexed {
         repeat(0).take((dc.w * 3) as usize).collect()
     } else {
@@ -781,18 +781,18 @@ pub fn write_png<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
     write_png_chunks(writer, w, h, data, src_fmt, tgt_type, &[])
 }
 
-/// Like write_png but also writes the given extension chunks into the file.
+/// Like `write_png` but also writes the given extension chunks.
 pub fn write_png_chunks<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
                                                                   src_fmt: ColFmt,
                                                                 tgt_type: ColType,
                                                         chunks: &[PngCustomChunk])
                                                                  -> io::Result<()>
 {
-    let src_chans = data.len() / w / h;
+    let src_bytespp = data.len() / w / h;
 
     if w < 1 || h < 1
-    || src_chans * w * h != data.len()
-    || src_chans != src_fmt.channels() {
+    || src_bytespp * w * h != data.len()
+    || src_bytespp != src_fmt.bytes_pp() {
         return IFErr!("invalid dimensions or data length");
     }
 
@@ -820,7 +820,7 @@ pub fn write_png_chunks<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8
         stream    : writer,
         w         : w,
         h         : h,
-        src_chans : src_chans,
+        src_bytespp : src_bytespp,
         src_fmt   : src_fmt,
         tgt_fmt   : tgt_fmt,
         data      : data,
@@ -878,10 +878,10 @@ fn write_custom_chunk<W: Write>(ec: &mut PngEncoder<W>, chunk: &PngCustomChunk) 
 }
 
 struct PngEncoder<'r, W:'r> {
-    stream        : &'r mut W,   // TODO is this ok?
+    stream        : &'r mut W,
     w             : usize,
     h             : usize,
-    src_chans     : usize,
+    src_bytespp   : usize,
     tgt_fmt       : ColFmt,
     src_fmt       : ColFmt,
     data          : &'r [u8],
@@ -894,13 +894,13 @@ fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
         None => return IFErr!("no such converter"),
     };
 
-    let filter_step = ec.tgt_fmt.channels();
+    let filter_step = ec.tgt_fmt.bytes_pp();
     let tgt_linesize = ec.w * filter_step + 1;   // +1 for filter type
     let mut cline: Vec<u8> = repeat(0).take(tgt_linesize).collect();
     let mut pline: Vec<u8> = repeat(0).take(tgt_linesize).collect();
     let mut filtered_image: Vec<u8> = repeat(0).take(tgt_linesize * ec.h).collect();
 
-    let src_linesize = ec.w * ec.src_chans;
+    let src_linesize = ec.w * ec.src_bytespp;
 
     let mut ti = 0;
     for si in (0 .. ec.h * src_linesize).step_by(src_linesize) {
@@ -1011,7 +1011,7 @@ pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     if 0 < (hdr.flags & 0xc0) { return IFErr!("interlaced TGAs not supported"); }
     if 0 < (hdr.flags & 0x10) { return IFErr!("right-to-left TGAs not supported"); }
 
-    let TgaInfo { src_chans, src_fmt, rle } = try!(parse_tga_header(&hdr));
+    let TgaInfo { src_bytespp, src_fmt, rle } = try!(parse_tga_header(&hdr));
 
     let tgt_fmt = {
         use self::ColFmt::*;
@@ -1035,7 +1035,7 @@ pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
         w              : hdr.width as usize,
         h              : hdr.height as usize,
         origin_at_top  : 0 < (hdr.flags & 0x20),
-        src_chans      : src_chans,
+        src_bytespp    : src_bytespp,
         rle            : rle,
         src_fmt        : src_fmt,
         tgt_fmt        : tgt_fmt,
@@ -1050,7 +1050,7 @@ pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
 }
 
 struct TgaInfo {
-    src_chans : usize,
+    src_bytespp : usize,
     src_fmt   : ColFmt,
     rle       : bool,
 }
@@ -1076,8 +1076,8 @@ fn parse_tga_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
         _ => return IFErr!("data type not supported")
     }
 
-    let src_chans = hdr.bits_pp as usize / 8;
-    let src_fmt = match src_chans {
+    let src_bytespp = hdr.bits_pp as usize / 8;
+    let src_fmt = match src_bytespp {
         1 => ColFmt::Y,
         2 => ColFmt::YA,
         3 => ColFmt::BGR,
@@ -1086,25 +1086,25 @@ fn parse_tga_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
     };
 
     Ok(TgaInfo {
-        src_chans : src_chans,
+        src_bytespp : src_bytespp,
         src_fmt   : src_fmt,
         rle       : rle,
     })
 }
 
 fn decode_tga<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
-    let tgt_chans = dc.tgt_fmt.channels();
-    let tgt_linesize = (dc.w * tgt_chans) as i64;
-    let src_linesize = (dc.w * dc.src_chans) as usize;
+    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
+    let tgt_linesize = (dc.w * tgt_bytespp) as isize;
+    let src_linesize = dc.w * dc.src_bytespp;
 
     let mut src_line: Vec<u8> = repeat(0).take(src_linesize).collect();
-    let mut result: Vec<u8> = repeat(0).take((dc.w * dc.h * tgt_chans) as usize).collect();
+    let mut result: Vec<u8> = repeat(0).take(dc.w * dc.h * tgt_bytespp).collect();
 
-    let (tgt_stride, mut ti): (i64, i64) =
+    let (tgt_stride, mut ti): (isize, isize) =
         if dc.origin_at_top {
             (tgt_linesize, 0)
         } else {
-            (-tgt_linesize, (dc.h-1) as i64 * tgt_linesize)
+            (-tgt_linesize, (dc.h-1) as isize * tgt_linesize)
         };
 
     let convert: LineConverter = match get_converter(dc.src_fmt, dc.tgt_fmt) {
@@ -1123,7 +1123,7 @@ fn decode_tga<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
 
     // ---- RLE ----
 
-    let bytes_pp = dc.src_chans as usize;
+    let bytes_pp = dc.src_bytespp as usize;
     let mut rbuf: Vec<u8> = repeat(0u8).take(src_linesize).collect();
     let mut plen = 0;    // packet length
     let mut its_rle = false;
@@ -1159,11 +1159,11 @@ fn decode_tga<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
 }
 
 struct TgaDecoder<'r, R:'r> {
-    stream        : &'r mut R,   // TODO is this ok?
+    stream        : &'r mut R,
     w             : usize,
     h             : usize,
-    origin_at_top : bool,    // src
-    src_chans     : usize,
+    origin_at_top : bool,
+    src_bytespp   : usize,
     rle           : bool,          // run length compressed
     src_fmt       : ColFmt,
     tgt_fmt       : ColFmt,
@@ -1201,11 +1201,11 @@ pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
                                                          tgt_type: ColType)
                                                           -> io::Result<()>
 {
-    let src_chans = data.len() / w / h;
+    let src_bytespp = data.len() / w / h;
 
     if w < 1 || h < 1 || 0xffff < w || 0xffff < h
-    || src_chans * w * h != data.len()
-    || src_chans != src_fmt.channels() {
+    || src_bytespp * w * h != data.len()
+    || src_bytespp != src_fmt.bytes_pp() {
         return IFErr!("invalid dimensions or data length");
     }
 
@@ -1233,8 +1233,8 @@ pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
         stream    : writer,
         w         : w,
         h         : h,
-        src_chans : src_chans,
-        tgt_chans : tgt_fmt.channels(),
+        src_bytespp : src_bytespp,
+        tgt_bytespp : tgt_fmt.bytes_pp(),
         src_fmt   : src_fmt,
         tgt_fmt   : tgt_fmt,
         rle       : true,
@@ -1256,7 +1256,7 @@ pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, data: &[u8],
 
 fn write_tga_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     use self::TgaDataType::*;
-    let (data_type, has_alpha) = match ec.tgt_chans {
+    let (data_type, has_alpha) = match ec.tgt_bytespp {
         1 => (if ec.rle { GrayRLE      } else { Gray      }, false),
         2 => (if ec.rle { GrayRLE      } else { Gray      }, true),
         3 => (if ec.rle { TrueColorRLE } else { TrueColor }, false),
@@ -1273,7 +1273,7 @@ fn write_tga_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
         0, 0, 0, 0,
         w[0], w[1],
         h[0], h[1],
-        (ec.tgt_chans * 8) as u8,
+        (ec.tgt_bytespp * 8) as u8,
         if has_alpha {8u8} else {0u8},  // flags
     ];
 
@@ -1281,8 +1281,8 @@ fn write_tga_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
 }
 
 fn write_tga_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
-    let src_linesize = (ec.w * ec.src_chans) as usize;
-    let tgt_linesize = (ec.w * ec.tgt_chans) as usize;
+    let src_linesize = (ec.w * ec.src_bytespp) as usize;
+    let tgt_linesize = (ec.w * ec.tgt_bytespp) as usize;
     let mut tgt_line: Vec<u8> = repeat(0u8).take(tgt_linesize).collect();
     let mut si = ec.h as usize * src_linesize;
 
@@ -1302,7 +1302,7 @@ fn write_tga_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
 
     // ----- RLE -----
 
-    let bytes_pp = ec.tgt_chans as usize;
+    let bytes_pp = ec.tgt_bytespp as usize;
     let max_packets_per_line = (tgt_linesize+127) / 128;
     let mut cmp_buf: Vec<u8> = repeat(0u8).take(tgt_linesize+max_packets_per_line).collect();
     for _ in (0 .. ec.h) {
@@ -1391,11 +1391,11 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
 }
 
 struct TgaEncoder<'r, R:'r> {
-    stream        : &'r mut R,   // TODO is this ok?
+    stream        : &'r mut R,
     w             : usize,
     h             : usize,
-    src_chans     : usize,
-    tgt_chans     : usize,
+    src_bytespp   : usize,
+    tgt_bytespp   : usize,
     tgt_fmt       : ColFmt,
     src_fmt       : ColFmt,
     rle           : bool,          // run length compressed
@@ -2076,8 +2076,8 @@ fn nextbit<R: Read>(stream: &mut R, mut cb: u8, mut bits_left: usize)
 }
 
 fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
-    let tgt_chans = dc.tgt_fmt.channels();
-    let mut result: Vec<u8> = repeat(0).take(dc.w * dc.h * tgt_chans).collect();
+    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
+    let mut result: Vec<u8> = repeat(0).take(dc.w * dc.h * tgt_bytespp).collect();
 
     match (dc.num_comps, dc.tgt_fmt) {
         (3, ColFmt::RGB) | (3, ColFmt::RGBA) => {
@@ -2101,7 +2101,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
                     if dc.tgt_fmt == ColFmt::RGBA {
                         *result.get_mut(di+3).unwrap() = 255;
                     }
-                    di += tgt_chans;
+                    di += tgt_bytespp;
                 }
                 si += dc.num_mcu_x * dc.comps[0].sfx * 8;
             }
@@ -2147,7 +2147,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
                     if dc.tgt_fmt == ColFmt::RGBA {
                         *result.get_mut(di+3).unwrap() = 255;
                     }
-                    di += tgt_chans;
+                    di += tgt_bytespp;
                 }
                 si += dc.num_mcu_x * comp.sfx * 8;
             }
@@ -2162,14 +2162,14 @@ fn upsample_gray<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
     let si0yratio = dc.comps[0].y as f64 / dc.h as f64;
     let si0xratio = dc.comps[0].x as f64 / dc.w as f64;
     let mut di = 0;
-    let tgt_chans = dc.tgt_fmt.channels();
+    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
 
     for j in (0 .. dc.h) {
         let si0 = (j as f64 * si0yratio).floor() as usize * stride0;
         for i in (0 .. dc.w) {
             result[di] = dc.comps[0].data[si0 + (i as f64 * si0xratio).floor() as usize];
             if dc.tgt_fmt == ColFmt::YA { result[di+1] = 255; }
-            di += tgt_chans;
+            di += tgt_bytespp;
         }
     }
 }
@@ -2186,7 +2186,7 @@ fn upsample_rgb<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
     let si2xratio = dc.comps[2].x as f64 / dc.w as f64;
 
     let mut di = 0;
-    let tgt_chans = dc.tgt_fmt.channels();
+    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
 
     for j in (0 .. dc.h) {
         let si0 = (j as f64 * si0yratio).floor() as usize * stride0;
@@ -2201,7 +2201,7 @@ fn upsample_rgb<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
             );
             copy_memory(&pixel[..], &mut result[di..di+3]);
             if dc.tgt_fmt == ColFmt::RGBA { result[di+3] = 255; }
-            di += tgt_chans;
+            di += tgt_bytespp;
         }
     }
 }
