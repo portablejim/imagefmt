@@ -84,16 +84,17 @@ impl Image {
     }
 }
 
-impl From<ColFmt> for ColType {
-    fn from(fmt: ColFmt) -> ColType {
-        match fmt {
+impl ColFmt {
+    /// Returns the color type of the color format.
+    pub fn color_type(self) -> ColType {
+        match self {
             ColFmt::Y => ColType::Gray,
             ColFmt::YA => ColType::GrayAlpha,
             ColFmt::RGB => ColType::Color,
             ColFmt::RGBA => ColType::ColorAlpha,
             ColFmt::BGR => ColType::Color,
             ColFmt::BGRA => ColType::ColorAlpha,
-            ColFmt::Auto => panic!("bug"),
+            ColFmt::Auto => ColType::Auto,
         }
     }
 }
