@@ -82,6 +82,12 @@ impl Image {
     {
         write(filepath, self.w, self.h, self.fmt, &self.pixels, tgt_type)
     }
+
+    /// Converts the image into a new allocation.
+    #[inline]
+    pub fn convert(&self, tgt_fmt: ColFmt) -> Result<Image, &str> {
+        convert(self.w, self.h, self.fmt, &self.pixels, tgt_fmt)
+    }
 }
 
 impl ColFmt {
@@ -192,6 +198,58 @@ pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
     let file = try!(File::create(filepath));
     let writer = &mut BufWriter::new(file);
     writefunc(writer, w, h, src_fmt, data, tgt_type)
+}
+
+/// Converts the image into a new allocation.
+pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt)
+                                                           -> Result<Image, &str>
+{
+    let src_bytespp = data.len() / w / h;
+
+    if w < 1 || h < 1
+    || src_bytespp * w * h != data.len()
+    || src_bytespp != src_fmt.bytes_pp() {
+        return Err("invalid dimensions or data length");
+    }
+
+    if src_fmt == ColFmt::Auto {
+        return Err("can't convert from unknown source format")
+    }
+
+    if tgt_fmt == src_fmt || tgt_fmt == ColFmt::Auto {
+        let mut result: Vec<u8> = repeat(0).take(data.len()).collect();
+        copy_memory(data, &mut result[..]);
+        return Ok(Image {
+            w      : w,
+            h      : h,
+            fmt    : src_fmt,
+            pixels : result,
+        })
+    }
+
+    let convert = match get_converter(src_fmt, tgt_fmt) {
+        Some(conv) => conv,
+        None => return Err("conversion not supported"),
+    };
+
+    let src_linesize = w * src_fmt.bytes_pp();
+    let tgt_linesize = w * tgt_fmt.bytes_pp();
+    let mut result: Vec<u8> = repeat(0).take(h * tgt_linesize).collect();
+
+    let mut si = 0;
+    let mut ti = 0;
+    for _j in (0 .. h) {
+        convert(&data[si .. si+src_linesize], &mut result[ti .. ti+tgt_linesize]);
+        si += src_linesize;
+        ti += tgt_linesize;
+    }
+
+    Ok(Image {
+        w      : w,
+        h      : h,
+        fmt    : tgt_fmt,
+        pixels : result,
+    })
 }
 
 impl ColFmt {
