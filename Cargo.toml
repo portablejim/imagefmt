@@ -9,3 +9,6 @@ include = ["imagefmt.rs", "Cargo.toml", "README.md"]
 [lib]
 name = "imagefmt"
 path = "imagefmt.rs"
+
+[dependencies]
+flate2 = "0.2"

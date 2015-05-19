@@ -21,8 +21,7 @@
     CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#![feature(rustc_private)]
-extern crate flate;
+extern crate flate2;
 use std::fs::{File};
 use std::io::{self, Read, Write, BufReader, BufWriter, ErrorKind};
 use std::iter::{repeat};
@@ -30,7 +29,8 @@ use std::path::Path;
 use std::cmp::min;
 use std::mem::{zeroed};
 use std::ptr;
-use self::flate::{inflate_bytes_zlib, deflate_bytes_zlib};
+use ::flate2::read::{ZlibDecoder, ZlibEncoder};
+use ::flate2::Compression;
 
 /// Image struct returned from the read functions.
 #[derive(Debug)]
@@ -718,13 +718,10 @@ fn fill_uc_buf<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<(
         di += chunk.len();
     }
 
-    let inflated = match inflate_bytes_zlib(&alldata[..]) {
-        Ok(cvec) => cvec,
-        Err(_) => return IFErr!("could not inflate zlib source")
-    };
-
-    dc.uc_buf = repeat(0u8).take(inflated[..].len()).collect();
-    copy_memory(&inflated[..], &mut dc.uc_buf[..]);
+    // TODO review...
+    let mut zlibdec = ZlibDecoder::new(&alldata[..]);
+    dc.uc_buf = Vec::<u8>::new();
+    try!(zlibdec.read_to_end(&mut dc.uc_buf));
 
     Ok(())
 }
@@ -983,14 +980,16 @@ fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
         ti += tgt_linesize;
     }
 
-    let compressed: flate::Bytes = deflate_bytes_zlib(&filtered_image[..]);
+    // TODO review...
+    let mut zlibenc = ZlibEncoder::new(&filtered_image[..], Compression::Fast);
+    let mut compressed = Vec::<u8>::new();
+    try!(zlibenc.read_to_end(&mut compressed));
     ec.crc.put(b"IDAT");
     ec.crc.put(&compressed[..]);
     let crc = &ec.crc.finish_be();
 
-    // TODO split up data into smaller chunks?
-    let chunklen = compressed[..].len() as u32;
-    try!(ec.stream.write_all(&u32_to_be(chunklen)[..]));
+    // TODO split up data into smaller chunks
+    try!(ec.stream.write_all(&u32_to_be(compressed.len() as u32)[..]));
     try!(ec.stream.write_all(b"IDAT"));
     try!(ec.stream.write_all(&compressed[..]));
     try!(ec.stream.write_all(crc));
