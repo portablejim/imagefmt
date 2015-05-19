@@ -27,8 +27,8 @@ use std::io::{self, Read, Write, BufReader, BufWriter, ErrorKind};
 use std::iter::{repeat};
 use std::path::Path;
 use std::cmp::min;
-use std::slice::bytes::{copy_memory};
 use std::mem::{zeroed};
+use std::ptr;
 use self::flate::{inflate_bytes_zlib, deflate_bytes_zlib};
 
 /// Image struct returned from the read functions.
@@ -540,7 +540,6 @@ fn depalette_convert(src_line: &[u8], tgt_line: &mut[u8], palette: &[u8],
     let mut d = 0;
     for s in (0 .. src_line.len()) {
         let pidx = src_line[s] as usize * 3;
-        copy_memory(&palette[pidx..pidx+3], &mut depaletted_line[d..d+3]);
         copy_memory(&palette[pidx..pidx+3], &mut depaletted_line[d..d+3]);
         d += 3;
     }
@@ -2783,5 +2782,15 @@ fn extract_extension(filepath: &Path) -> Option<&str> {
     match filepath.extension() {
         Some(ext) => ext.to_str(),
         None => None,
+    }
+}
+
+#[inline]
+fn copy_memory(src: &[u8], dst: &mut[u8]) {
+    if src.len() != dst.len() {
+        panic!("src.len() != dst.len()")
+    }
+    unsafe {
+        ptr::copy(src.as_ptr(), (&mut dst[0]) as *mut u8, src.len());
     }
 }

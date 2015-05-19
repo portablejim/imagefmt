@@ -1,4 +1,3 @@
-#![feature(core)]
 #![feature(step_by)]
 #![feature(rustc_private)]
 
