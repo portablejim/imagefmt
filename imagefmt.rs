@@ -21,6 +21,7 @@
     CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+#![feature(rustc_private)]
 extern crate flate;
 use std::fs::{File};
 use std::io::{self, Read, Write, BufReader, BufWriter, ErrorKind};

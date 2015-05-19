@@ -2,7 +2,10 @@
 name = "imagefmt"
 version = "0.1.0"
 authors = ["Tero Hänninen"]
+description = "Image loading and saving, 8-bit only, with conversions."
+license = "MIT"
+include = ["imagefmt.rs", "Cargo.toml", "README.md"]
 
 [lib]
 name = "imagefmt"
-path = "lib.rs"
+path = "imagefmt.rs"
