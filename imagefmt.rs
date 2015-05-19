@@ -959,8 +959,9 @@ fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
 
     let src_linesize = ec.w * ec.src_bytespp;
 
+    let mut si = 0;
     let mut ti = 0;
-    for si in (0 .. ec.h * src_linesize).step_by(src_linesize) {
+    while si < ec.h * src_linesize {
         convert(&ec.data[si .. si+src_linesize], &mut cline[1 .. tgt_linesize]);
 
         for i in (1 .. filter_step+1) {
@@ -977,6 +978,7 @@ fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
         pline = cline;
         cline = swap;
 
+        si += src_linesize;
         ti += tgt_linesize;
     }
 
@@ -1198,8 +1200,10 @@ fn decode_tga<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
             let copysize: usize = min(plen, wanted);
             if its_rle {
                 try!(dc.stream.read_exact(&mut rbuf[0..bytes_pp]));
-                for p in (gotten .. gotten+copysize).step_by(bytes_pp) {
+                let mut p = gotten;
+                while p < gotten+copysize {
                     copy_memory(&rbuf[0..bytes_pp], &mut src_line[p..p+bytes_pp]);
+                    p += bytes_pp;
                 }
             } else {    // it's raw
                 try!(dc.stream.read_exact(&mut src_line[gotten..gotten+copysize]));
@@ -2327,7 +2331,8 @@ unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
         }
     }
 
-    for i in (0 .. 64).step_by(8) {
+    let mut i = 0;
+    while i < 64 {
         let mut t0 = 0; let mut t1 = 0;
         let mut t2 = 0; let mut t3 = 0;
         let mut x0 = 0; let mut x1 = 0;
@@ -2358,6 +2363,7 @@ unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
         *dst.offset(4) = stbi_clamp((x3-t0) >> 17);
 
         dst = dst.offset(dst_stride as isize);
+        i += 8;
     }
 }
 
@@ -2460,8 +2466,8 @@ fn luminance(r: u8, g: u8, b: u8) -> u8 {
 
 fn y_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in (0 .. src_line.len()) {
-        tgt_line[t  ] = src_line[s];
+    for &sb in src_line {
+        tgt_line[t  ] = sb;
         tgt_line[t+1] = 255;
         t += 2;
     }
@@ -2470,10 +2476,10 @@ fn y_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
 const Y_TO_BGR: LineConverter = y_to_rgb;
 fn y_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in (0 .. src_line.len()) {
-        tgt_line[t  ] = src_line[s];
-        tgt_line[t+1] = src_line[s];
-        tgt_line[t+2] = src_line[s];
+    for &sb in src_line {
+        tgt_line[t  ] = sb;
+        tgt_line[t+1] = sb;
+        tgt_line[t+2] = sb;
         t += 3;
     }
 }
@@ -2481,180 +2487,200 @@ fn y_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
 const Y_TO_BGRA: LineConverter = y_to_rgba;
 fn y_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
     let mut t = 0;
-    for s in (0 .. src_line.len()) {
-        tgt_line[t  ] = src_line[s];
-        tgt_line[t+1] = src_line[s];
-        tgt_line[t+2] = src_line[s];
+    for &sb in src_line {
+        tgt_line[t  ] = sb;
+        tgt_line[t+1] = sb;
+        tgt_line[t+2] = sb;
         tgt_line[t+3] = 255;
         t += 4;
     }
 }
 
 fn ya_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(2) {
-        tgt_line[t] = src_line[s];
-        t += 1;
+    let mut s = 0;
+    for tb in tgt_line {
+        *tb = src_line[s];
+        s += 2;
     }
 }
 
 const YA_TO_BGR: LineConverter = ya_to_rgb;
 fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(2) {
+    while s < src_line.len() {
         tgt_line[t  ] = src_line[s];
         tgt_line[t+1] = src_line[s];
         tgt_line[t+2] = src_line[s];
+        s += 2;
         t += 3;
     }
 }
 
 const YA_TO_BGRA: LineConverter = ya_to_rgba;
 fn ya_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(2) {
+    while s < src_line.len() {
         tgt_line[t  ] = src_line[s];
         tgt_line[t+1] = src_line[s];
         tgt_line[t+2] = src_line[s];
-        tgt_line[t+3] = 255;
+        tgt_line[t+3] = src_line[s+1];
+        s += 2;
         t += 4;
     }
 }
 
 fn rgb_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(3) {
-        tgt_line[t] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
-        t += 1;
+    let mut s = 0;
+    for tb in tgt_line {
+        *tb = luminance(src_line[s], src_line[s+1], src_line[s+2]);
+        s += 3;
     }
 }
 
 fn rgb_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(3) {
+    while s < src_line.len() {
         tgt_line[t  ] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         tgt_line[t+1] = 255;
+        s += 3;
         t += 2;
     }
 }
 
 const BGR_TO_BGRA: LineConverter = rgb_to_rgba;
 fn rgb_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(3) {
+    while s < src_line.len() {
         tgt_line[t  ] = src_line[s  ];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s+2];
         tgt_line[t+3] = 255;
+        s += 3;
         t += 4;
     }
 }
 
 fn rgba_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(4) {
-        tgt_line[t] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
-        t += 1;
+    let mut s = 0;
+    for tb in tgt_line {
+        *tb = luminance(src_line[s], src_line[s+1], src_line[s+2]);
+        s += 4;
     }
 }
 
 fn rgba_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(4) {
+    while s < src_line.len() {
         tgt_line[t  ] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
         tgt_line[t+1] = src_line[s+3];
+        s += 4;
         t += 2;
     }
 }
 
 const BGRA_TO_BGR: LineConverter = rgba_to_rgb;
 fn rgba_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(4) {
+    while s < src_line.len() {
         tgt_line[t  ] = src_line[s  ];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s+2];
+        s += 4;
         t += 3;
     }
 }
 
 fn bgr_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(3) {
-        tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
-        t += 1;
+    let mut s = 0;
+    for tb in tgt_line {
+        *tb = luminance(src_line[s+2], src_line[s+1], src_line[s]);
+        s += 3;
     }
 }
 
 fn bgr_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(3) {
+    while s < src_line.len() {
         tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         tgt_line[t+1] = 255;
+        s += 3;
         t += 2;
     }
 }
 
 const RGB_TO_BGR: LineConverter = bgr_to_rgb;
 fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(3) {
-        tgt_line[t  ] = src_line[s+2];
-        tgt_line[t+1] = src_line[s+1];
-        tgt_line[t+2] = src_line[s  ];
-        t += 3;
+    let mut st = 0;
+    while st < src_line.len() {
+        tgt_line[st  ] = src_line[st+2];
+        tgt_line[st+1] = src_line[st+1];
+        tgt_line[st+2] = src_line[st  ];
+        st += 3;
     }
 }
 
 const RGB_TO_BGRA: LineConverter = bgr_to_rgba;
 fn bgr_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(3) {
+    while s < src_line.len() {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s  ];
         tgt_line[t+3] = 255;
+        s += 3;
         t += 4;
     }
 }
 
 fn bgra_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(4) {
-        tgt_line[t] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
-        t += 1;
+    let mut s = 0;
+    for tb in tgt_line {
+        *tb = luminance(src_line[s+2], src_line[s+1], src_line[s]);
+        s += 4;
     }
 }
 
 fn bgra_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(4) {
+    while s < src_line.len() {
         tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
         tgt_line[t+1] = src_line[s+3];
+        s += 4;
         t += 2;
     }
 }
 
 const RGBA_TO_BGR: LineConverter = bgra_to_rgb;
 fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
+    let mut s = 0;
     let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(4) {
+    while s < src_line.len() {
         tgt_line[t  ] = src_line[s+2];
         tgt_line[t+1] = src_line[s+1];
         tgt_line[t+2] = src_line[s  ];
+        s += 4;
         t += 3;
     }
 }
 
 const RGBA_TO_BGRA: LineConverter = bgra_to_rgba;
 fn bgra_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut t = 0;
-    for s in (0 .. src_line.len()).step_by(4) {
-        tgt_line[t  ] = src_line[s+2];
-        tgt_line[t+1] = src_line[s+1];
-        tgt_line[t+2] = src_line[s  ];
-        tgt_line[t+3] = src_line[s+3];
-        t += 4;
+    let mut st = 0;
+    while st < src_line.len() {
+        tgt_line[st  ] = src_line[st+2];
+        tgt_line[st+1] = src_line[st+1];
+        tgt_line[st+2] = src_line[st  ];
+        tgt_line[st+3] = src_line[st+3];
+        st += 4;
     }
 }
 
