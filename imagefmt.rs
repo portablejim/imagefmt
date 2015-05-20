@@ -22,6 +22,7 @@
 */
 
 extern crate flate2;
+use std::ffi::OsStr;
 use std::fs::{File};
 use std::io::{self, Read, Write, BufReader, BufWriter, ErrorKind};
 use std::iter::{repeat};
@@ -153,12 +154,13 @@ impl<R: Read> IFRead for R {
 pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
     let filepath: &Path = filepath.as_ref();
     type F = fn(&mut BufReader<File>) -> io::Result<Info>;
-    let readfunc: F = match extract_extension(filepath) {
-        Some("png")                => read_png_info,
-        Some("tga")                => read_tga_info,
-        Some("jpg") | Some("jpeg") => read_jpeg_info,
-        _ => return IFErr!("extension not recognized"),
-    };
+    let readfunc: F =
+        match filepath.extension().and_then(OsStr::to_str) {
+            Some("png")                => read_png_info,
+            Some("tga")                => read_tga_info,
+            Some("jpg") | Some("jpeg") => read_jpeg_info,
+            _ => return IFErr!("extension not recognized"),
+        };
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
     readfunc(reader)
@@ -171,12 +173,13 @@ pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
 pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
     let filepath: &Path = filepath.as_ref();
     type F = fn(&mut BufReader<File>, ColFmt) -> io::Result<Image>;
-    let readfunc: F = match extract_extension(filepath) {
-        Some("png")                => read_png,
-        Some("tga")                => read_tga,
-        Some("jpg") | Some("jpeg") => read_jpeg,
-        _ => return IFErr!("extension not recognized"),
-    };
+    let readfunc: F =
+        match filepath.extension().and_then(OsStr::to_str) {
+            Some("png")                => read_png,
+            Some("tga")                => read_tga,
+            Some("jpg") | Some("jpeg") => read_jpeg,
+            _ => return IFErr!("extension not recognized"),
+        };
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
     readfunc(reader, req_fmt)
@@ -191,11 +194,12 @@ pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
     let filepath: &Path = filepath.as_ref();
     type F = fn(&mut BufWriter<File>, usize, usize, ColFmt, &[u8], ColType)
                                                          -> io::Result<()>;
-    let writefunc: F = match extract_extension(filepath) {
-        Some("png") => write_png,
-        Some("tga") => write_tga,
-        _ => return IFErr!("extension not supported for writing"),
-    };
+    let writefunc: F =
+        match filepath.extension().and_then(OsStr::to_str) {
+            Some("png") => write_png,
+            Some("tga") => write_tga,
+            _ => return IFErr!("extension not supported for writing"),
+        };
     let file = try!(File::create(filepath));
     let writer = &mut BufWriter::new(file);
     writefunc(writer, w, h, src_fmt, data, tgt_type)
@@ -2802,13 +2806,6 @@ fn u32_to_be(x: u32) -> [u8; 4] {
     let buf = [(x >> 24) as u8, (x >> 16) as u8,
                (x >>  8) as u8, (x)       as u8];
     buf
-}
-
-fn extract_extension(filepath: &Path) -> Option<&str> {
-    match filepath.extension() {
-        Some(ext) => ext.to_str(),
-        None => None,
-    }
 }
 
 #[inline]
