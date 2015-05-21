@@ -44,7 +44,8 @@ pub struct Image {
 
 /// Color format.
 ///
-/// `Y` is gray of course. `Auto` means automatic/infer/guess.
+/// `Y` is gray of course. `Auto` means automatic/infer, or, unknown when returned from
+/// the read_info functions.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColFmt {
     Auto,
@@ -66,7 +67,7 @@ pub struct Info {
 
 /// Color type – these are categories of color formats.
 ///
-/// `Auto` means automatic/infer/guess.
+/// `Auto` means automatic/infer/unknown.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ColType {
     Auto,
@@ -300,7 +301,7 @@ pub fn read_png_info<R: Read>(reader: &mut R) -> io::Result<Info> {
                3 => ColType::Color,   // type of the palette
                4 => ColType::GrayAlpha,
                6 => ColType::ColorAlpha,
-               _ => return IFErr!("unsupported color type"),
+               _ => ColType::Auto,      // unknown type
            },
     })
 }
@@ -1034,7 +1035,7 @@ pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<Info> {
                ColFmt::YA => ColType::GrayAlpha,
                ColFmt::BGR => ColType::Color,
                ColFmt::BGRA => ColType::ColorAlpha,
-               _ => return IFErr!("source format unknown"),
+                           _ => ColType::Auto,      // unknown type
            },
     })
 }
