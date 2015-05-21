@@ -1,8 +1,8 @@
 [package]
 name = "imagefmt"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Tero Hänninen"]
-description = "Image loading and saving, 8-bit only, with conversions."
+description = "PNG, TGA and JPEG (no encoder for JPEG). 8-bit only, with conversions."
 license = "MIT"
 repository = "https://github.com/lgvz/imagefmt"
 include = ["imagefmt.rs", "Cargo.toml", "README.md"]
