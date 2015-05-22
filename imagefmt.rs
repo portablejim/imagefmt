@@ -93,64 +93,6 @@ impl Image {
     }
 }
 
-impl ColFmt {
-    /// Returns the color type of the color format.
-    pub fn color_type(self) -> ColType {
-        match self {
-            ColFmt::Y => ColType::Gray,
-            ColFmt::YA => ColType::GrayAlpha,
-            ColFmt::RGB => ColType::Color,
-            ColFmt::RGBA => ColType::ColorAlpha,
-            ColFmt::BGR => ColType::Color,
-            ColFmt::BGRA => ColType::ColorAlpha,
-            ColFmt::Auto => ColType::Auto,
-        }
-    }
-}
-
-macro_rules! IFErr {
-    ($e:expr) => (Err(io::Error::new(ErrorKind::Other, $e)))
-}
-
-trait IFRead {
-    fn read_u8(&mut self) -> io::Result<u8>;
-    fn read_exact(&mut self, buf: &mut[u8]) -> io::Result<()>;
-    fn skip(&mut self, amt: usize) -> io::Result<()>;
-}
-
-impl<R: Read> IFRead for R {
-    #[inline]
-    fn read_u8(&mut self) -> io::Result<u8> {
-        let mut buf = [0];
-        match self.read(&mut buf) {
-            Ok(n) if n == 1 => Ok(buf[0]),
-            _               => IFErr!("not enough data"),
-        }
-    }
-
-    fn read_exact(&mut self, buf: &mut[u8]) -> io::Result<()> {
-        let mut ready = 0;
-        while ready < buf.len() {
-            let got = try!(self.read(&mut buf[ready..]));
-            if got == 0 {
-                return IFErr!("not enough data");
-            }
-            ready += got;
-        }
-        Ok(())
-    }
-
-    fn skip(&mut self, mut amt: usize) -> io::Result<()> {
-        let mut buf = [0u8; 1024];
-        while 0 < amt {
-            let n = min(amt, buf.len());
-            try!(self.read_exact(&mut buf[0..n]));
-            amt -= n;
-        }
-        Ok(())
-    }
-}
-
 /// Returns width, height and color type of the image.
 pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
     let filepath: &Path = filepath.as_ref();
@@ -160,7 +102,7 @@ pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
             Some("png")                => read_png_info,
             Some("tga")                => read_tga_info,
             Some("jpg") | Some("jpeg") => read_jpeg_info,
-            _ => return IFErr!("extension not recognized"),
+            _ => return error("extension not recognized"),
         };
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
@@ -179,7 +121,7 @@ pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
             Some("png")                => read_png,
             Some("tga")                => read_tga,
             Some("jpg") | Some("jpeg") => read_jpeg,
-            _ => return IFErr!("extension not recognized"),
+            _ => return error("extension not recognized"),
         };
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
@@ -199,7 +141,7 @@ pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
         match filepath.extension().and_then(OsStr::to_str) {
             Some("png") => write_png,
             Some("tga") => write_tga,
-            _ => return IFErr!("extension not supported for writing"),
+            _ => return error("extension not supported for writing"),
         };
     let file = try!(File::create(filepath));
     let writer = &mut BufWriter::new(file);
@@ -259,6 +201,19 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
 }
 
 impl ColFmt {
+    /// Returns the color type of the color format.
+    pub fn color_type(self) -> ColType {
+        match self {
+            ColFmt::Y => ColType::Gray,
+            ColFmt::YA => ColType::GrayAlpha,
+            ColFmt::RGB => ColType::Color,
+            ColFmt::RGBA => ColType::ColorAlpha,
+            ColFmt::BGR => ColType::Color,
+            ColFmt::BGRA => ColType::ColorAlpha,
+            ColFmt::Auto => ColType::Auto,
+        }
+    }
+
     fn bytes_pp(&self) -> usize {
         use self::ColFmt::*;
         match *self {
@@ -317,7 +272,7 @@ pub fn read_png_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
        &buf[8..16] != b"\0\0\0\x0dIHDR" ||
        &buf[29..33] != &crc32be(&buf[12..29])[..]
     {
-        return IFErr!("corrupt png header");
+        return error("corrupt png header");
     }
 
     Ok(PngHeader {
@@ -349,20 +304,20 @@ pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[
 {
     let req_fmt = { use self::ColFmt::*; match req_fmt {
         Auto | Y | YA | RGB | RGBA | BGR | BGRA => req_fmt,
-        //_ => return IFErr!("format not supported")
+        //_ => return error("format not supported")
     }};
 
     let hdr = try!(read_png_header(reader));
 
-    if hdr.width < 1 || hdr.height < 1 { return IFErr!("invalid dimensions") }
-    if hdr.bit_depth != 8 { return IFErr!("only 8-bit images supported") }
+    if hdr.width < 1 || hdr.height < 1 { return error("invalid dimensions") }
+    if hdr.bit_depth != 8 { return error("only 8-bit images supported") }
     if hdr.compression_method != 0 || hdr.filter_method != 0 {
-        return IFErr!("not supported");
+        return error("not supported");
     }
 
     let ilace = match PngInterlace::from_u8(hdr.interlace_method) {
         Some(im) => im,
-        None => return IFErr!("unsupported interlace method"),
+        None => return error("unsupported interlace method"),
     };
 
     let src_fmt = match hdr.color_type {
@@ -371,7 +326,7 @@ pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[
         3 => ColFmt::RGB,   // format of the palette
         4 => ColFmt::YA,
         6 => ColFmt::RGBA,
-        _ => return IFErr!("unsupported color type"),
+        _ => return error("unsupported color type"),
     };
 
     let dc = &mut PngDecoder {
@@ -425,7 +380,7 @@ enum PngStage {
 fn read_chunkmeta<R: Read>(dc: &mut PngDecoder<R>) -> io::Result<usize> {
     try!(dc.stream.read_exact(&mut dc.chunk_lentype[0..8]));
     let len = u32_from_be(&dc.chunk_lentype[0..4]) as usize;
-    if 0x7fff_ffff < len { return IFErr!("chunk too long"); }
+    if 0x7fff_ffff < len { return error("chunk too long"); }
     dc.crc.put(&dc.chunk_lentype[4..8]);   // type
     Ok(len)
 }
@@ -435,7 +390,7 @@ fn readcheck_crc<R: Read>(dc: &mut PngDecoder<R>) -> io::Result<()> {
     let mut tmp = [0u8; 4];
     try!(dc.stream.read_exact(&mut tmp));
     if &dc.crc.finish_be()[..] != &tmp[0..4] {
-        return IFErr!("corrupt chunk");
+        return error("corrupt chunk");
     }
     Ok(())
 }
@@ -457,7 +412,7 @@ fn decode_png<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
         match &dc.chunk_lentype[4..8] {
             b"IDAT" => {
                 if !(stage == IhdrParsed || (stage == PlteParsed && dc.src_indexed)) {
-                    return IFErr!("corrupt chunk stream");
+                    return error("corrupt chunk stream");
                 }
 
                 // also reads chunk_lentype for next chunk
@@ -468,7 +423,7 @@ fn decode_png<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
             b"PLTE" => {
                 let entries = len / 3;
                 if stage != IhdrParsed || len % 3 != 0 || 256 < entries {
-                    return IFErr!("corrupt chunk stream");
+                    return error("corrupt chunk stream");
                 }
                 palette = repeat(0u8).take(len).collect();
                 try!(dc.stream.read_exact(&mut palette));
@@ -478,12 +433,12 @@ fn decode_png<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
             }
             b"IEND" => {
                 if stage != IdatParsed {
-                    return IFErr!("corrupt chunk stream");
+                    return error("corrupt chunk stream");
                 }
                 let mut crc = [0u8; 4];
                 try!(dc.stream.read_exact(&mut crc));
                 if len != 0 || &crc[0..4] != &[0xae, 0x42, 0x60, 0x82][..] {
-                    return IFErr!("corrupt chunk");
+                    return error("corrupt chunk");
                 }
                 break;//stage = IendParsed;
             }
@@ -574,7 +529,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
 
     let chan_convert = match get_converter(dc.src_fmt, dc.tgt_fmt) {
         Some(c) => c,
-        None => return IFErr!("no such converter"),
+        None => return error("no such converter"),
     };
 
     let convert: fn(&[u8], &mut[u8], &[u8], &mut[u8], LineConverter) = if dc.src_indexed {
@@ -778,7 +733,7 @@ fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> io::Result<(
                                           *pline.get_unchecked(k-fstep)));
                 }
             }
-            None => return IFErr!("filter type not supported"),
+            None => return error("filter type not supported"),
         }
         Ok(())
     }
@@ -853,14 +808,14 @@ pub fn write_png_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: C
     if w < 1 || h < 1
     || src_bytespp * w * h != data.len()
     || src_bytespp != src_fmt.bytes_pp() {
-        return IFErr!("invalid dimensions or data length");
+        return error("invalid dimensions or data length");
     }
 
     match src_fmt {
         ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA
                                              | ColFmt::BGR
                                              | ColFmt::BGRA => {}
-        ColFmt::Auto => return IFErr!("invalid format"),
+        ColFmt::Auto => return error("invalid format"),
     }
 
     let tgt_fmt = match tgt_type {
@@ -872,7 +827,7 @@ pub fn write_png_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: C
             ColFmt::Y    | ColFmt::YA => src_fmt,
             ColFmt::RGB  | ColFmt::BGR => ColFmt::RGB,
             ColFmt::RGBA | ColFmt::BGRA => ColFmt::RGBA,
-            ColFmt::Auto => return IFErr!("invalid format"),
+            ColFmt::Auto => return error("invalid format"),
         },
     };
 
@@ -910,7 +865,7 @@ fn write_png_header<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
         ColFmt::YA => PngColortype::YA,
         ColFmt::RGB => PngColortype::RGB,
         ColFmt::RGBA => PngColortype::RGBA,
-        _ => return IFErr!("not supported"),
+        _ => return error("not supported"),
     } as u8;
     copy_memory(&[0, 0, 0], &mut hdr[26..29]);  // compression, filter, interlace
     ec.crc.put(&hdr[12..29]);
@@ -920,13 +875,13 @@ fn write_png_header<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
 }
 
 fn write_custom_chunk<W: Write>(ec: &mut PngEncoder<W>, chunk: &PngCustomChunk) -> io::Result<()> {
-    if chunk.name[0] < 97 || 122 < chunk.name[0] { return IFErr!("invalid chunk name"); }
+    if chunk.name[0] < 97 || 122 < chunk.name[0] { return error("invalid chunk name"); }
     for b in &chunk.name[1..] {
         if *b < 65 || (90 < *b && *b < 97) || 122 < *b {
-            return IFErr!("invalid chunk name");
+            return error("invalid chunk name");
         }
     }
-    if 0x7fff_ffff < chunk.data.len() { return IFErr!("chunk too long"); }
+    if 0x7fff_ffff < chunk.data.len() { return error("chunk too long"); }
 
     try!(ec.stream.write_all(&u32_to_be(chunk.data.len() as u32)[..]));
     try!(ec.stream.write_all(&chunk.name[..]));
@@ -951,7 +906,7 @@ struct PngEncoder<'r, W:'r> {
 fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
     let convert = match get_converter(ec.src_fmt, ec.tgt_fmt) {
         Some(c) => c,
-        None => return IFErr!("no such converter"),
+        None => return error("no such converter"),
     };
 
     let filter_step = ec.tgt_fmt.bytes_pp();
@@ -1070,10 +1025,10 @@ pub fn read_tga_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
 pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let hdr = try!(read_tga_header(reader));
 
-    if 0 < hdr.palette_type { return IFErr!("paletted TGAs not supported"); }
-    if hdr.width < 1 || hdr.height < 1 { return IFErr!("invalid dimensions"); }
-    if 0 < (hdr.flags & 0xc0) { return IFErr!("interlaced TGAs not supported"); }
-    if 0 < (hdr.flags & 0x10) { return IFErr!("right-to-left TGAs not supported"); }
+    if 0 < hdr.palette_type { return error("paletted TGAs not supported"); }
+    if hdr.width < 1 || hdr.height < 1 { return error("invalid dimensions"); }
+    if 0 < (hdr.flags & 0xc0) { return error("interlaced TGAs not supported"); }
+    if 0 < (hdr.flags & 0x10) { return error("right-to-left TGAs not supported"); }
 
     let TgaInfo { src_bytespp, src_fmt, rle } = try!(parse_tga_header(&hdr));
 
@@ -1086,9 +1041,9 @@ pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
                 YA => YA,
                 BGR => RGB,
                 BGRA => RGBA,
-                _ => return IFErr!("not supported"),
+                _ => return error("not supported"),
             },
-            //_ => return IFErr!("conversion not supported"),
+            //_ => return error("conversion not supported"),
         }
     };
 
@@ -1137,7 +1092,7 @@ fn parse_tga_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
         (Some(TrueColorRLE), 32, 0) => { rle = true; }  // again, 8 bits are present in some pics
         (Some(GrayRLE),       8, 0) => { rle = true; }
         (Some(GrayRLE),      16, 8) => { rle = true; }
-        _ => return IFErr!("data type not supported")
+        _ => return error("data type not supported")
     }
 
     let src_bytespp = hdr.bits_pp as usize / 8;
@@ -1146,7 +1101,7 @@ fn parse_tga_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
         2 => ColFmt::YA,
         3 => ColFmt::BGR,
         4 => ColFmt::BGRA,
-        _ => return IFErr!("not supported"),
+        _ => return error("not supported"),
     };
 
     Ok(TgaInfo {
@@ -1173,7 +1128,7 @@ fn decode_tga<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
 
     let convert: LineConverter = match get_converter(dc.src_fmt, dc.tgt_fmt) {
         Some(c) => c,
-        None => return IFErr!("no such converter"),
+        None => return error("no such converter"),
     };
 
     if !dc.rle {
@@ -1272,14 +1227,14 @@ pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
     if w < 1 || h < 1 || 0xffff < w || 0xffff < h
     || src_bytespp * w * h != data.len()
     || src_bytespp != src_fmt.bytes_pp() {
-        return IFErr!("invalid dimensions or data length");
+        return error("invalid dimensions or data length");
     }
 
     match src_fmt {
         ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA
                                              | ColFmt::BGR
                                              | ColFmt::BGRA => {}
-        ColFmt::Auto => return IFErr!("invalid format"),
+        ColFmt::Auto => return error("invalid format"),
     }
 
     let tgt_fmt = match tgt_type {
@@ -1291,7 +1246,7 @@ pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
             ColFmt::Y    | ColFmt::YA => src_fmt,
             ColFmt::RGB  | ColFmt::BGR => ColFmt::BGR,
             ColFmt::RGBA | ColFmt::BGRA => ColFmt::BGRA,
-            ColFmt::Auto => return IFErr!("invalid format"),
+            ColFmt::Auto => return error("invalid format"),
         },
     };
 
@@ -1327,7 +1282,7 @@ fn write_tga_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
         2 => (if ec.rle { GrayRLE      } else { Gray      }, true),
         3 => (if ec.rle { TrueColorRLE } else { TrueColor }, false),
         4 => (if ec.rle { TrueColorRLE } else { TrueColor }, true),
-        _ => return IFErr!("internal error")
+        _ => return error("internal error")
     };
 
     let w = u16_to_le(ec.w as u16);
@@ -1354,7 +1309,7 @@ fn write_tga_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
 
     let convert = match get_converter(ec.src_fmt, ec.tgt_fmt) {
         Some(c) => c,
-        None => return IFErr!("no such converter"),
+        None => return error("no such converter"),
     };
 
     if !ec.rle {
@@ -1479,7 +1434,7 @@ pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<Info> {
         let mut marker: [u8; 2] = [0, 0];
         try!(stream.read_exact(&mut marker));
 
-        if marker[0] != 0xff { return IFErr!("no marker"); }
+        if marker[0] != 0xff { return error("no marker"); }
         while marker[1] == 0xff {
             try!(stream.read_exact(&mut marker[1..2]));
         }
@@ -1494,18 +1449,18 @@ pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<Info> {
                     c: match tmp[7] {
                            1 => ColType::Gray,
                            3 => ColType::Color,
-                           _ => return IFErr!("not valid baseline jpeg")
+                           _ => return error("not valid baseline jpeg")
                        },
                 });
             }
-            SOS | EOI => return IFErr!("no frame header"),
+            SOS | EOI => return error("no frame header"),
             DRI | DHT | DQT | COM | APP0 ... APPF => {
                 let mut tmp: [u8; 2] = [0, 0];
                 try!(stream.read_exact(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]) - 2;
                 try!(stream.skip(len as usize));
             }
-            _ => return IFErr!("invalid / unsupported marker"),
+            _ => return error("invalid / unsupported marker"),
         }
     }
 }
@@ -1517,7 +1472,7 @@ pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     use self::ColFmt::*;
     let req_fmt = match req_fmt {
         Auto | Y | YA | RGB | RGBA => req_fmt,
-        _ => return IFErr!("format not supported")
+        _ => return error("format not supported")
     };
 
     try!(read_jfif(reader));
@@ -1547,13 +1502,13 @@ pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     try!(read_markers(dc));   // reads until first scan header
 
     if dc.eoi_reached {
-        return IFErr!("no image data");
+        return error("no image data");
     }
     dc.tgt_fmt =
         if req_fmt == ColFmt::Auto {
             match dc.num_comps {
                 1 => ColFmt::Y, 3 => ColFmt::RGB,
-                _ => return IFErr!("internal error")
+                _ => return error("internal error")
             }
         } else {
             req_fmt
@@ -1584,18 +1539,18 @@ fn read_jfif<R: Read>(reader: &mut R) -> io::Result<()> {
 
     if &buf[0..4] != &[0xff_u8, 0xd8, 0xff, 0xe0][..] ||
        &buf[6..11] != b"JFIF\0" || len < 16 {
-        return IFErr!("not JPEG/JFIF");
+        return error("not JPEG/JFIF");
     }
 
     if buf[11] != 1 {
-        return IFErr!("version not supported");
+        return error("version not supported");
     }
 
     // ignore density_unit, -x, -y at 13, 14..16, 16..18
 
     let thumbsize = buf[18] as usize * buf[19] as usize * 3;
     if thumbsize != len - 16 {
-        return IFErr!("corrupt jpeg header");
+        return error("corrupt jpeg header");
     }
     reader.skip(thumbsize)
 }
@@ -1654,7 +1609,7 @@ fn read_markers<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         let mut marker: [u8; 2] = [0, 0];
         try!(dc.stream.read_exact(&mut marker));
 
-        if marker[0] != 0xff { return IFErr!("no marker"); }
+        if marker[0] != 0xff { return error("no marker"); }
         while marker[1] == 0xff {
             try!(dc.stream.read_exact(&mut marker[1..2]));
         }
@@ -1665,14 +1620,14 @@ fn read_markers<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
             DQT => try!(read_quantization_tables(dc)),
             SOF0 => {
                 if dc.has_frame_header {
-                    return IFErr!("extra frame header");
+                    return error("extra frame header");
                 }
                 try!(read_frame_header(dc));
                 dc.has_frame_header = true;
             }
             SOS => {
                 if !dc.has_frame_header {
-                    return IFErr!("no frame header");
+                    return error("no frame header");
                 }
                 try!(read_scan_header(dc));
                 has_next_scan_header = true;
@@ -1686,7 +1641,7 @@ fn read_markers<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
                 let len = u16_from_be(&mut tmp[..]) - 2;
                 try!(dc.stream.skip(len as usize));
             }
-            _ => return IFErr!("invalid / unsupported marker"),
+            _ => return error("invalid / unsupported marker"),
         }
     }
     Ok(())
@@ -1724,7 +1679,7 @@ fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         let table_class = buf[0] >> 4;            // 0 = dc table, 1 = ac table
         let table_slot = (buf[0] & 0xf) as usize;  // must be 0 or 1 for baseline
         if 1 < table_slot || 1 < table_class {
-            return IFErr!("invalid / not supported");
+            return error("invalid / not supported");
         }
 
         // compute total number of huffman codes
@@ -1733,7 +1688,7 @@ fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
             mt += buf[i] as usize;
         }
         if 256 < mt {
-            return IFErr!("invalid / not supported");
+            return error("invalid / not supported");
         }
 
         if table_class == 0 {
@@ -1814,7 +1769,7 @@ fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> 
     try!(dc.stream.read_exact(&mut buf[0..2]));
     let mut len = u16_from_be(&buf[0..2]) as usize -2;
     if len % 65 != 0 {
-        return IFErr!("invalid / not supported");
+        return error("invalid / not supported");
     }
 
     while 0 < len {
@@ -1822,7 +1777,7 @@ fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> 
         let precision = buf[0] >> 4;  // 0 = 8 bit, 1 = 16 bit
         let table_slot = (buf[0] & 0xf) as usize;
         if 3 < table_slot || precision != 0 {   // only 8 bit for baseline
-            return IFErr!("invalid / not supported");
+            return error("invalid / not supported");
         }
         try!(dc.stream.read_exact(&mut dc.qtables[table_slot][0..64]));
         len -= 65;
@@ -1841,7 +1796,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
 
     if precision != 8 || (dc.num_comps != 1 && dc.num_comps != 3) ||
        len != 8 + dc.num_comps*3 {
-        return IFErr!("invalid / not supported");
+        return error("invalid / not supported");
     }
 
     dc.hmax = 0;
@@ -1852,7 +1807,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     for i in (0 .. dc.num_comps) {
         let ci = (buf[i*3]-1) as usize;
         if dc.num_comps <= ci {
-            return IFErr!("invalid / not supported");
+            return error("invalid / not supported");
         }
         dc.index_for[i] = ci;
         let sampling_factors = buf[i*3 + 1];
@@ -1872,14 +1827,14 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         if comp.sfy < 1 || 4 < comp.sfy ||
            comp.sfx < 1 || 4 < comp.sfx ||
            3 < comp.qtable {
-            return IFErr!("invalid / not supported");
+            return error("invalid / not supported");
         }
 
         if dc.hmax < comp.sfx { dc.hmax = comp.sfx; }
         if dc.vmax < comp.sfy { dc.vmax = comp.sfy; }
         mcu_du += comp.sfx * comp.sfy;
     }
-    if 10 < mcu_du { return IFErr!("invalid / not supported"); }
+    if 10 < mcu_du { return error("invalid / not supported"); }
 
     for i in (0 .. dc.num_comps) {
         dc.comps[i].x = (dc.w as f64 * dc.comps[i].sfx as f64 / dc.hmax as f64).ceil() as usize;
@@ -1901,7 +1856,7 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     let num_scan_comps = buf[2] as usize;
 
     if num_scan_comps != dc.num_comps || len != (6+num_scan_comps*2) {
-        return IFErr!("invalid / not supported");
+        return error("invalid / not supported");
     }
 
     let mut compbuf: Vec<u8> = repeat(0u8).take(len-3).collect();
@@ -1912,14 +1867,14 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         let mut ci = 0;
         while ci < dc.num_comps && dc.comps[ci].id != comp_id { ci+=1 }
         if dc.num_comps <= ci {
-            return IFErr!("invalid / not supported");
+            return error("invalid / not supported");
         }
 
         let tables = compbuf[i*2+1];
         dc.comps[ci].dc_table = (tables >> 4) as usize;
         dc.comps[ci].ac_table = (tables & 0xf) as usize;
         if 1 < dc.comps[ci].dc_table || 1 < dc.comps[i].ac_table {
-            return IFErr!("invalid / not supported");
+            return error("invalid / not supported");
         }
     }
 
@@ -1931,7 +1886,7 @@ fn read_restart_interval<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     let mut buf: [u8; 4] = [0, 0, 0, 0];
     try!(dc.stream.read_exact(&mut buf));
     let len = u16_from_be(&buf[0..2]) as usize;
-    if len != 4 { return IFErr!("invalid / not supported"); }
+    if len != 4 { return error("invalid / not supported"); }
     dc.restart_interval = u16_from_be(&buf[2..4]) as usize;
     Ok(())
 }
@@ -2008,7 +1963,7 @@ fn read_restart<R: Read>(stream: &mut R) -> io::Result<()> {
     let mut buf: [u8; 2] = [0, 0];
     try!(stream.read_exact(&mut buf));
     if buf[0] != 0xff || buf[1] < RST0 || RST7 < buf[1] {
-        return IFErr!("reset marker missing");
+        return error("reset marker missing");
     }
     Ok(())
 }
@@ -2061,7 +2016,7 @@ fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx: u
         k += rrrr as usize;
 
         if 63 < k {
-            return IFErr!("corrupt block");
+            return error("corrupt block");
         }
         res[DEZIGZAG[k] as usize] =
             (try!(receive_and_extend(dc, ssss)) * dc.qtables[qtable_idx][k] as isize) as i16;
@@ -2089,12 +2044,12 @@ fn decode_huff<R: Read>(dc: &mut JpegDecoder<R>, tab_idx: usize, dctab: bool) ->
 
         i += 1;
         if tab.maxcode.len() <= i {
-            return IFErr!("corrupt huffman coding");
+            return error("corrupt huffman coding");
         }
     }
     let j = (tab.valptr[i] - tab.mincode[i] + code) as usize;
     if tab.values.len() <= j {
-        return IFErr!("corrupt huffman coding")
+        return error("corrupt huffman coding")
     }
     Ok(tab.values[j])
 }
@@ -2130,7 +2085,7 @@ fn nextbit<R: Read>(stream: &mut R, mut cb: u8, mut bits_left: usize)
         if cb == 0xff {
             let b2 = try!(stream.read_u8());
             if b2 != 0x0 {
-                return IFErr!("unexpected marker")
+                return error("unexpected marker")
             }
         }
     }
@@ -2219,7 +2174,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
             }
             return Ok(result);
         },
-        _ => return IFErr!("internal error"),
+        _ => return error("internal error"),
     }
 }
 
@@ -2786,6 +2741,45 @@ static CRC32_TABLE: [u32; 256] = [
 
 // ------------------------------------------------------------
 
+trait IFRead {
+    fn read_u8(&mut self) -> io::Result<u8>;
+    fn read_exact(&mut self, buf: &mut[u8]) -> io::Result<()>;
+    fn skip(&mut self, amt: usize) -> io::Result<()>;
+}
+
+impl<R: Read> IFRead for R {
+    #[inline]
+    fn read_u8(&mut self) -> io::Result<u8> {
+        let mut buf = [0];
+        match self.read(&mut buf) {
+            Ok(n) if n == 1 => Ok(buf[0]),
+            _               => error("not enough data"),
+        }
+    }
+
+    fn read_exact(&mut self, buf: &mut[u8]) -> io::Result<()> {
+        let mut ready = 0;
+        while ready < buf.len() {
+            let got = try!(self.read(&mut buf[ready..]));
+            if got == 0 {
+                return error("not enough data");
+            }
+            ready += got;
+        }
+        Ok(())
+    }
+
+    fn skip(&mut self, mut amt: usize) -> io::Result<()> {
+        let mut buf = [0u8; 1024];
+        while 0 < amt {
+            let n = min(amt, buf.len());
+            try!(self.read_exact(&mut buf[0..n]));
+            amt -= n;
+        }
+        Ok(())
+    }
+}
+
 fn u16_from_be(buf: &[u8]) -> u16 {
     (buf[0] as u16) << 8 | buf[1] as u16
 }
@@ -2817,4 +2811,9 @@ fn copy_memory(src: &[u8], dst: &mut[u8]) {
     unsafe {
         ptr::copy(src.as_ptr(), (&mut dst[0]) as *mut u8, src.len());
     }
+}
+
+#[inline]
+fn error<T>(msg: &str) -> Result<T, io::Error> {
+    Err(io::Error::new(ErrorKind::Other, msg))
 }
