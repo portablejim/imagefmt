@@ -661,7 +661,7 @@ fn copy_memory(src: &[u8], dst: &mut[u8]) {
         panic!("src.len() != dst.len()")
     }
     unsafe {
-        ptr::copy(src.as_ptr(), (&mut dst[0]) as *mut u8, src.len());
+        ptr::copy(src.as_ptr(), dst.as_mut_ptr(), src.len());
     }
 }
 
