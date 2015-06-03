@@ -5,6 +5,7 @@
 | ---    | ---                | ---                               |
 | png    | 8-bit              | 8-bit non-paletted non-interlaced |
 | tga    | 8-bit non-paletted | 8-bit non-paletted                |
+| bmp    | 8-bit              | nope                              |
 | jpeg   | baseline           | nope                              |
 
 ```Rust

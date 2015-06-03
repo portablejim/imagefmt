@@ -31,11 +31,13 @@ use std::ptr;
 
 mod png;
 mod tga;
+mod bmp;
 mod jpeg;
 
 pub use png::{read_png, read_png_info, read_png_header, read_png_chunks,
                 write_png, write_png_chunks, PngHeader, PngCustomChunk};
 pub use tga::{read_tga, read_tga_info, read_tga_header, write_tga, TgaHeader};
+pub use bmp::{read_bmp, read_bmp_info, read_bmp_header};
 pub use jpeg::{read_jpeg, read_jpeg_info};
 
 /// Image struct returned from the read functions.
@@ -89,6 +91,7 @@ pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
         match filepath.extension().and_then(OsStr::to_str) {
             Some("png")                => read_png_info,
             Some("tga")                => read_tga_info,
+            Some("bmp")                => read_bmp_info,
             Some("jpg") | Some("jpeg") => read_jpeg_info,
             _ => return error("extension not recognized"),
         };
@@ -108,6 +111,7 @@ pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
         match filepath.extension().and_then(OsStr::to_str) {
             Some("png")                => read_png,
             Some("tga")                => read_tga,
+            Some("bmp")                => read_bmp,
             Some("jpg") | Some("jpeg") => read_jpeg,
             _ => return error("extension not recognized"),
         };
@@ -653,6 +657,15 @@ fn u32_to_be(x: u32) -> [u8; 4] {
     let buf = [(x >> 24) as u8, (x >> 16) as u8,
                (x >>  8) as u8, (x)       as u8];
     buf
+}
+
+fn u32_from_le(buf: &[u8]) -> u32 {
+    (buf[3] as u32) << 24 | (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | buf[0] as u32
+}
+
+fn i32_from_le(buf: &[u8]) -> i32 {
+    ((buf[3] as u32) << 24 | (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | buf[0] as u32)
+        as i32
 }
 
 #[inline]
