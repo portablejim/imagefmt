@@ -27,6 +27,7 @@ use std::io::{self, Read, BufReader, BufWriter, ErrorKind};
 use std::iter::{repeat};
 use std::path::Path;
 use std::cmp::min;
+use std::fmt::{self, Debug};
 use std::ptr;
 
 mod png;
@@ -49,7 +50,6 @@ mod ext {
 }
 
 /// Image struct returned from the read functions.
-#[derive(Debug)]
 pub struct Image {
     pub w      : usize,
     pub h      : usize,
@@ -689,4 +689,11 @@ fn copy_memory(src: &[u8], dst: &mut[u8]) {
 #[inline]
 fn error<T>(msg: &str) -> Result<T, io::Error> {
     Err(io::Error::new(ErrorKind::Other, msg))
+}
+
+impl Debug for Image {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(fmt, "Image {{ w: {:?}, h: {:?}, fmt: {:?}, pixels: [{} bytes] }}",
+               self.w, self.h, self.fmt, self.pixels.len())
+    }
 }
