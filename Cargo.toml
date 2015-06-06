@@ -5,6 +5,7 @@ authors = ["Tero Hänninen"]
 description = "Decoders for PNG, TGA, BMP, JPEG. Encoders for PNG, TGA. 8-bit only, with conversions."
 license = "MIT"
 repository = "https://github.com/lgvz/imagefmt"
+include = ["src/*", "Cargo.toml", "README.md"]
 
 [dependencies]
 flate2 = "0.2"
