@@ -16,9 +16,6 @@ fn main() {
     // load and convert to bgra
     let _pic = imagefmt::read("stars.jpg", ColFmt::BGRA).unwrap();
 
-    // convert to grayscale+alpha
-    let _pic = imagefmt::read("advanced.png", ColFmt::YA).unwrap();
-
     // convert to one of y, ya, rgb, rgba
     let pic = imagefmt::read("marbles.tga", ColFmt::Auto).unwrap();
 
