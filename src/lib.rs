@@ -34,11 +34,19 @@ mod tga;
 mod bmp;
 mod jpeg;
 
-pub use png::{read_png, read_png_info, read_png_header, read_png_chunks,
-                write_png, write_png_chunks, PngHeader, PngCustomChunk};
-pub use tga::{read_tga, read_tga_info, read_tga_header, write_tga, TgaHeader};
-pub use bmp::{read_bmp, read_bmp_info, read_bmp_header};
+pub use png::{read_png, read_png_info, read_png_chunks,
+              write_png, write_png_chunks, PngCustomChunk};
+pub use tga::{read_tga, read_tga_info, write_tga};
+pub use bmp::{read_bmp, read_bmp_info};
 pub use jpeg::{read_jpeg, read_jpeg_info};
+
+/// Functions for reading headers, stuff like that.
+// Private for now, at least.
+mod ext {
+    pub use super::png::{read_png_header, PngHeader};
+    pub use super::tga::{read_tga_header, TgaHeader};
+    pub use super::bmp::{read_bmp_header, BmpHeader, DibV1, DibV2, DibV4, DibV5};
+}
 
 /// Image struct returned from the read functions.
 #[derive(Debug)]
