@@ -297,11 +297,11 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
 {
     let filter_step = if dc.src_indexed { 1 } else { dc.src_fmt.bytes_pp() };
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
-    let tgt_linesize = dc.w as usize * tgt_bytespp;
+    let tgt_linesize = dc.w * tgt_bytespp;
 
     let mut result: Vec<u8> = repeat(0).take(dc.w * dc.h * tgt_bytespp).collect();
     let mut depaletted_line: Vec<u8> = if dc.src_indexed {
-        repeat(0).take((dc.w * 3) as usize).collect()
+        repeat(0).take(dc.w * 3).collect()
     } else {
         Vec::new()
     };
