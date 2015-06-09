@@ -79,6 +79,7 @@ pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         num_mcu_x   : 0,
         num_mcu_y   : 0,
         restart_interval : 0,
+        correct_comp_ids : true,
         comps       : unsafe { zeroed() },
         index_for   : [0, 0, 0],
         num_comps   : 0,
@@ -138,6 +139,7 @@ struct JpegDecoder<'r, R: Read + 'r> {
     num_mcu_y   : usize,
     restart_interval : usize,
 
+    correct_comp_ids : bool,
     comps       : [Component; 3],
     index_for   : [usize; 3],
     num_comps   : usize,
@@ -375,15 +377,20 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     try!(dc.stream.read_exact(&mut buf[0 .. dc.num_comps*3]));
 
     for i in (0 .. dc.num_comps) {
-        let ci = (buf[i*3]-1) as usize;
-        if dc.num_comps <= ci {
-            return error("invalid / not supported");
-        }
+        let mut ci = buf[i*3] as usize;
+
+        // JFIF says ci should be i+1, but there are images where ci is i. Normalize ids
+        // so that ci == i, always. So much for standards...
+        if i == 0 { dc.correct_comp_ids = ci == i+1; }
+        if (dc.correct_comp_ids && ci != i+1)
+        || (!dc.correct_comp_ids && ci != i) { return error("invalid component id") }
+        if dc.correct_comp_ids { ci -= 1 };
+
         dc.index_for[i] = ci;
         let sampling_factors = buf[i*3 + 1];
         let comp = &mut dc.comps[ci];
         *comp = Component {
-            id      : buf[i*3],
+            id      : ci as u8,
             sfx     : (sampling_factors >> 4) as usize,
             sfy     : (sampling_factors & 0xf) as usize,
             x       : 0,
@@ -433,7 +440,8 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     try!(dc.stream.read_exact(&mut compbuf));
 
     for i in (0 .. num_scan_comps) {
-        let comp_id = compbuf[i*2];
+        let comp_id = compbuf[i*2] - if dc.correct_comp_ids { 1 } else { 0 };
+
         let mut ci = 0;
         while ci < dc.num_comps && dc.comps[ci].id != comp_id { ci+=1 }
         if dc.num_comps <= ci {
