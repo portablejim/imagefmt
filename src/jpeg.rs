@@ -118,29 +118,6 @@ pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     })
 }
 
-fn read_app0<R: Read>(reader: &mut R) -> io::Result<()> {
-    let mut buf = [0u8; 16];
-    try!(reader.read_exact(&mut buf));
-
-    let len = u16_from_be(&buf[0..2]) as usize;
-
-    if &buf[2..7] != b"JFIF\0" || len < 16 {
-        return error("not JPEG/JFIF");
-    }
-
-    if buf[7] != 1 {
-        return error("version not supported");
-    }
-
-    // ignore density_unit, -x, -y at 13, 14..16, 16..18
-
-    let thumbsize = buf[14] as usize * buf[15] as usize * 3;
-    if thumbsize != len - 16 {
-        return error("corrupt app0 marker");
-    }
-    reader.skip(thumbsize)
-}
-
 struct JpegDecoder<'r, R: Read + 'r> {
     stream        : &'r mut R,
     w             : usize,
@@ -226,8 +203,7 @@ fn read_markers<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
             }
             DRI => try!(read_restart_interval(dc)),
             EOI => dc.eoi_reached = true,
-            APP0 => try!(read_app0(dc.stream)),
-            APP1 ... APPF | COM => {
+            APP0 ... APPF | COM => {
                 let mut tmp = [0u8; 2];
                 try!(dc.stream.read_exact(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]);
@@ -257,7 +233,6 @@ const RST0: u8 = 0xd0;    // restart entropy coded data
 // ...
 const RST7: u8 = 0xd7;    // restart entropy coded data
 const APP0: u8 = 0xe0;    // application 0 segment (jfif)
-const APP1: u8 = 0xe1;    // application 1 segment (exif)
 // ...
 const APPF: u8 = 0xef;    // application f segment
 //const DAC: u8 = 0xcc;     // define arithmetic conditioning table
