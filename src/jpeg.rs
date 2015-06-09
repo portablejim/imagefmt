@@ -11,22 +11,27 @@ use super::{
 // Baseline JPEG decoder
 
 /// Returns width, height and color type of the image.
-pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<Info> {
-    try!(read_jfif(stream));
+pub fn read_jpeg_info<R: Read>(reader: &mut R) -> io::Result<Info> {
+    let mut marker = [0u8; 2];
+
+    // SOI
+    try!(reader.read_exact(&mut marker));
+    if &marker[0..2] != &[0xff, 0xd8_u8][..] {
+        return error("not JPEG");
+    }
 
     loop {
-        let mut marker: [u8; 2] = [0, 0];
-        try!(stream.read_exact(&mut marker));
+        try!(reader.read_exact(&mut marker));
 
         if marker[0] != 0xff { return error("no marker"); }
         while marker[1] == 0xff {
-            try!(stream.read_exact(&mut marker[1..2]));
+            try!(reader.read_exact(&mut marker[1..2]));
         }
 
         match marker[1] {
             SOF0 | SOF2 => {
                 let mut tmp: [u8; 8] = [0,0,0,0, 0,0,0,0];
-                try!(stream.read_exact(&mut tmp));
+                try!(reader.read_exact(&mut tmp));
                 return Ok(Info {
                     w: u16_from_be(&tmp[5..7]) as usize,
                     h: u16_from_be(&tmp[3..5]) as usize,
@@ -40,9 +45,9 @@ pub fn read_jpeg_info<R: Read>(stream: &mut R) -> io::Result<Info> {
             SOS | EOI => return error("no frame header"),
             DRI | DHT | DQT | COM | APP0 ... APPF => {
                 let mut tmp: [u8; 2] = [0, 0];
-                try!(stream.read_exact(&mut tmp));
+                try!(reader.read_exact(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]) - 2;
-                try!(stream.skip(len as usize));
+                try!(reader.skip(len as usize));
             }
             _ => return error("invalid / unsupported marker"),
         }
@@ -58,8 +63,6 @@ pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         Auto | Y | YA | RGB | RGBA => req_fmt,
         _ => return error("format not supported")
     };
-
-    try!(read_jfif(reader));
 
     let dc = &mut JpegDecoder {
         stream      : reader,
@@ -115,26 +118,25 @@ pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     })
 }
 
-fn read_jfif<R: Read>(reader: &mut R) -> io::Result<()> {
-    let mut buf = [0u8; 20]; // SOI, APP0
+fn read_app0<R: Read>(reader: &mut R) -> io::Result<()> {
+    let mut buf = [0u8; 16];
     try!(reader.read_exact(&mut buf));
 
-    let len = u16_from_be(&buf[4..6]) as usize;
+    let len = u16_from_be(&buf[0..2]) as usize;
 
-    if &buf[0..4] != &[0xff_u8, 0xd8, 0xff, 0xe0][..] ||
-       &buf[6..11] != b"JFIF\0" || len < 16 {
+    if &buf[2..7] != b"JFIF\0" || len < 16 {
         return error("not JPEG/JFIF");
     }
 
-    if buf[11] != 1 {
+    if buf[7] != 1 {
         return error("version not supported");
     }
 
     // ignore density_unit, -x, -y at 13, 14..16, 16..18
 
-    let thumbsize = buf[18] as usize * buf[19] as usize * 3;
+    let thumbsize = buf[14] as usize * buf[15] as usize * 3;
     if thumbsize != len - 16 {
-        return error("corrupt jpeg header");
+        return error("corrupt app0 marker");
     }
     reader.skip(thumbsize)
 }
@@ -188,9 +190,15 @@ struct Component {
 }
 
 fn read_markers<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
+    let mut marker = [0u8; 2];
+    // SOI
+    try!(dc.stream.read_exact(&mut marker));
+    if &marker[0..2] != &[0xff, 0xd8_u8][..] {
+        return error("not JPEG");
+    }
+
     let mut has_next_scan_header = false;
     while !has_next_scan_header && !dc.eoi_reached {
-        let mut marker: [u8; 2] = [0, 0];
         try!(dc.stream.read_exact(&mut marker));
 
         if marker[0] != 0xff { return error("no marker"); }
@@ -218,14 +226,15 @@ fn read_markers<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
             }
             DRI => try!(read_restart_interval(dc)),
             EOI => dc.eoi_reached = true,
-            APP0 ... APPF | COM => {
-                //println!("skipping unknown marker...");
+            APP0 => try!(read_app0(dc.stream)),
+            APP1 ... APPF | COM => {
                 let mut tmp: [u8; 2] = [0, 0];
                 try!(dc.stream.read_exact(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]) - 2;
                 try!(dc.stream.skip(len as usize));
             }
-            _ => return error("invalid / unsupported marker"),
+            SOF2 => return error("progressive jpeg not supported"),
+            _ => return error("unsupported marker"),
         }
     }
     Ok(())
@@ -246,7 +255,8 @@ const SOS: u8 = 0xda;     // start of scan
 const RST0: u8 = 0xd0;    // restart entropy coded data
 // ...
 const RST7: u8 = 0xd7;    // restart entropy coded data
-const APP0: u8 = 0xe0;    // application 0 segment
+const APP0: u8 = 0xe0;    // application 0 segment (jfif)
+const APP1: u8 = 0xe1;    // application 1 segment (exif)
 // ...
 const APPF: u8 = 0xef;    // application f segment
 //const DAC: u8 = 0xcc;     // define arithmetic conditioning table
