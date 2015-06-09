@@ -228,10 +228,11 @@ fn read_markers<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
             EOI => dc.eoi_reached = true,
             APP0 => try!(read_app0(dc.stream)),
             APP1 ... APPF | COM => {
-                let mut tmp: [u8; 2] = [0, 0];
+                let mut tmp = [0u8; 2];
                 try!(dc.stream.read_exact(&mut tmp));
-                let len = u16_from_be(&mut tmp[..]) - 2;
-                try!(dc.stream.skip(len as usize));
+                let len = u16_from_be(&mut tmp[..]);
+                if len < 2 { return error("invalid data length") }
+                try!(dc.stream.skip(len as usize - 2));
             }
             SOF2 => return error("progressive jpeg not supported"),
             _ => return error("unsupported marker"),
