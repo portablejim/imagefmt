@@ -50,6 +50,7 @@ mod ext {
 }
 
 /// Image struct returned from the read functions.
+#[derive(Clone)]
 pub struct Image {
     pub w   : usize,
     pub h   : usize,
