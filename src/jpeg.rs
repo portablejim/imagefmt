@@ -383,13 +383,14 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         // so that ci == i, always. So much for standards...
         if i == 0 { dc.correct_comp_ids = ci == i+1; }
         if (dc.correct_comp_ids && ci != i+1)
-        || (!dc.correct_comp_ids && ci != i) { return error("invalid component id") }
+        || (!dc.correct_comp_ids && ci != i) {
+            return error("invalid component id")
+        }
         if dc.correct_comp_ids { ci -= 1 };
 
         dc.index_for[i] = ci;
         let sampling_factors = buf[i*3 + 1];
-        let comp = &mut dc.comps[ci];
-        *comp = Component {
+        dc.comps[ci] = Component {
             id      : ci as u8,
             sfx     : (sampling_factors >> 4) as usize,
             sfy     : (sampling_factors & 0xf) as usize,
@@ -401,6 +402,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
             pred    : 0,
             data    : Vec::<u8>::new(),
         };
+        let comp = &dc.comps[ci];
         if comp.sfy < 1 || 4 < comp.sfy ||
            comp.sfx < 1 || 4 < comp.sfx ||
            3 < comp.qtable {
