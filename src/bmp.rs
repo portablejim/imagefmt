@@ -15,7 +15,7 @@ pub fn read_bmp_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     Ok(Info {
         w: hdr.width.abs() as usize,
         h: hdr.height.abs() as usize,
-        c: if let Some(mask) = hdr.dib_v3_alpha_mask {
+        ct: if let Some(mask) = hdr.dib_v3_alpha_mask {
                if mask != 0 { ColType::ColorAlpha } else { ColType::Color }
            } else {
                ColType::Color
@@ -323,9 +323,9 @@ pub fn read_bmp<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     }
 
     Ok(Image {
-        w      : hdr.width as usize,
-        h      : hdr.height.abs() as usize,
-        fmt    : tgt_fmt,
-        pixels : result,
+        w   : hdr.width as usize,
+        h   : hdr.height.abs() as usize,
+        fmt : tgt_fmt,
+        buf : result,
     })
 }

@@ -51,10 +51,18 @@ mod ext {
 
 /// Image struct returned from the read functions.
 pub struct Image {
-    pub w      : usize,
-    pub h      : usize,
-    pub fmt    : ColFmt,
-    pub pixels : Vec<u8>,
+    pub w   : usize,
+    pub h   : usize,
+    pub fmt : ColFmt,
+    pub buf : Vec<u8>,
+}
+
+/// Holds basic info about an image.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Info {
+    pub w : usize,
+    pub h : usize,
+    pub ct : ColType,
 }
 
 /// Color format.
@@ -69,14 +77,6 @@ pub enum ColFmt {
     RGBA,
     BGR,
     BGRA,
-}
-
-/// Holds basic info about an image.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Info {
-    pub w : usize,
-    pub h : usize,
-    pub c : ColType,
 }
 
 /// Color type – these are categories of color formats.
@@ -168,10 +168,10 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
         let mut result: Vec<u8> = repeat(0).take(data.len()).collect();
         copy_memory(data, &mut result[..]);
         return Ok(Image {
-            w      : w,
-            h      : h,
-            fmt    : src_fmt,
-            pixels : result,
+            w   : w,
+            h   : h,
+            fmt : src_fmt,
+            buf : result,
         })
     }
 
@@ -193,10 +193,10 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
     }
 
     Ok(Image {
-        w      : w,
-        h      : h,
-        fmt    : tgt_fmt,
-        pixels : result,
+        w   : w,
+        h   : h,
+        fmt : tgt_fmt,
+        buf : result,
     })
 }
 
@@ -206,13 +206,13 @@ impl Image {
     pub fn write<P>(&self, filepath: P, tgt_type: ColType) -> io::Result<()>
             where P: AsRef<Path>
     {
-        write(filepath, self.w, self.h, self.fmt, &self.pixels, tgt_type)
+        write(filepath, self.w, self.h, self.fmt, &self.buf, tgt_type)
     }
 
     /// Converts the image into a new allocation.
     #[inline]
     pub fn convert(&self, tgt_fmt: ColFmt) -> Result<Image, &str> {
-        convert(self.w, self.h, self.fmt, &self.pixels, tgt_fmt)
+        convert(self.w, self.h, self.fmt, &self.buf, tgt_fmt)
     }
 }
 
@@ -693,7 +693,7 @@ fn error<T>(msg: &str) -> Result<T, io::Error> {
 
 impl Debug for Image {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(fmt, "Image {{ w: {:?}, h: {:?}, fmt: {:?}, pixels: [{} bytes] }}",
-               self.w, self.h, self.fmt, self.pixels.len())
+        write!(fmt, "Image {{ w: {:?}, h: {:?}, fmt: {:?}, buf: [{} bytes] }}",
+               self.w, self.h, self.fmt, self.buf.len())
     }
 }

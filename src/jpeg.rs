@@ -35,7 +35,7 @@ pub fn read_jpeg_info<R: Read>(reader: &mut R) -> io::Result<Info> {
                 return Ok(Info {
                     w: u16_from_be(&tmp[5..7]) as usize,
                     h: u16_from_be(&tmp[3..5]) as usize,
-                    c: match tmp[7] {
+                    ct: match tmp[7] {
                            1 => ColType::Gray,
                            3 => ColType::Color,
                            _ => return error("not valid baseline jpeg")
@@ -107,10 +107,10 @@ pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     }
 
     Ok(Image {
-        w      : dc.w,
-        h      : dc.h,
-        fmt    : dc.tgt_fmt,
-        pixels : {
+        w   : dc.w,
+        h   : dc.h,
+        fmt : dc.tgt_fmt,
+        buf : {
             // progressive images aren't supported so only one scan
             try!(decode_scan(dc));
             // throw away fill samples and convert to target format

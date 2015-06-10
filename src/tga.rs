@@ -36,7 +36,7 @@ pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     Ok(Info {
         w: hdr.width as usize,
         h: hdr.height as usize,
-        c: match src_fmt {
+        ct: match src_fmt {
                ColFmt::Y => ColType::Gray,
                ColFmt::YA => ColType::GrayAlpha,
                ColFmt::BGR => ColType::Color,
@@ -112,10 +112,10 @@ pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     };
 
     Ok(Image {
-        w      : dc.w,
-        h      : dc.h,
-        fmt    : dc.tgt_fmt,
-        pixels : try!(decode_tga(dc))
+        w   : dc.w,
+        h   : dc.h,
+        fmt : dc.tgt_fmt,
+        buf : try!(decode_tga(dc))
     })
 }
 

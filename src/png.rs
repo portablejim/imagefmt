@@ -34,7 +34,7 @@ pub fn read_png_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     Ok(Info {
         w: hdr.width as usize,
         h: hdr.height as usize,
-        c: match hdr.color_type {
+        ct: match hdr.color_type {
                0 => ColType::Gray,
                2 => ColType::Color,
                3 => ColType::Color,   // type of the palette
@@ -123,12 +123,12 @@ pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[
         crc         : Crc32::new(),
     };
 
-    let (pixels, chunks) = try!(decode_png(dc, chunk_names));
+    let (buf, chunks) = try!(decode_png(dc, chunk_names));
     Ok((Image {
-        w      : dc.w,
-        h      : dc.h,
-        fmt    : dc.tgt_fmt,
-        pixels : pixels
+        w   : dc.w,
+        h   : dc.h,
+        fmt : dc.tgt_fmt,
+        buf : buf
     }, chunks))
 }
 
