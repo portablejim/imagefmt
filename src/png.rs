@@ -8,7 +8,7 @@ use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
 use super::{
     Image, Info, ColFmt, ColType, error,
-    copy_memory, get_converter, LineConverter,
+    copy_memory, get_converter,
     u32_to_be, u32_from_be, Crc32, crc32be, IFRead,
 };
 
