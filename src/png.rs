@@ -422,6 +422,7 @@ fn a7_red5_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { (redy*4+2)*dstw
 fn a7_red6_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { redy*2*dstw + redx*2+1   }
 fn a7_red7_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { (redy*2+1)*dstw + redx   }
 
+// TODO This is still the original just-make-it-work mess. Clean up!
 fn fill_uc_buf<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<()> {
     let mut chunks: Vec<Vec<u8>> = Vec::new();
     let mut totallen = 0;
