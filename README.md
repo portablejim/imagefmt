@@ -23,9 +23,9 @@ fn main() {
     pic.write("out.png", ColType::Gray).unwrap();
 
     // there's also a free function that doesn't require an Image
-    imagefmt::write("out.tga", pic.w, pic.h, pic.fmt, &pic.pixels,
-                                                    ColType::Gray)
-                                                        .unwrap();
+    imagefmt::write("out.tga", pic.w, pic.h, pic.fmt, &pic.buf,
+                                                 ColType::Gray)
+                                                     .unwrap();
 
     // get width, height and color type
     let _info = imagefmt::read_info("hiisi.png").unwrap();
