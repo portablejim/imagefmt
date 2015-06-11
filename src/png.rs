@@ -273,23 +273,13 @@ enum PngColortype {
     RGBA = 6,
 }
 
-fn depalette_convert(src_line: &[u8], tgt_line: &mut[u8], palette: &[u8],
-                                               depaletted_line: &mut[u8],
-                                             chan_convert: LineConverter)
-{
+fn depalettize(src: &[u8], palette: &[u8], dst: &mut[u8]) {
     let mut d = 0;
-    for s in (0 .. src_line.len()) {
-        let pidx = src_line[s] as usize * 3;
-        copy_memory(&palette[pidx..pidx+3], &mut depaletted_line[d..d+3]);
+    for &pi in src {
+        let pidx = pi as usize * 3;
+        copy_memory(&palette[pidx..pidx+3], &mut dst[d..d+3]);
         d += 3;
     }
-    chan_convert(&depaletted_line[0 .. src_line.len()*3], tgt_line)
-}
-
-fn simple_convert(src_line: &[u8], tgt_line: &mut[u8], _: &[u8], _: &mut[u8],
-                                                 chan_convert: LineConverter)
-{
-    chan_convert(src_line, tgt_line)
 }
 
 fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &[u8])
@@ -306,15 +296,9 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
         Vec::new()
     };
 
-    let chan_convert = match get_converter(dc.src_fmt, dc.tgt_fmt) {
+    let convert = match get_converter(dc.src_fmt, dc.tgt_fmt) {
         Some(c) => c,
         None => return error("no such converter"),
-    };
-
-    let convert: fn(&[u8], &mut[u8], &[u8], &mut[u8], LineConverter) = if dc.src_indexed {
-        depalette_convert
-    } else {
-        simple_convert
     };
 
     try!(fill_uc_buf(dc, len));
@@ -335,7 +319,13 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                     filter_type, filter_step
                 ));
 
-                convert(&cline[1..], &mut result[ti .. ti+tgt_linesize], palette, &mut depaletted_line[..], chan_convert);
+                if dc.src_indexed {
+                    depalettize(&cline[1..], &palette, &mut depaletted_line);
+                    convert(&depaletted_line[0 .. src_linesize*3],
+                            &mut result[ti .. ti+tgt_linesize])
+                } else {
+                    convert(&cline[1..], &mut result[ti .. ti+tgt_linesize]);
+                }
 
                 ti += tgt_linesize;
 
@@ -387,11 +377,13 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
 
                     try!(recon(&mut cline[1..], &pline[1..], filter_type, filter_step));
 
-                    convert(&cline[1..],
-                            &mut redlinebuf[0..redw[pass] * tgt_bytespp],
-                            palette,
-                            &mut depaletted_line[..],
-                            chan_convert);
+                    if dc.src_indexed {
+                        depalettize(&cline[1..], &palette, &mut depaletted_line);
+                        convert(&depaletted_line[0 .. src_linesize*3],
+                                &mut redlinebuf[0..redw[pass] * tgt_bytespp])
+                    } else {
+                        convert(&cline[1..], &mut redlinebuf[0..redw[pass] * tgt_bytespp]);
+                    }
 
                     let mut redi = 0;
                     for i in (0 .. redw[pass]) {
