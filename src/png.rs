@@ -118,8 +118,6 @@ pub fn read_png_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[
         tgt_fmt     : if req_fmt == ColFmt::Auto { src_fmt } else { req_fmt },
         chunk_lentype : [0u8; 8],
         readbuf     : repeat(0u8).take(4096).collect(),
-        uc_buf      : Vec::<u8>::new(),
-        uc_start    : 0,
         crc         : Crc32::new(),
     };
 
@@ -143,8 +141,6 @@ struct PngDecoder<'r, R:'r> {
 
     chunk_lentype: [u8; 8],   // for reading len, type
     readbuf: Vec<u8>,
-    uc_buf: Vec<u8>,
-    uc_start: usize,
     crc: Crc32,
 }
 
@@ -301,7 +297,8 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
         None => return error("no such converter"),
     };
 
-    try!(fill_uc_buf(dc, len));
+    let compressed_data = try!(read_idat_chunks(dc, len));
+    let mut zlib = ZlibDecoder::new(&compressed_data[..]);
 
     match dc.ilace {
         PngInterlace::None => {
@@ -311,11 +308,11 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
 
             let mut ti = 0;
             for _j in (0 .. dc.h) {
-                next_uncompressed_line(dc, &mut cline[..]);
+                try!(zlib.read_exact(&mut cline[..]));
                 let filter_type: u8 = cline[0];
 
                 try!(recon(
-                    &mut cline[1 .. src_linesize+1], &mut pline[1 .. src_linesize+1],
+                    &mut cline[1 .. src_linesize+1], &pline[1 .. src_linesize+1],
                     filter_type, filter_step
                 ));
 
@@ -372,7 +369,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                         &mut linebuf0[0 .. src_linesize+1])
                     };
 
-                    next_uncompressed_line(dc, &mut cline[..]);
+                    try!(zlib.read_exact(&mut cline[..]));
                     let filter_type: u8 = cline[0];
 
                     try!(recon(&mut cline[1..], &pline[1..], filter_type, filter_step));
@@ -423,7 +420,7 @@ fn a7_red6_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { redy*2*dstw + r
 fn a7_red7_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { (redy*2+1)*dstw + redx   }
 
 // TODO This is still the original just-make-it-work mess. Clean up!
-fn fill_uc_buf<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<()> {
+fn read_idat_chunks<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<(Vec<u8>)> {
     let mut chunks: Vec<Vec<u8>> = Vec::new();
     let mut totallen = 0;
     loop {
@@ -450,18 +447,7 @@ fn fill_uc_buf<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<(
         di += chunk.len();
     }
 
-    // TODO review...
-    let mut zlibdec = ZlibDecoder::new(&alldata[..]);
-    dc.uc_buf = Vec::<u8>::new();
-    try!(zlibdec.read_to_end(&mut dc.uc_buf));
-
-    Ok(())
-}
-
-fn next_uncompressed_line<R: Read>(dc: &mut PngDecoder<R>, dst: &mut[u8]) {
-    let dstlen = dst.len();
-    copy_memory(&dc.uc_buf[dc.uc_start .. dc.uc_start + dstlen], dst);
-    dc.uc_start += dst.len();
+    Ok(alldata)
 }
 
 // the ergonomy of get_unchecked and wrapping ops is non-existent!
