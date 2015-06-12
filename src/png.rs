@@ -419,35 +419,21 @@ fn a7_red5_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { (redy*4+2)*dstw
 fn a7_red6_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { redy*2*dstw + redx*2+1   }
 fn a7_red7_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { (redy*2+1)*dstw + redx   }
 
-// TODO This is still the original just-make-it-work mess. Clean up!
+// will leave len to the length of next chunk after last idat chunk
 fn read_idat_chunks<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<(Vec<u8>)> {
-    let mut chunks: Vec<Vec<u8>> = Vec::new();
-    let mut totallen = 0;
+    let mut all: Vec<u8> = Vec::new();
     loop {
-        let mut fresh: Vec<u8> = repeat(0).take(*len).collect();
-        try!(dc.stream.read_exact(&mut fresh));
-        dc.crc.put(&fresh[..]);
-        chunks.push(fresh);
-        totallen += *len;
-
+        all.extend(repeat(0).take(*len));
+        let start = all.len() - *len;
+        try!(dc.stream.read_exact(&mut all[start..]));
+        dc.crc.put(&all[start..]);
         try!(readcheck_crc(dc));
-
-        // next chunk's len and type
-        *len = try!(read_chunkmeta(dc));
-
+        *len = try!(read_chunkmeta(dc));    // next chunk's len and type
         if &dc.chunk_lentype[4..8] != b"IDAT" {
             break;
         }
     }
-
-    let mut alldata: Vec<u8> = repeat(0).take(totallen).collect();
-    let mut di = 0;
-    for chunk in &chunks {
-        copy_memory(&chunk[..], &mut alldata[di .. di+chunk.len()]);
-        di += chunk.len();
-    }
-
-    Ok(alldata)
+    Ok(all)
 }
 
 // the ergonomy of get_unchecked and wrapping ops is non-existent!
