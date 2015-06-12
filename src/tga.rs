@@ -5,7 +5,7 @@ use std::iter::{repeat};
 use std::cmp::min;
 use super::{
     Image, Info, ColFmt, ColType, error,
-    copy_memory, get_converter, LineConverter,
+    copy_memory, converter,
     u16_to_le, u16_from_le, IFRead,
 };
 
@@ -177,10 +177,7 @@ fn decode_tga<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
             (-tgt_linesize, (dc.h-1) as isize * tgt_linesize)
         };
 
-    let convert: LineConverter = match get_converter(dc.src_fmt, dc.tgt_fmt) {
-        Some(c) => c,
-        None => return error("no such converter"),
-    };
+    let convert = try!(converter(dc.src_fmt, dc.tgt_fmt));
 
     if !dc.rle {
         for _j in (0 .. dc.h) {
@@ -358,10 +355,7 @@ fn write_tga_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     let mut tgt_line: Vec<u8> = repeat(0u8).take(tgt_linesize).collect();
     let mut si = ec.h as usize * src_linesize;
 
-    let convert = match get_converter(ec.src_fmt, ec.tgt_fmt) {
-        Some(c) => c,
-        None => return error("no such converter"),
-    };
+    let convert = try!(converter(ec.src_fmt, ec.tgt_fmt));
 
     if !ec.rle {
         for _ in (0 .. ec.h) {

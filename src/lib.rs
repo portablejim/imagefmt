@@ -176,10 +176,7 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
         })
     }
 
-    let convert = match get_converter(src_fmt, tgt_fmt) {
-        Some(conv) => conv,
-        None => return Err("conversion not supported"),
-    };
+    let convert = try!(converter(src_fmt, tgt_fmt).map_err(|_| "no such converter"));
 
     let src_linesize = w * src_fmt.bytes_pp();
     let tgt_linesize = w * tgt_fmt.bytes_pp();
@@ -247,41 +244,41 @@ impl ColFmt {
 
 type LineConverter = fn(&[u8], &mut[u8]);
 
-fn get_converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> Option<LineConverter> {
+fn converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> io::Result<LineConverter> {
     use self::ColFmt::*;
     match (src_fmt, tgt_fmt) {
-        (ref s, ref t) if (*s == *t) => Some(copy_memory),
-        (Y, YA)      => Some(y_to_ya),
-        (Y, RGB)     => Some(y_to_rgb),
-        (Y, RGBA)    => Some(y_to_rgba),
-        (Y, BGR)     => Some(Y_TO_BGR),
-        (Y, BGRA)    => Some(Y_TO_BGRA),
-        (YA, Y)      => Some(ya_to_y),
-        (YA, RGB)    => Some(ya_to_rgb),
-        (YA, RGBA)   => Some(ya_to_rgba),
-        (YA, BGR)    => Some(YA_TO_BGR),
-        (YA, BGRA)   => Some(YA_TO_BGRA),
-        (RGB, Y)     => Some(rgb_to_y),
-        (RGB, YA)    => Some(rgb_to_ya),
-        (RGB, RGBA)  => Some(rgb_to_rgba),
-        (RGB, BGR)   => Some(RGB_TO_BGR),
-        (RGB, BGRA)  => Some(RGB_TO_BGRA),
-        (RGBA, Y)    => Some(rgba_to_y),
-        (RGBA, YA)   => Some(rgba_to_ya),
-        (RGBA, RGB)  => Some(rgba_to_rgb),
-        (RGBA, BGR)  => Some(RGBA_TO_BGR),
-        (RGBA, BGRA) => Some(RGBA_TO_BGRA),
-        (BGR, Y)     => Some(bgr_to_y),
-        (BGR, YA)    => Some(bgr_to_ya),
-        (BGR, RGB)   => Some(bgr_to_rgb),
-        (BGR, RGBA)  => Some(bgr_to_rgba),
-        (BGR, BGRA)  => Some(BGR_TO_BGRA),
-        (BGRA, Y)    => Some(bgra_to_y),
-        (BGRA, YA)   => Some(bgra_to_ya),
-        (BGRA, RGB)  => Some(bgra_to_rgb),
-        (BGRA, RGBA) => Some(bgra_to_rgba),
-        (BGRA, BGR)  => Some(BGRA_TO_BGR),
-        _ => None,
+        (ref s, ref t) if (*s == *t) => Ok(copy_memory),
+        (Y, YA)      => Ok(y_to_ya),
+        (Y, RGB)     => Ok(y_to_rgb),
+        (Y, RGBA)    => Ok(y_to_rgba),
+        (Y, BGR)     => Ok(Y_TO_BGR),
+        (Y, BGRA)    => Ok(Y_TO_BGRA),
+        (YA, Y)      => Ok(ya_to_y),
+        (YA, RGB)    => Ok(ya_to_rgb),
+        (YA, RGBA)   => Ok(ya_to_rgba),
+        (YA, BGR)    => Ok(YA_TO_BGR),
+        (YA, BGRA)   => Ok(YA_TO_BGRA),
+        (RGB, Y)     => Ok(rgb_to_y),
+        (RGB, YA)    => Ok(rgb_to_ya),
+        (RGB, RGBA)  => Ok(rgb_to_rgba),
+        (RGB, BGR)   => Ok(RGB_TO_BGR),
+        (RGB, BGRA)  => Ok(RGB_TO_BGRA),
+        (RGBA, Y)    => Ok(rgba_to_y),
+        (RGBA, YA)   => Ok(rgba_to_ya),
+        (RGBA, RGB)  => Ok(rgba_to_rgb),
+        (RGBA, BGR)  => Ok(RGBA_TO_BGR),
+        (RGBA, BGRA) => Ok(RGBA_TO_BGRA),
+        (BGR, Y)     => Ok(bgr_to_y),
+        (BGR, YA)    => Ok(bgr_to_ya),
+        (BGR, RGB)   => Ok(bgr_to_rgb),
+        (BGR, RGBA)  => Ok(bgr_to_rgba),
+        (BGR, BGRA)  => Ok(BGR_TO_BGRA),
+        (BGRA, Y)    => Ok(bgra_to_y),
+        (BGRA, YA)   => Ok(bgra_to_ya),
+        (BGRA, RGB)  => Ok(bgra_to_rgb),
+        (BGRA, RGBA) => Ok(bgra_to_rgba),
+        (BGRA, BGR)  => Ok(BGRA_TO_BGR),
+        _ => error("no such converter"),
     }
 }
 

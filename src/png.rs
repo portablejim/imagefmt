@@ -8,7 +8,7 @@ use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
 use super::{
     Image, Info, ColFmt, ColType, error,
-    copy_memory, get_converter,
+    copy_memory, converter,
     u32_to_be, u32_from_be, Crc32, crc32be, IFRead,
 };
 
@@ -292,10 +292,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
         Vec::new()
     };
 
-    let convert = match get_converter(dc.src_fmt, dc.tgt_fmt) {
-        Some(c) => c,
-        None => return error("no such converter"),
-    };
+    let convert = try!(converter(dc.src_fmt, dc.tgt_fmt));
 
     let compressed_data = try!(read_idat_chunks(dc, len));
     let mut zlib = ZlibDecoder::new(&compressed_data[..]);
@@ -652,10 +649,7 @@ struct PngEncoder<'r, W:'r> {
 }
 
 fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
-    let convert = match get_converter(ec.src_fmt, ec.tgt_fmt) {
-        Some(c) => c,
-        None => return error("no such converter"),
-    };
+    let convert = try!(converter(ec.src_fmt, ec.tgt_fmt));
 
     let filter_step = ec.tgt_fmt.bytes_pp();
     let tgt_linesize = ec.w * filter_step + 1;   // +1 for filter type

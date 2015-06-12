@@ -4,7 +4,7 @@ use std::io::{self, Read};
 use std::iter::{repeat};
 use super::{
     Image, Info, ColFmt, ColType, error,
-    copy_memory, get_converter,
+    copy_memory, converter,
     u32_from_le, i32_from_le, u16_from_le, IFRead,
 };
 
@@ -263,10 +263,7 @@ pub fn read_bmp<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
         }
     };
 
-    let convert = match get_converter(ColFmt::BGRA, tgt_fmt) {
-        Some(c) => c,
-        None => return error("internal error"),
-    };
+    let convert = try!(converter(ColFmt::BGRA, tgt_fmt));
 
     let src_linesize = hdr.width as usize * bytes_pp;  // without padding
     let src_pad = if paletted { 0 } else { 3 - ((src_linesize-1) % 4) };
