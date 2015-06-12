@@ -688,19 +688,20 @@ fn write_png_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
         ti += tgt_linesize;
     }
 
-    // TODO review...
     let mut zlibenc = ZlibEncoder::new(&filtered_image[..], Compression::Fast);
-    let mut compressed = Vec::<u8>::new();
-    try!(zlibenc.read_to_end(&mut compressed));
-    ec.crc.put(b"IDAT");
-    ec.crc.put(&compressed[..]);
-    let crc = &ec.crc.finish_be();
+    let mut compressed = [0u8; 1024*8];
 
-    // TODO split up data into smaller chunks
-    try!(ec.stream.write_all(&u32_to_be(compressed.len() as u32)[..]));
-    try!(ec.stream.write_all(b"IDAT"));
-    try!(ec.stream.write_all(&compressed[..]));
-    try!(ec.stream.write_all(crc));
+    loop {
+        let n = try!(zlibenc.read(&mut compressed[..]));
+        if n == 0 { break }
+        ec.crc.put(b"IDAT");
+        ec.crc.put(&compressed[..n]);
+        let crc = &ec.crc.finish_be();
+        try!(ec.stream.write_all(&u32_to_be(n as u32)[..]));
+        try!(ec.stream.write_all(b"IDAT"));
+        try!(ec.stream.write_all(&compressed[..n]));
+        try!(ec.stream.write_all(crc));
+    }
+
     Ok(())
 }
-
