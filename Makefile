@@ -5,4 +5,4 @@ docs:
 		--cfg feature=\"tga\"\
 		--cfg feature=\"bmp\"\
 		--cfg feature=\"jpeg\"\
-		-o imagefmt-gh-pages -L target/debug -L target/debug/deps
+		-o docs -L target/debug -L target/debug/deps
