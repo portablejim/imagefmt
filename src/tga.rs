@@ -2,6 +2,7 @@
 
 use std::io::{self, Read, Write};
 use std::iter::{repeat};
+use std::io::{Seek, SeekFrom};
 use std::cmp::min;
 use super::{
     Image, Info, ColFmt, ColType, error,
@@ -73,7 +74,7 @@ pub fn read_tga_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
 ///
 /// Passing `ColFmt::Auto` as req_fmt converts the data to one of `Y`, `YA`, `RGB`,
 /// `RGBA`.
-pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read_tga<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let hdr = try!(read_tga_header(reader));
 
     if 0 < hdr.palette_type { return error("paletted TGAs not supported"); }
@@ -98,7 +99,7 @@ pub fn read_tga<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
         }
     };
 
-    try!(reader.skip(hdr.id_length as usize));
+    try!(reader.seek(SeekFrom::Current(hdr.id_length as i64)));
 
     let dc = &mut TgaDecoder {
         stream         : reader,

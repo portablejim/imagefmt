@@ -2,6 +2,7 @@
 
 use std::io::{self, Read};
 use std::iter::{repeat};
+use std::io::{Seek, SeekFrom};
 use std::mem::{zeroed};
 use super::{
     Image, Info, ColFmt, ColType, error,
@@ -11,7 +12,7 @@ use super::{
 // Baseline JPEG decoder
 
 /// Returns width, height and color type of the image.
-pub fn read_jpeg_info<R: Read>(reader: &mut R) -> io::Result<Info> {
+pub fn read_jpeg_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
     let mut marker = [0u8; 2];
 
     // SOI
@@ -47,7 +48,7 @@ pub fn read_jpeg_info<R: Read>(reader: &mut R) -> io::Result<Info> {
                 let mut tmp: [u8; 2] = [0, 0];
                 try!(reader.read_exact(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]) - 2;
-                try!(reader.skip(len as usize));
+                try!(reader.seek(SeekFrom::Current(len as i64)));
             }
             _ => return error("invalid / unsupported marker"),
         }
@@ -57,7 +58,7 @@ pub fn read_jpeg_info<R: Read>(reader: &mut R) -> io::Result<Info> {
 /// Reads an image and converts it to requested format.
 ///
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to `Y` or `RGB`.
-pub fn read_jpeg<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read_jpeg<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     use super::ColFmt::*;
     let req_fmt = match req_fmt {
         Auto | Y | YA | RGB | RGBA => req_fmt,
@@ -168,7 +169,7 @@ struct Component {
     data     : Vec<u8>,      // reconstructed samples
 }
 
-fn read_markers<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
+fn read_markers<R: Read+Seek>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     let mut marker = [0u8; 2];
     // SOI
     try!(dc.stream.read_exact(&mut marker));
@@ -210,7 +211,7 @@ fn read_markers<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
                 try!(dc.stream.read_exact(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]);
                 if len < 2 { return error("invalid data length") }
-                try!(dc.stream.skip(len as usize - 2));
+                try!(dc.stream.seek(SeekFrom::Current(len as i64 - 2)));
             }
             SOF2 => return error("progressive jpeg not supported"),
             _ => return error("unsupported marker"),

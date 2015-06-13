@@ -2,6 +2,7 @@
 
 use std::io::{self, Read};
 use std::iter::{repeat};
+use std::io::{Seek, SeekFrom};
 use super::{
     Image, Info, ColFmt, ColType, error,
     copy_memory, converter,
@@ -9,7 +10,7 @@ use super::{
 };
 
 /// Returns width, height and color type of the image.
-pub fn read_bmp_info<R: Read>(reader: &mut R) -> io::Result<Info> {
+pub fn read_bmp_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
     let hdr = try!(read_bmp_header(reader));
 
     Ok(Info {
@@ -81,7 +82,7 @@ pub struct DibV5 {
 }
 
 /// Reads a BMP header.
-pub fn read_bmp_header<R: Read>(reader: &mut R) -> io::Result<BmpHeader> {
+pub fn read_bmp_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
     let mut bmp_header = [0u8; 18]; // bmp header + size of dib header
     try!(reader.read_exact(&mut bmp_header[..]));
 
@@ -180,7 +181,7 @@ const CMP_BITS: u32       = 3;
 ///
 /// Passing `ColFmt::Auto` as req_fmt converts the data to `RGB` or `RGBA`. The DIB
 /// headers BITMAPV4HEADER and BITMAPV5HEADER are ignored if present.
-pub fn read_bmp<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read_bmp<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let hdr = try!(read_bmp_header(reader));
 
     if hdr.width < 1 || hdr.height == 0 { return error("invalid dimensions") }
@@ -252,8 +253,7 @@ pub fn read_bmp<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
             (Vec::new(), Vec::new())
         };
 
-    try!(reader.skip(hdr.pixel_data_offset - 14 - hdr.dib_size
-        - if palette_length > 0 { palette_length * pe_bytes_pp } else { 0 }));
+    try!(reader.seek(SeekFrom::Start(hdr.pixel_data_offset as u64)));
 
     let tgt_fmt = {
         use super::ColFmt::*;

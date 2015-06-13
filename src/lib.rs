@@ -585,7 +585,6 @@ static CRC32_TABLE: [u32; 256] = [
 trait IFRead {
     fn read_u8(&mut self) -> io::Result<u8>;
     fn read_exact(&mut self, buf: &mut[u8]) -> io::Result<()>;
-    fn skip(&mut self, amt: usize) -> io::Result<()>;
 }
 
 impl<R: Read> IFRead for R {
@@ -606,16 +605,6 @@ impl<R: Read> IFRead for R {
                 return error("not enough data");
             }
             ready += got;
-        }
-        Ok(())
-    }
-
-    fn skip(&mut self, mut amt: usize) -> io::Result<()> {
-        let mut buf = [0u8; 1024];
-        while 0 < amt {
-            let n = min(amt, buf.len());
-            try!(self.read_exact(&mut buf[0..n]));
-            amt -= n;
         }
         Ok(())
     }
