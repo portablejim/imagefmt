@@ -526,7 +526,7 @@
 
 <span class='doccomment'>/// Header of a TGA image.</span>
 <span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Debug</span>)]</span>
-<span class='kw'>pub</span> <span class='kw'>struct</span> <span class='ident'>TgaHeader</span> {
+<span class='kw'>struct</span> <span class='ident'>TgaHeader</span> {
    <span class='kw'>pub</span> <span class='ident'>id_length</span>      : <span class='ident'>u8</span>,
    <span class='kw'>pub</span> <span class='ident'>palette_type</span>   : <span class='ident'>u8</span>,
    <span class='kw'>pub</span> <span class='ident'>data_type</span>      : <span class='ident'>u8</span>,
@@ -542,11 +542,11 @@
 }
 
 <span class='doccomment'>/// Returns width, height and color type of the image.</span>
-<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read_tga_info</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Info</span><span class='op'>&gt;</span> {
+<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read_info</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Info</span><span class='op'>&gt;</span> {
     <span class='kw'>use</span> <span class='ident'>super</span>::<span class='ident'>ColFmt</span>::<span class='op'>*</span>;
 
-    <span class='kw'>let</span> <span class='ident'>hdr</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>read_tga_header</span>(<span class='ident'>reader</span>));
-    <span class='kw'>let</span> <span class='ident'>TgaInfo</span> { <span class='ident'>src_fmt</span>, .. } <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>parse_tga_header</span>(<span class='kw-2'>&amp;</span><span class='ident'>hdr</span>));
+    <span class='kw'>let</span> <span class='ident'>hdr</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>read_header</span>(<span class='ident'>reader</span>));
+    <span class='kw'>let</span> <span class='ident'>TgaInfo</span> { <span class='ident'>src_fmt</span>, .. } <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>parse_header</span>(<span class='kw-2'>&amp;</span><span class='ident'>hdr</span>));
 
     <span class='prelude-val'>Ok</span>(<span class='ident'>Info</span> {
         <span class='ident'>w</span>: <span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span>,
@@ -564,7 +564,7 @@
 <span class='doccomment'>/// Reads a TGA header.</span>
 <span class='doccomment'>///</span>
 <span class='doccomment'>/// The fields are not parsed into enums or anything like that.</span>
-<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read_tga_header</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>TgaHeader</span><span class='op'>&gt;</span> {
+<span class='kw'>fn</span> <span class='ident'>read_header</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>TgaHeader</span><span class='op'>&gt;</span> {
     <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>buf</span> <span class='op'>=</span> [<span class='number'>0u8</span>; <span class='number'>18</span>];
     <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>buf</span>));
 
@@ -588,15 +588,15 @@
 <span class='doccomment'>///</span>
 <span class='doccomment'>/// Passing `ColFmt::Auto` as req_fmt converts the data to one of `Y`, `YA`, `RGB`,</span>
 <span class='doccomment'>/// `RGBA`.</span>
-<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read_tga</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>+</span><span class='ident'>Seek</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>, <span class='ident'>req_fmt</span>: <span class='ident'>ColFmt</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Image</span><span class='op'>&gt;</span> {
-    <span class='kw'>let</span> <span class='ident'>hdr</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>read_tga_header</span>(<span class='ident'>reader</span>));
+<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>+</span><span class='ident'>Seek</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>, <span class='ident'>req_fmt</span>: <span class='ident'>ColFmt</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Image</span><span class='op'>&gt;</span> {
+    <span class='kw'>let</span> <span class='ident'>hdr</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>read_header</span>(<span class='ident'>reader</span>));
 
     <span class='kw'>if</span> <span class='number'>0</span> <span class='op'>&lt;</span> <span class='ident'>hdr</span>.<span class='ident'>palette_type</span> { <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;paletted TGAs not supported&quot;</span>); }
     <span class='kw'>if</span> <span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='op'>&lt;</span> <span class='number'>1</span> <span class='op'>||</span> <span class='ident'>hdr</span>.<span class='ident'>height</span> <span class='op'>&lt;</span> <span class='number'>1</span> { <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;invalid dimensions&quot;</span>); }
     <span class='kw'>if</span> <span class='number'>0</span> <span class='op'>&lt;</span> (<span class='ident'>hdr</span>.<span class='ident'>flags</span> <span class='kw-2'>&amp;</span> <span class='number'>0xc0</span>) { <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;interlaced TGAs not supported&quot;</span>); }
     <span class='kw'>if</span> <span class='number'>0</span> <span class='op'>&lt;</span> (<span class='ident'>hdr</span>.<span class='ident'>flags</span> <span class='kw-2'>&amp;</span> <span class='number'>0x10</span>) { <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;right-to-left TGAs not supported&quot;</span>); }
 
-    <span class='kw'>let</span> <span class='ident'>TgaInfo</span> { <span class='ident'>src_bytespp</span>, <span class='ident'>src_fmt</span>, <span class='ident'>rle</span> } <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>parse_tga_header</span>(<span class='kw-2'>&amp;</span><span class='ident'>hdr</span>));
+    <span class='kw'>let</span> <span class='ident'>TgaInfo</span> { <span class='ident'>src_bytespp</span>, <span class='ident'>src_fmt</span>, <span class='ident'>rle</span> } <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>parse_header</span>(<span class='kw-2'>&amp;</span><span class='ident'>hdr</span>));
 
     <span class='kw'>let</span> <span class='ident'>tgt_fmt</span> <span class='op'>=</span> {
         <span class='kw'>use</span> <span class='ident'>super</span>::<span class='ident'>ColFmt</span>::<span class='op'>*</span>;
@@ -630,7 +630,7 @@
         <span class='ident'>w</span>   : <span class='ident'>dc</span>.<span class='ident'>w</span>,
         <span class='ident'>h</span>   : <span class='ident'>dc</span>.<span class='ident'>h</span>,
         <span class='ident'>fmt</span> : <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span>,
-        <span class='ident'>buf</span> : <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>decode_tga</span>(<span class='ident'>dc</span>))
+        <span class='ident'>buf</span> : <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>decode</span>(<span class='ident'>dc</span>))
     })
 }
 
@@ -641,7 +641,7 @@
 }
 
 <span class='comment'>// Returns: source color format and whether it&#39;s RLE compressed</span>
-<span class='kw'>fn</span> <span class='ident'>parse_tga_header</span>(<span class='ident'>hdr</span>: <span class='kw-2'>&amp;</span><span class='ident'>TgaHeader</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>TgaInfo</span><span class='op'>&gt;</span> {
+<span class='kw'>fn</span> <span class='ident'>parse_header</span>(<span class='ident'>hdr</span>: <span class='kw-2'>&amp;</span><span class='ident'>TgaHeader</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>TgaInfo</span><span class='op'>&gt;</span> {
     <span class='kw'>use</span> <span class='self'>self</span>::<span class='ident'>TgaDataType</span>::<span class='op'>*</span>;
 
     <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>rle</span> <span class='op'>=</span> <span class='boolval'>false</span>;
@@ -677,7 +677,7 @@
     })
 }
 
-<span class='kw'>fn</span> <span class='ident'>decode_tga</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>dc</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>TgaDecoder</span><span class='op'>&lt;</span><span class='ident'>R</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;&gt;</span> {
+<span class='kw'>fn</span> <span class='ident'>decode</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>dc</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>TgaDecoder</span><span class='op'>&lt;</span><span class='ident'>R</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;&gt;</span> {
     <span class='kw'>let</span> <span class='ident'>tgt_bytespp</span> <span class='op'>=</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span>.<span class='ident'>bytes_pp</span>();
     <span class='kw'>let</span> <span class='ident'>tgt_linesize</span> <span class='op'>=</span> (<span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>) <span class='kw'>as</span> <span class='ident'>isize</span>;
     <span class='kw'>let</span> <span class='ident'>src_linesize</span> <span class='op'>=</span> <span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>dc</span>.<span class='ident'>src_bytespp</span>;
@@ -780,10 +780,10 @@
 <span class='comment'>// TGA Encoder</span>
 
 <span class='doccomment'>/// Writes an image and converts it to requested color type.</span>
-<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>write_tga</span><span class='op'>&lt;</span><span class='ident'>W</span>: <span class='ident'>Write</span><span class='op'>&gt;</span>(<span class='ident'>writer</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>W</span>, <span class='ident'>w</span>: <span class='ident'>usize</span>, <span class='ident'>h</span>: <span class='ident'>usize</span>, <span class='ident'>src_fmt</span>: <span class='ident'>ColFmt</span>,
-                                                                   <span class='ident'>data</span>: <span class='kw-2'>&amp;</span>[<span class='ident'>u8</span>],
-                                                             <span class='ident'>tgt_type</span>: <span class='ident'>ColType</span>)
-                                                              <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span>
+<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>write</span><span class='op'>&lt;</span><span class='ident'>W</span>: <span class='ident'>Write</span><span class='op'>&gt;</span>(<span class='ident'>writer</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>W</span>, <span class='ident'>w</span>: <span class='ident'>usize</span>, <span class='ident'>h</span>: <span class='ident'>usize</span>, <span class='ident'>src_fmt</span>: <span class='ident'>ColFmt</span>,
+                                                               <span class='ident'>data</span>: <span class='kw-2'>&amp;</span>[<span class='ident'>u8</span>],
+                                                         <span class='ident'>tgt_type</span>: <span class='ident'>ColType</span>)
+                                                          <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span>
 {
     <span class='kw'>let</span> <span class='ident'>src_bytespp</span> <span class='op'>=</span> <span class='ident'>data</span>.<span class='ident'>len</span>() <span class='op'>/</span> <span class='ident'>w</span> <span class='op'>/</span> <span class='ident'>h</span>;
 
@@ -825,8 +825,8 @@
         <span class='ident'>data</span>      : <span class='ident'>data</span>,
     };
 
-    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>write_tga_header</span>(<span class='ident'>ec</span>));
-    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>write_tga_image_data</span>(<span class='ident'>ec</span>));
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>write_header</span>(<span class='ident'>ec</span>));
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>write_image_data</span>(<span class='ident'>ec</span>));
 
     <span class='comment'>// write footer</span>
     <span class='kw'>let</span> <span class='ident'>ftr</span>: <span class='kw-2'>&amp;</span><span class='lifetime'>&#39;static</span> [<span class='ident'>u8</span>] <span class='op'>=</span>
@@ -838,7 +838,7 @@
     <span class='ident'>ec</span>.<span class='ident'>stream</span>.<span class='ident'>flush</span>()
 }
 
-<span class='kw'>fn</span> <span class='ident'>write_tga_header</span><span class='op'>&lt;</span><span class='ident'>W</span>: <span class='ident'>Write</span><span class='op'>&gt;</span>(<span class='ident'>ec</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>TgaEncoder</span><span class='op'>&lt;</span><span class='ident'>W</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span> {
+<span class='kw'>fn</span> <span class='ident'>write_header</span><span class='op'>&lt;</span><span class='ident'>W</span>: <span class='ident'>Write</span><span class='op'>&gt;</span>(<span class='ident'>ec</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>TgaEncoder</span><span class='op'>&lt;</span><span class='ident'>W</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span> {
     <span class='kw'>use</span> <span class='self'>self</span>::<span class='ident'>TgaDataType</span>::<span class='op'>*</span>;
     <span class='kw'>let</span> (<span class='ident'>data_type</span>, <span class='ident'>has_alpha</span>) <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>ec</span>.<span class='ident'>tgt_bytespp</span> {
         <span class='number'>1</span> <span class='op'>=&gt;</span> (<span class='kw'>if</span> <span class='ident'>ec</span>.<span class='ident'>rle</span> { <span class='ident'>GrayRLE</span>      } <span class='kw'>else</span> { <span class='ident'>Gray</span>      }, <span class='boolval'>false</span>),
@@ -864,7 +864,7 @@
     <span class='ident'>ec</span>.<span class='ident'>stream</span>.<span class='ident'>write_all</span>(<span class='ident'>hdr</span>)
 }
 
-<span class='kw'>fn</span> <span class='ident'>write_tga_image_data</span><span class='op'>&lt;</span><span class='ident'>W</span>: <span class='ident'>Write</span><span class='op'>&gt;</span>(<span class='ident'>ec</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>TgaEncoder</span><span class='op'>&lt;</span><span class='ident'>W</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span> {
+<span class='kw'>fn</span> <span class='ident'>write_image_data</span><span class='op'>&lt;</span><span class='ident'>W</span>: <span class='ident'>Write</span><span class='op'>&gt;</span>(<span class='ident'>ec</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>TgaEncoder</span><span class='op'>&lt;</span><span class='ident'>W</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span> {
     <span class='kw'>let</span> <span class='ident'>src_linesize</span> <span class='op'>=</span> (<span class='ident'>ec</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>ec</span>.<span class='ident'>src_bytespp</span>) <span class='kw'>as</span> <span class='ident'>usize</span>;
     <span class='kw'>let</span> <span class='ident'>tgt_linesize</span> <span class='op'>=</span> (<span class='ident'>ec</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>ec</span>.<span class='ident'>tgt_bytespp</span>) <span class='kw'>as</span> <span class='ident'>usize</span>;
     <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>tgt_line</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0u8</span>).<span class='ident'>take</span>(<span class='ident'>tgt_linesize</span>).<span class='ident'>collect</span>();

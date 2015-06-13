@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["read_tga","Reads an image and converts it to requested format."],["read_tga_info","Returns width, height and color type of the image."],["write_tga","Writes an image and converts it to requested color type."]]});
+initSidebarItems({"fn":[["read","Reads an image and converts it to requested format."],["read_info","Returns width, height and color type of the image."],["write","Writes an image and converts it to requested color type."]]});

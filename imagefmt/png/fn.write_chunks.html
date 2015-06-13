@@ -4,12 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `read_png_chunks` fn in crate `imagefmt`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, read_png_chunks">
+    <meta name="description" content="API documentation for the Rust `write_chunks` fn in crate `imagefmt`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, write_chunks">
 
-    <title>imagefmt::read_png_chunks - Rust</title>
+    <title>imagefmt::png::write_chunks - Rust</title>
 
-    <link rel="stylesheet" type="text/css" href="../main.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
 
     
     
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='index.html'>imagefmt</a></p><script>window.sidebarCurrent = {name: 'read_png_chunks', ty: 'fn', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+        <p class='location'><a href='../index.html'>imagefmt</a>::<wbr><a href='index.html'>png</a></p><script>window.sidebarCurrent = {name: 'write_chunks', ty: 'fn', relpath: ''};</script><script defer src="sidebar-items.js"></script>
     </section>
 
     <nav class="sub">
@@ -41,14 +41,12 @@
     </nav>
 
     <section id='main' class="content fn">
-<h1 class='fqn'><span class='in-band'>Function <a href='index.html'>imagefmt</a>::<wbr><a class='fn' href=''>read_png_chunks</a></span><span class='out-of-band'><span id='render-detail'>
+<h1 class='fqn'><span class='in-band'>Function <a href='../index.html'>imagefmt</a>::<wbr><a href='index.html'>png</a>::<wbr><a class='fn' href=''>write_chunks</a></span><span class='out-of-band'><span id='render-detail'>
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-370' class='srclink' href='../src/imagefmt/png.rs.html#86-131' title='goto source code'>[src]</a></span></h1>
-<pre class='rust fn'>pub fn read_png_chunks&lt;R: <a class='trait' href='http://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a>&gt;(reader: &amp;mut R, req_fmt: <a class='enum' href='../imagefmt/enum.ColFmt.html' title='imagefmt::ColFmt'>ColFmt</a>, chunk_names: <a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a><a href='http://doc.rust-lang.org/nightly/std/primitive.array.html'>[<a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a>; 4]</a><a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/std/io/error/type.Result.html' title='std::io::error::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a class='struct' href='../imagefmt/struct.Image.html' title='imagefmt::Image'>Image</a>, <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../imagefmt/struct.PngCustomChunk.html' title='imagefmt::PngCustomChunk'>PngCustomChunk</a>&gt;)</a>&gt;</pre><div class='docblock'><p>Like <code>read_png</code> but also returns the requested extension chunks.</p>
-
-<p>If the requested chunks are not present they are ignored.</p>
+        </span><a id='src-3554' class='srclink' href='../../src/imagefmt/png.rs.html#545-598' title='goto source code'>[src]</a></span></h1>
+<pre class='rust fn'>pub fn write_chunks&lt;W: <a class='trait' href='http://doc.rust-lang.org/nightly/std/io/trait.Write.html' title='std::io::Write'>Write</a>&gt;(writer: &amp;mut W, w: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, h: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, src_fmt: <a class='enum' href='../../imagefmt/enum.ColFmt.html' title='imagefmt::ColFmt'>ColFmt</a>, data: <a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a><a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, tgt_type: <a class='enum' href='../../imagefmt/enum.ColType.html' title='imagefmt::ColType'>ColType</a>, chunks: <a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a><a class='struct' href='../../imagefmt/png/struct.PngCustomChunk.html' title='imagefmt::png::PngCustomChunk'>PngCustomChunk</a><a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/std/io/error/type.Result.html' title='std::io::error::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt;</pre><div class='docblock'><p>Like <code>png::write</code> but also writes the given extension chunks.</p>
 </div></section>
     <section id='search' class="content hidden"></section>
 
@@ -92,13 +90,13 @@
     
 
     <script>
-        window.rootPath = "../";
+        window.rootPath = "../../";
         window.currentCrate = "imagefmt";
         window.playgroundUrl = "";
     </script>
-    <script src="../jquery.js"></script>
-    <script src="../main.js"></script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
     
-    <script async src="../search-index.js"></script>
+    <script async src="../../search-index.js"></script>
 </body>
 </html>

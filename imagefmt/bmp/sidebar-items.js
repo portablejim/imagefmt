@@ -1,1 +1,1 @@
-initSidebarItems({"fn":[["read_bmp","Reads an image and converts it to requested format."],["read_bmp_info","Returns width, height and color type of the image."]]});
+initSidebarItems({"fn":[["read","Reads an image and converts it to requested format."],["read_info","Returns width, height and color type of the image."]]});
