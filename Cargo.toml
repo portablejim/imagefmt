@@ -4,7 +4,7 @@ version = "0.5.0"
 authors = ["Tero Hänninen"]
 description = "Decoders for PNG, TGA, BMP, JPEG. Encoders for PNG, TGA. 8-bit only, with conversions."
 license = "MIT"
-include = ["src/*", "Cargo.toml", "README.md"]
+include = ["src/*", "Cargo.toml", "README.md", "Makefile"]
 repository = "https://github.com/lgvz/imagefmt"
 documentation = "http://lgvz.github.io/imagefmt/imagefmt/"
 
