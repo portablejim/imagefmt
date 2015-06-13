@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `lib` crate.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, lib">
+
+    <title>lib - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'></p><script>window.sidebarCurrent = {name: 'lib', ty: 'mod', relpath: '../'};</script>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Crate <a class='mod' href=''>lib</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-0' class='srclink' href='../src/lib/lib.rs.html#3-665' title='goto source code'>[src]</a></span></h1>
+<h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.Image.html'
+                               title='lib::Image'>Image</a></td>
+                        <td class='docblock short'>
+                             <p>Image struct returned from the read functions.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.Info.html'
+                               title='lib::Info'>Info</a></td>
+                        <td class='docblock short'>
+                             <p>Holds basic info about an image.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.PngCustomChunk.html'
+                               title='lib::PngCustomChunk'>PngCustomChunk</a></td>
+                        <td class='docblock short'>
+                             <p>PNG extension chunk.</p>
+
+                        </td>
+                    </tr>
+                </table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='enum' href='enum.ColFmt.html'
+                               title='lib::ColFmt'>ColFmt</a></td>
+                        <td class='docblock short'>
+                             <p>Color format.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='enum' href='enum.ColType.html'
+                               title='lib::ColType'>ColType</a></td>
+                        <td class='docblock short'>
+                             <p>Color type – these are categories of color formats.</p>
+
+                        </td>
+                    </tr>
+                </table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.convert.html'
+                               title='lib::convert'>convert</a></td>
+                        <td class='docblock short'>
+                             <p>Converts the image into a new allocation.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read.html'
+                               title='lib::read'>read</a></td>
+                        <td class='docblock short'>
+                             <p>Reads an image and converts it to requested format.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_bmp.html'
+                               title='lib::read_bmp'>read_bmp</a></td>
+                        <td class='docblock short'>
+                             <p>Reads an image and converts it to requested format.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_bmp_info.html'
+                               title='lib::read_bmp_info'>read_bmp_info</a></td>
+                        <td class='docblock short'>
+                             <p>Returns width, height and color type of the image.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_info.html'
+                               title='lib::read_info'>read_info</a></td>
+                        <td class='docblock short'>
+                             <p>Returns width, height and color type of the image.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_jpeg.html'
+                               title='lib::read_jpeg'>read_jpeg</a></td>
+                        <td class='docblock short'>
+                             <p>Reads an image and converts it to requested format.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_jpeg_info.html'
+                               title='lib::read_jpeg_info'>read_jpeg_info</a></td>
+                        <td class='docblock short'>
+                             <p>Returns width, height and color type of the image.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_png.html'
+                               title='lib::read_png'>read_png</a></td>
+                        <td class='docblock short'>
+                             <p>Reads an image and converts it to requested format.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_png_chunks.html'
+                               title='lib::read_png_chunks'>read_png_chunks</a></td>
+                        <td class='docblock short'>
+                             <p>Like <code>read_png</code> but also returns the requested extension chunks.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_png_info.html'
+                               title='lib::read_png_info'>read_png_info</a></td>
+                        <td class='docblock short'>
+                             <p>Returns width, height and color type of the image.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_tga.html'
+                               title='lib::read_tga'>read_tga</a></td>
+                        <td class='docblock short'>
+                             <p>Reads an image and converts it to requested format.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_tga_info.html'
+                               title='lib::read_tga_info'>read_tga_info</a></td>
+                        <td class='docblock short'>
+                             <p>Returns width, height and color type of the image.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.write.html'
+                               title='lib::write'>write</a></td>
+                        <td class='docblock short'>
+                             <p>Writes an image and converts it to requested color type.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.write_png.html'
+                               title='lib::write_png'>write_png</a></td>
+                        <td class='docblock short'>
+                             <p>Writes an image and converts it to requested color type.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.write_png_chunks.html'
+                               title='lib::write_png_chunks'>write_png_chunks</a></td>
+                        <td class='docblock short'>
+                             <p>Like <code>write_png</code> but also writes the given extension chunks.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.write_tga.html'
+                               title='lib::write_tga'>write_tga</a></td>
+                        <td class='docblock short'>
+                             <p>Writes an image and converts it to requested color type.</p>
+
+                        </td>
+                    </tr>
+                </table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "lib";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script async src="../search-index.js"></script>
+</body>
+</html>
