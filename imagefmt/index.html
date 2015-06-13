@@ -45,8 +45,33 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-0' class='srclink' href='../src/imagefmt/lib.rs.html#3-665' title='goto source code'>[src]</a></span></h1>
-<h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+        </span><a id='src-0' class='srclink' href='../src/imagefmt/lib.rs.html#3-691' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'>
+<h1 id="example" class='section-header'><a
+                           href="#example">Example</a></h1><pre id='rust-example-rendered' class='rust '>
+<span class='kw'>extern</span> <span class='kw'>crate</span> <span class='ident'>imagefmt</span>;
+<span class='kw'>use</span> <span class='ident'>imagefmt</span>::{<span class='ident'>ColFmt</span>, <span class='ident'>ColType</span>};
+
+<span class='kw'>fn</span> <span class='ident'>main</span>() {
+    <span class='comment'>// load and convert to bgra</span>
+    <span class='kw'>let</span> <span class='ident'>_pic</span> <span class='op'>=</span> <span class='ident'>imagefmt</span>::<span class='ident'>read</span>(<span class='string'>&quot;stars.jpg&quot;</span>, <span class='ident'>ColFmt</span>::<span class='ident'>BGRA</span>).<span class='ident'>unwrap</span>();
+
+    <span class='comment'>// convert to one of y, ya, rgb, rgba</span>
+    <span class='kw'>let</span> <span class='ident'>pic</span> <span class='op'>=</span> <span class='ident'>imagefmt</span>::<span class='ident'>read</span>(<span class='string'>&quot;marbles.tga&quot;</span>, <span class='ident'>ColFmt</span>::<span class='ident'>Auto</span>).<span class='ident'>unwrap</span>();
+
+    <span class='comment'>// write image out as grayscale</span>
+    <span class='ident'>pic</span>.<span class='ident'>write</span>(<span class='string'>&quot;out.png&quot;</span>, <span class='ident'>ColType</span>::<span class='ident'>Gray</span>).<span class='ident'>unwrap</span>();
+
+    <span class='comment'>// there&#39;s also a free function that doesn&#39;t require an Image</span>
+    <span class='ident'>imagefmt</span>::<span class='ident'>write</span>(<span class='string'>&quot;out.tga&quot;</span>, <span class='ident'>pic</span>.<span class='ident'>w</span>, <span class='ident'>pic</span>.<span class='ident'>h</span>, <span class='ident'>pic</span>.<span class='ident'>fmt</span>, <span class='kw-2'>&amp;</span><span class='ident'>pic</span>.<span class='ident'>buf</span>,
+                                                 <span class='ident'>ColType</span>::<span class='ident'>Gray</span>)
+                                                     .<span class='ident'>unwrap</span>();
+
+    <span class='comment'>// get width, height and color type</span>
+    <span class='kw'>let</span> <span class='ident'>_info</span> <span class='op'>=</span> <span class='ident'>imagefmt</span>::<span class='ident'>read_info</span>(<span class='string'>&quot;hiisi.png&quot;</span>).<span class='ident'>unwrap</span>();
+}
+</pre>
+</div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
 <table>
                     <tr class=' module-item'>
                         <td><a class='struct' href='struct.Image.html'
