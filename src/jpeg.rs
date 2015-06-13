@@ -12,7 +12,7 @@ use super::{
 // Baseline JPEG decoder
 
 /// Returns width, height and color type of the image.
-pub fn read_jpeg_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
+pub fn read_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
     let mut marker = [0u8; 2];
 
     // SOI
@@ -58,7 +58,7 @@ pub fn read_jpeg_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
 /// Reads an image and converts it to requested format.
 ///
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to `Y` or `RGB`.
-pub fn read_jpeg<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     use super::ColFmt::*;
     let req_fmt = match req_fmt {
         Auto | Y | YA | RGB | RGBA => req_fmt,

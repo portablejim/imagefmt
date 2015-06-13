@@ -12,7 +12,7 @@ use super::{
 
 /// Header of a TGA image.
 #[derive(Debug)]
-pub struct TgaHeader {
+struct TgaHeader {
    pub id_length      : u8,
    pub palette_type   : u8,
    pub data_type      : u8,
@@ -28,11 +28,11 @@ pub struct TgaHeader {
 }
 
 /// Returns width, height and color type of the image.
-pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<Info> {
+pub fn read_info<R: Read>(reader: &mut R) -> io::Result<Info> {
     use super::ColFmt::*;
 
-    let hdr = try!(read_tga_header(reader));
-    let TgaInfo { src_fmt, .. } = try!(parse_tga_header(&hdr));
+    let hdr = try!(read_header(reader));
+    let TgaInfo { src_fmt, .. } = try!(parse_header(&hdr));
 
     Ok(Info {
         w: hdr.width as usize,
@@ -50,7 +50,7 @@ pub fn read_tga_info<R: Read>(reader: &mut R) -> io::Result<Info> {
 /// Reads a TGA header.
 ///
 /// The fields are not parsed into enums or anything like that.
-pub fn read_tga_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
+fn read_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
     let mut buf = [0u8; 18];
     try!(reader.read_exact(&mut buf));
 
@@ -74,15 +74,15 @@ pub fn read_tga_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
 ///
 /// Passing `ColFmt::Auto` as req_fmt converts the data to one of `Y`, `YA`, `RGB`,
 /// `RGBA`.
-pub fn read_tga<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
-    let hdr = try!(read_tga_header(reader));
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+    let hdr = try!(read_header(reader));
 
     if 0 < hdr.palette_type { return error("paletted TGAs not supported"); }
     if hdr.width < 1 || hdr.height < 1 { return error("invalid dimensions"); }
     if 0 < (hdr.flags & 0xc0) { return error("interlaced TGAs not supported"); }
     if 0 < (hdr.flags & 0x10) { return error("right-to-left TGAs not supported"); }
 
-    let TgaInfo { src_bytespp, src_fmt, rle } = try!(parse_tga_header(&hdr));
+    let TgaInfo { src_bytespp, src_fmt, rle } = try!(parse_header(&hdr));
 
     let tgt_fmt = {
         use super::ColFmt::*;
@@ -116,7 +116,7 @@ pub fn read_tga<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Ima
         w   : dc.w,
         h   : dc.h,
         fmt : dc.tgt_fmt,
-        buf : try!(decode_tga(dc))
+        buf : try!(decode(dc))
     })
 }
 
@@ -127,7 +127,7 @@ struct TgaInfo {
 }
 
 // Returns: source color format and whether it's RLE compressed
-fn parse_tga_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
+fn parse_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
     use self::TgaDataType::*;
 
     let mut rle = false;
@@ -163,7 +163,7 @@ fn parse_tga_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
     })
 }
 
-fn decode_tga<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
+fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
     let tgt_linesize = (dc.w * tgt_bytespp) as isize;
     let src_linesize = dc.w * dc.src_bytespp;
@@ -266,10 +266,10 @@ impl TgaDataType {
 // TGA Encoder
 
 /// Writes an image and converts it to requested color type.
-pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
-                                                                   data: &[u8],
-                                                             tgt_type: ColType)
-                                                              -> io::Result<()>
+pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
+                                                               data: &[u8],
+                                                         tgt_type: ColType)
+                                                          -> io::Result<()>
 {
     let src_bytespp = data.len() / w / h;
 
@@ -311,8 +311,8 @@ pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
         data      : data,
     };
 
-    try!(write_tga_header(ec));
-    try!(write_tga_image_data(ec));
+    try!(write_header(ec));
+    try!(write_image_data(ec));
 
     // write footer
     let ftr: &'static [u8] =
@@ -324,7 +324,7 @@ pub fn write_tga<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
     ec.stream.flush()
 }
 
-fn write_tga_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
+fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     use self::TgaDataType::*;
     let (data_type, has_alpha) = match ec.tgt_bytespp {
         1 => (if ec.rle { GrayRLE      } else { Gray      }, false),
@@ -350,7 +350,7 @@ fn write_tga_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     ec.stream.write_all(hdr)
 }
 
-fn write_tga_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
+fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     let src_linesize = (ec.w * ec.src_bytespp) as usize;
     let tgt_linesize = (ec.w * ec.tgt_bytespp) as usize;
     let mut tgt_line: Vec<u8> = repeat(0u8).take(tgt_linesize).collect();

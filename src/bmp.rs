@@ -10,8 +10,8 @@ use super::{
 };
 
 /// Returns width, height and color type of the image.
-pub fn read_bmp_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
-    let hdr = try!(read_bmp_header(reader));
+pub fn read_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
+    let hdr = try!(read_header(reader));
 
     Ok(Info {
         w: hdr.width.abs() as usize,
@@ -26,7 +26,7 @@ pub fn read_bmp_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
 
 /// Header of a BMP image.
 #[derive(Debug)]
-pub struct BmpHeader {
+struct BmpHeader {
     // BMP
     pub file_size             : u32,
     pub pixel_data_offset     : usize,
@@ -45,7 +45,7 @@ pub struct BmpHeader {
 
 /// Optional part of a BMP header.
 #[derive(Debug)]
-pub struct DibV1 {
+struct DibV1 {
     pub bits_pp               : usize,
     pub compression           : u32,
     pub idat_size             : usize,
@@ -57,7 +57,7 @@ pub struct DibV1 {
 
 /// Optional part of a BMP header.
 #[derive(Debug)]
-pub struct DibV2 {
+struct DibV2 {
     pub red_mask              : u32,
     pub green_mask            : u32,
     pub blue_mask             : u32,
@@ -65,7 +65,7 @@ pub struct DibV2 {
 
 /// Optional part of a BMP header.
 #[derive(Debug)]
-pub struct DibV4 {
+struct DibV4 {
     pub color_space_type      : u32,
     pub color_space_endpoints : Vec<u8>,//[u8; 36],     // Vec for Debug
     pub gamma_red             : u32,
@@ -76,13 +76,13 @@ pub struct DibV4 {
 
 /// Optional part of a BMP header.
 #[derive(Debug)]
-pub struct DibV5 {
+struct DibV5 {
     pub icc_profile_data      : u32,
     pub icc_profile_size      : u32,
 }
 
 /// Reads a BMP header.
-pub fn read_bmp_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
+fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
     let mut bmp_header = [0u8; 18]; // bmp header + size of dib header
     try!(reader.read_exact(&mut bmp_header[..]));
 
@@ -181,8 +181,8 @@ const CMP_BITS: u32       = 3;
 ///
 /// Passing `ColFmt::Auto` as req_fmt converts the data to `RGB` or `RGBA`. The DIB
 /// headers BITMAPV4HEADER and BITMAPV5HEADER are ignored if present.
-pub fn read_bmp<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
-    let hdr = try!(read_bmp_header(reader));
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+    let hdr = try!(read_header(reader));
 
     if hdr.width < 1 || hdr.height == 0 { return error("invalid dimensions") }
     if hdr.pixel_data_offset < (14 + hdr.dib_size)
