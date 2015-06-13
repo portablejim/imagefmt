@@ -31,7 +31,6 @@ use std::fs::{File};
 use std::io::{self, Read, BufReader, BufWriter, ErrorKind};
 use std::iter::{repeat};
 use std::path::Path;
-use std::cmp::min;
 use std::fmt::{self, Debug};
 use std::ptr;
 
