@@ -1,6 +1,8 @@
-**Image loading and saving**
+# imagefmt
+
 * [Documentation](http://lgvz.github.io/imagefmt/imagefmt/)
 * Returned data is always 8-bit (Y/YA/RGB/RGBA/BGR/BGRA)
+* All formats are optional via Cargo features (all enabled by default)
 
 | Format | Decoder                  | Encoder                           |
 | ---    | ---                      | ---                               |
