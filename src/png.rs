@@ -84,7 +84,7 @@ pub fn read<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
 ///
 /// If the requested chunks are not present they are ignored.
 pub fn read_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
-                                          -> io::Result<(Image, Vec<PngCustomChunk>)>
+                                          -> io::Result<(Image, Vec<ExtChunk>)>
 {
     let hdr = try!(read_header(reader));
 
@@ -171,12 +171,12 @@ fn readcheck_crc<R: Read>(dc: &mut PngDecoder<R>) -> io::Result<()> {
 }
 
 fn decode<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
-                              -> io::Result<(Vec<u8>, Vec<PngCustomChunk>)>
+                              -> io::Result<(Vec<u8>, Vec<ExtChunk>)>
 {
     use self::PngStage::*;
 
     let mut result = Vec::<u8>::new();
-    let mut chunks = Vec::<PngCustomChunk>::new();
+    let mut chunks = Vec::<ExtChunk>::new();
     let mut palette = Vec::<u8>::new();
 
     let mut stage = IhdrParsed;
@@ -224,7 +224,7 @@ fn decode<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                     let mut data: Vec<u8> = repeat(0u8).take(len).collect();
                     try!(dc.stream.read_exact(&mut data));
                     dc.crc.put(&data[..]);
-                    chunks.push(PngCustomChunk { name: name, data: data });
+                    chunks.push(ExtChunk { name: name, data: data });
                 } else {
                     // unknown chunk, ignore but check crc... or should crc be ignored?
                     while 0 < len {
@@ -526,7 +526,7 @@ impl PngFilter {
 // PNG encoder
 
 /// PNG extension chunk.
-pub struct PngCustomChunk {
+pub struct ExtChunk {
     pub name: [u8; 4],
     pub data: Vec<u8>,
 }
@@ -545,7 +545,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
 pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
                                                                           data: &[u8],
                                                                     tgt_type: ColType,
-                                                            chunks: &[PngCustomChunk])
+                                                                  chunks: &[ExtChunk])
                                                                      -> io::Result<()>
 {
     let src_bytespp = data.len() / w / h;
@@ -619,7 +619,7 @@ fn write_header<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
     ec.stream.write_all(&hdr[..])
 }
 
-fn write_custom_chunk<W: Write>(ec: &mut PngEncoder<W>, chunk: &PngCustomChunk) -> io::Result<()> {
+fn write_custom_chunk<W: Write>(ec: &mut PngEncoder<W>, chunk: &ExtChunk) -> io::Result<()> {
     if chunk.name[0] < 97 || 122 < chunk.name[0] { return error("invalid chunk name"); }
     for b in &chunk.name[1..] {
         if *b < 65 || (90 < *b && *b < 97) || 122 < *b {
