@@ -639,6 +639,15 @@
 <span id="597">597</span>
 <span id="598">598</span>
 <span id="599">599</span>
+<span id="600">600</span>
+<span id="601">601</span>
+<span id="602">602</span>
+<span id="603">603</span>
+<span id="604">604</span>
+<span id="605">605</span>
+<span id="606">606</span>
+<span id="607">607</span>
+<span id="608">608</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright (c) 2014-2015 Tero Hänninen</span>
 <span class='comment'>//</span>
@@ -857,6 +866,15 @@
             <span class='ident'>ColFmt</span>::<span class='ident'>BGR</span> <span class='op'>=&gt;</span> <span class='ident'>ColType</span>::<span class='ident'>Color</span>,
             <span class='ident'>ColFmt</span>::<span class='ident'>BGRA</span> <span class='op'>=&gt;</span> <span class='ident'>ColType</span>::<span class='ident'>ColorAlpha</span>,
             <span class='ident'>ColFmt</span>::<span class='ident'>Auto</span> <span class='op'>=&gt;</span> <span class='ident'>ColType</span>::<span class='ident'>Auto</span>,
+        }
+    }
+
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>has_alpha</span>(<span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>bool</span><span class='op'>&gt;</span> {
+        <span class='kw'>use</span> <span class='ident'>ColFmt</span>::<span class='op'>*</span>;
+        <span class='kw'>match</span> <span class='self'>self</span> {
+            <span class='ident'>YA</span> <span class='op'>|</span> <span class='ident'>RGBA</span> <span class='op'>|</span> <span class='ident'>BGRA</span> <span class='op'>=&gt;</span> <span class='prelude-val'>Some</span>(<span class='boolval'>true</span>),
+            <span class='ident'>Y</span> <span class='op'>|</span> <span class='ident'>RGB</span> <span class='op'>|</span> <span class='ident'>BGR</span> <span class='op'>=&gt;</span> <span class='prelude-val'>Some</span>(<span class='boolval'>false</span>),
+            <span class='ident'>Auto</span> <span class='op'>=&gt;</span> <span class='prelude-val'>None</span>,
         }
     }
 

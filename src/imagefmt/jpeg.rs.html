@@ -1001,6 +1001,15 @@
 <span id="959">959</span>
 <span id="960">960</span>
 <span id="961">961</span>
+<span id="962">962</span>
+<span id="963">963</span>
+<span id="964">964</span>
+<span id="965">965</span>
+<span id="966">966</span>
+<span id="967">967</span>
+<span id="968">968</span>
+<span id="969">969</span>
+<span id="970">970</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright (c) 2014-2015 Tero Hänninen, license: MIT</span>
 
@@ -1065,8 +1074,8 @@
 <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>+</span><span class='ident'>Seek</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>, <span class='ident'>req_fmt</span>: <span class='ident'>ColFmt</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Image</span><span class='op'>&gt;</span> {
     <span class='kw'>use</span> <span class='ident'>super</span>::<span class='ident'>ColFmt</span>::<span class='op'>*</span>;
     <span class='kw'>let</span> <span class='ident'>req_fmt</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>req_fmt</span> {
-        <span class='ident'>Auto</span> <span class='op'>|</span> <span class='ident'>Y</span> <span class='op'>|</span> <span class='ident'>YA</span> <span class='op'>|</span> <span class='ident'>RGB</span> <span class='op'>|</span> <span class='ident'>RGBA</span> <span class='op'>=&gt;</span> <span class='ident'>req_fmt</span>,
-        _ <span class='op'>=&gt;</span> <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;format not supported&quot;</span>)
+        <span class='ident'>Auto</span> <span class='op'>|</span> <span class='ident'>Y</span> <span class='op'>|</span> <span class='ident'>YA</span> <span class='op'>|</span> <span class='ident'>RGB</span> <span class='op'>|</span> <span class='ident'>RGBA</span> <span class='op'>|</span> <span class='ident'>BGR</span> <span class='op'>|</span> <span class='ident'>BGRA</span> <span class='op'>=&gt;</span> <span class='ident'>req_fmt</span>,
+        <span class='comment'>//_ =&gt; return error(&quot;conversion not supported&quot;)</span>
     };
 
     <span class='kw'>let</span> <span class='ident'>dc</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>JpegDecoder</span> {
@@ -1686,10 +1695,15 @@
     <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>result</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>dc</span>.<span class='ident'>h</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>).<span class='ident'>collect</span>();
 
     <span class='kw'>match</span> (<span class='ident'>dc</span>.<span class='ident'>num_comps</span>, <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span>) {
-        (<span class='number'>3</span>, <span class='ident'>ColFmt</span>::<span class='ident'>RGB</span>) <span class='op'>|</span> (<span class='number'>3</span>, <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span>) <span class='op'>=&gt;</span> {
+        (<span class='number'>3</span>, <span class='ident'>ColFmt</span>::<span class='ident'>RGB</span>) <span class='op'>|</span> (<span class='number'>3</span>, <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span>) <span class='op'>|</span> (<span class='number'>3</span>, <span class='ident'>ColFmt</span>::<span class='ident'>BGR</span>) <span class='op'>|</span> (<span class='number'>3</span>, <span class='ident'>ColFmt</span>::<span class='ident'>BGRA</span>) <span class='op'>=&gt;</span> {
+            <span class='kw'>let</span> (<span class='ident'>ri</span>, <span class='ident'>gi</span>, <span class='ident'>bi</span>) <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span> {
+                <span class='ident'>ColFmt</span>::<span class='ident'>RGB</span> <span class='op'>|</span> <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span> <span class='op'>=&gt;</span> (<span class='number'>0</span>, <span class='number'>1</span>, <span class='number'>2</span>),
+                <span class='ident'>ColFmt</span>::<span class='ident'>BGR</span> <span class='op'>|</span> <span class='ident'>ColFmt</span>::<span class='ident'>BGRA</span> <span class='op'>=&gt;</span> (<span class='number'>2</span>, <span class='number'>1</span>, <span class='number'>0</span>),
+                _ <span class='op'>=&gt;</span> <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;bug&quot;</span>),
+            };
             <span class='kw'>for</span> <span class='kw-2'>ref</span> <span class='ident'>comp</span> <span class='kw'>in</span> <span class='kw-2'>&amp;</span><span class='ident'>dc</span>.<span class='ident'>comps</span> {
                 <span class='kw'>if</span> <span class='ident'>comp</span>.<span class='ident'>sfx</span> <span class='op'>!=</span> <span class='ident'>dc</span>.<span class='ident'>hmax</span> <span class='op'>||</span> <span class='ident'>comp</span>.<span class='ident'>sfy</span> <span class='op'>!=</span> <span class='ident'>dc</span>.<span class='ident'>vmax</span> {
-                    <span class='ident'>upsample_rgb</span>(<span class='ident'>dc</span>, <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>result</span>[..]);
+                    <span class='ident'>upsample_rgb</span>(<span class='ident'>dc</span>, <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>result</span>[..], <span class='ident'>ri</span>, <span class='ident'>gi</span>, <span class='ident'>bi</span>);
                     <span class='kw'>return</span> <span class='prelude-val'>Ok</span>(<span class='ident'>result</span>);
                 }
             }
@@ -1703,9 +1717,11 @@
                         <span class='ident'>dc</span>.<span class='ident'>comps</span>[<span class='number'>1</span>].<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>],
                         <span class='ident'>dc</span>.<span class='ident'>comps</span>[<span class='number'>2</span>].<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>],
                     );
-                    <span class='ident'>copy_memory</span>(<span class='kw-2'>&amp;</span><span class='ident'>pixel</span>[..], <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>result</span>[<span class='ident'>di</span>..<span class='ident'>di</span><span class='op'>+</span><span class='number'>3</span>]);
-                    <span class='kw'>if</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span> <span class='op'>==</span> <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span> {
-                        <span class='op'>*</span><span class='ident'>result</span>.<span class='ident'>get_mut</span>(<span class='ident'>di</span><span class='op'>+</span><span class='number'>3</span>).<span class='ident'>unwrap</span>() <span class='op'>=</span> <span class='number'>255</span>;
+                    <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='ident'>ri</span>] <span class='op'>=</span> <span class='ident'>pixel</span>[<span class='number'>0</span>];
+                    <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='ident'>gi</span>] <span class='op'>=</span> <span class='ident'>pixel</span>[<span class='number'>1</span>];
+                    <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='ident'>bi</span>] <span class='op'>=</span> <span class='ident'>pixel</span>[<span class='number'>2</span>];
+                    <span class='kw'>if</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span>.<span class='ident'>has_alpha</span>() <span class='op'>==</span> <span class='prelude-val'>Some</span>(<span class='boolval'>true</span>) {
+                        <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='number'>3</span>] <span class='op'>=</span> <span class='number'>255</span>;
                     }
                     <span class='ident'>di</span> <span class='op'>+=</span> <span class='ident'>tgt_bytespp</span>;
                 }
@@ -1726,8 +1742,8 @@
             <span class='kw'>if</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span> <span class='op'>==</span> <span class='ident'>ColFmt</span>::<span class='ident'>YA</span> {
                 <span class='kw'>for</span> <span class='ident'>_j</span> <span class='kw'>in</span> (<span class='number'>0</span> .. <span class='ident'>dc</span>.<span class='ident'>h</span>) {
                     <span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> (<span class='number'>0</span> .. <span class='ident'>dc</span>.<span class='ident'>w</span>) {
-                        <span class='op'>*</span><span class='ident'>result</span>.<span class='ident'>get_mut</span>(<span class='ident'>di</span>  ).<span class='ident'>unwrap</span>() <span class='op'>=</span> <span class='ident'>comp</span>.<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>];
-                        <span class='op'>*</span><span class='ident'>result</span>.<span class='ident'>get_mut</span>(<span class='ident'>di</span><span class='op'>+</span><span class='number'>1</span>).<span class='ident'>unwrap</span>() <span class='op'>=</span> <span class='number'>255</span>;
+                        <span class='ident'>result</span>[<span class='ident'>di</span>  ] <span class='op'>=</span> <span class='ident'>comp</span>.<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>];
+                        <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='number'>1</span>] <span class='op'>=</span> <span class='number'>255</span>;
                         <span class='ident'>di</span> <span class='op'>+=</span> <span class='number'>2</span>;
                     }
                     <span class='ident'>si</span> <span class='op'>+=</span> <span class='ident'>dc</span>.<span class='ident'>num_mcu_x</span> <span class='op'>*</span> <span class='ident'>comp</span>.<span class='ident'>sfx</span> <span class='op'>*</span> <span class='number'>8</span>;
@@ -1741,17 +1757,17 @@
             }
             <span class='kw'>return</span> <span class='prelude-val'>Ok</span>(<span class='ident'>result</span>);
         },
-        (<span class='number'>1</span>, <span class='ident'>ColFmt</span>::<span class='ident'>RGB</span>) <span class='op'>|</span> (<span class='number'>1</span>, <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span>) <span class='op'>=&gt;</span> {
+        (<span class='number'>1</span>, <span class='ident'>ColFmt</span>::<span class='ident'>RGB</span>) <span class='op'>|</span> (<span class='number'>1</span>, <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span>) <span class='op'>|</span> (<span class='number'>1</span>, <span class='ident'>ColFmt</span>::<span class='ident'>BGR</span>) <span class='op'>|</span> (<span class='number'>1</span>, <span class='ident'>ColFmt</span>::<span class='ident'>BGRA</span>) <span class='op'>=&gt;</span> {
             <span class='kw'>let</span> <span class='ident'>comp</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='ident'>dc</span>.<span class='ident'>comps</span>[<span class='number'>0</span>];
             <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>si</span> <span class='op'>=</span> <span class='number'>0</span>;
             <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>di</span> <span class='op'>=</span> <span class='number'>0</span>;
             <span class='kw'>for</span> <span class='ident'>_j</span> <span class='kw'>in</span> (<span class='number'>0</span> .. <span class='ident'>dc</span>.<span class='ident'>h</span>) {
                 <span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> (<span class='number'>0</span> .. <span class='ident'>dc</span>.<span class='ident'>w</span>) {
-                    <span class='op'>*</span><span class='ident'>result</span>.<span class='ident'>get_mut</span>(<span class='ident'>di</span>  ).<span class='ident'>unwrap</span>() <span class='op'>=</span> <span class='ident'>comp</span>.<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>];
-                    <span class='op'>*</span><span class='ident'>result</span>.<span class='ident'>get_mut</span>(<span class='ident'>di</span><span class='op'>+</span><span class='number'>1</span>).<span class='ident'>unwrap</span>() <span class='op'>=</span> <span class='ident'>comp</span>.<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>];
-                    <span class='op'>*</span><span class='ident'>result</span>.<span class='ident'>get_mut</span>(<span class='ident'>di</span><span class='op'>+</span><span class='number'>2</span>).<span class='ident'>unwrap</span>() <span class='op'>=</span> <span class='ident'>comp</span>.<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>];
-                    <span class='kw'>if</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span> <span class='op'>==</span> <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span> {
-                        <span class='op'>*</span><span class='ident'>result</span>.<span class='ident'>get_mut</span>(<span class='ident'>di</span><span class='op'>+</span><span class='number'>3</span>).<span class='ident'>unwrap</span>() <span class='op'>=</span> <span class='number'>255</span>;
+                    <span class='ident'>result</span>[<span class='ident'>di</span>  ] <span class='op'>=</span> <span class='ident'>comp</span>.<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>];
+                    <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='number'>1</span>] <span class='op'>=</span> <span class='ident'>comp</span>.<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>];
+                    <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='number'>2</span>] <span class='op'>=</span> <span class='ident'>comp</span>.<span class='ident'>data</span>[<span class='ident'>si</span><span class='op'>+</span><span class='ident'>i</span>];
+                    <span class='kw'>if</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span>.<span class='ident'>has_alpha</span>() <span class='op'>==</span> <span class='prelude-val'>Some</span>(<span class='boolval'>true</span>) {
+                        <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='number'>3</span>] <span class='op'>=</span> <span class='number'>255</span>;
                     }
                     <span class='ident'>di</span> <span class='op'>+=</span> <span class='ident'>tgt_bytespp</span>;
                 }
@@ -1780,7 +1796,7 @@
     }
 }
 
-<span class='kw'>fn</span> <span class='ident'>upsample_rgb</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>dc</span>: <span class='kw-2'>&amp;</span><span class='ident'>JpegDecoder</span><span class='op'>&lt;</span><span class='ident'>R</span><span class='op'>&gt;</span>, <span class='ident'>result</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span>[<span class='ident'>u8</span>]) {
+<span class='kw'>fn</span> <span class='ident'>upsample_rgb</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>dc</span>: <span class='kw-2'>&amp;</span><span class='ident'>JpegDecoder</span><span class='op'>&lt;</span><span class='ident'>R</span><span class='op'>&gt;</span>, <span class='ident'>result</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span>[<span class='ident'>u8</span>], <span class='ident'>ri</span>: <span class='ident'>usize</span>, <span class='ident'>gi</span>: <span class='ident'>usize</span>, <span class='ident'>bi</span>: <span class='ident'>usize</span>) {
     <span class='kw'>let</span> <span class='ident'>stride0</span> <span class='op'>=</span> <span class='ident'>dc</span>.<span class='ident'>num_mcu_x</span> <span class='op'>*</span> <span class='ident'>dc</span>.<span class='ident'>comps</span>[<span class='number'>0</span>].<span class='ident'>sfx</span> <span class='op'>*</span> <span class='number'>8</span>;
     <span class='kw'>let</span> <span class='ident'>stride1</span> <span class='op'>=</span> <span class='ident'>dc</span>.<span class='ident'>num_mcu_x</span> <span class='op'>*</span> <span class='ident'>dc</span>.<span class='ident'>comps</span>[<span class='number'>1</span>].<span class='ident'>sfx</span> <span class='op'>*</span> <span class='number'>8</span>;
     <span class='kw'>let</span> <span class='ident'>stride2</span> <span class='op'>=</span> <span class='ident'>dc</span>.<span class='ident'>num_mcu_x</span> <span class='op'>*</span> <span class='ident'>dc</span>.<span class='ident'>comps</span>[<span class='number'>2</span>].<span class='ident'>sfx</span> <span class='op'>*</span> <span class='number'>8</span>;
@@ -1805,8 +1821,10 @@
                 <span class='ident'>dc</span>.<span class='ident'>comps</span>[<span class='number'>1</span>].<span class='ident'>data</span>[<span class='ident'>si1</span> <span class='op'>+</span> (<span class='ident'>i</span> <span class='kw'>as</span> <span class='ident'>f64</span> <span class='op'>*</span> <span class='ident'>si1xratio</span>).<span class='ident'>floor</span>() <span class='kw'>as</span> <span class='ident'>usize</span>],
                 <span class='ident'>dc</span>.<span class='ident'>comps</span>[<span class='number'>2</span>].<span class='ident'>data</span>[<span class='ident'>si2</span> <span class='op'>+</span> (<span class='ident'>i</span> <span class='kw'>as</span> <span class='ident'>f64</span> <span class='op'>*</span> <span class='ident'>si2xratio</span>).<span class='ident'>floor</span>() <span class='kw'>as</span> <span class='ident'>usize</span>],
             );
-            <span class='ident'>copy_memory</span>(<span class='kw-2'>&amp;</span><span class='ident'>pixel</span>[..], <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>result</span>[<span class='ident'>di</span>..<span class='ident'>di</span><span class='op'>+</span><span class='number'>3</span>]);
-            <span class='kw'>if</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span> <span class='op'>==</span> <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span> { <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='number'>3</span>] <span class='op'>=</span> <span class='number'>255</span>; }
+            <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='ident'>ri</span>] <span class='op'>=</span> <span class='ident'>pixel</span>[<span class='number'>0</span>];
+            <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='ident'>gi</span>] <span class='op'>=</span> <span class='ident'>pixel</span>[<span class='number'>1</span>];
+            <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='ident'>bi</span>] <span class='op'>=</span> <span class='ident'>pixel</span>[<span class='number'>2</span>];
+            <span class='kw'>if</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span>.<span class='ident'>has_alpha</span>() <span class='op'>==</span> <span class='prelude-val'>Some</span>(<span class='boolval'>true</span>) { <span class='ident'>result</span>[<span class='ident'>di</span><span class='op'>+</span><span class='number'>3</span>] <span class='op'>=</span> <span class='number'>255</span>; }
             <span class='ident'>di</span> <span class='op'>+=</span> <span class='ident'>tgt_bytespp</span>;
         }
     }
