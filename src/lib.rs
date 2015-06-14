@@ -218,6 +218,15 @@ impl ColFmt {
         }
     }
 
+    pub fn has_alpha(self) -> Option<bool> {
+        use ColFmt::*;
+        match self {
+            YA | RGBA | BGRA => Some(true),
+            Y | RGB | BGR => Some(false),
+            Auto => None,
+        }
+    }
+
     fn bytes_pp(&self) -> usize {
         use self::ColFmt::*;
         match *self {
