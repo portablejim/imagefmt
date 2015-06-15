@@ -10,10 +10,11 @@ documentation = "http://lgvz.github.io/imagefmt/imagefmt/"
 
 [features]
 default = ["png", "jpeg", "bmp", "tga"]
-png = []
+png = ["flate2"]
 jpeg = []
 bmp = []
 tga = []
 
-[dependencies]
-flate2 = "0.2"
+[dependencies.flate2]
+version = "0.2"
+optional = true
