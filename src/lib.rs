@@ -535,33 +535,37 @@ impl<R: Read> IFRead for R {
     }
 }
 
+#[allow(dead_code)]
 fn u16_from_be(buf: &[u8]) -> u16 {
     (buf[0] as u16) << 8 | buf[1] as u16
 }
 
+#[allow(dead_code)]
 fn u16_from_le(buf: &[u8]) -> u16 {
     (buf[1] as u16) << 8 | buf[0] as u16
 }
 
+#[allow(dead_code)]
 fn u16_to_le(x: u16) -> [u8; 2] {
-    let buf = [x as u8, (x >> 8) as u8];
-    buf
+    [x as u8, (x >> 8) as u8]
 }
 
+#[allow(dead_code)]
 fn u32_from_be(buf: &[u8]) -> u32 {
     (buf[0] as u32) << 24 | (buf[1] as u32) << 16 | (buf[2] as u32) << 8 | buf[3] as u32
 }
 
+#[allow(dead_code)]
 fn u32_to_be(x: u32) -> [u8; 4] {
-    let buf = [(x >> 24) as u8, (x >> 16) as u8,
-               (x >>  8) as u8, (x)       as u8];
-    buf
+    [(x >> 24) as u8, (x >> 16) as u8, (x >> 8) as u8, (x) as u8]
 }
 
+#[allow(dead_code)]
 fn u32_from_le(buf: &[u8]) -> u32 {
     (buf[3] as u32) << 24 | (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | buf[0] as u32
 }
 
+#[allow(dead_code)]
 fn i32_from_le(buf: &[u8]) -> i32 {
     ((buf[3] as u32) << 24 | (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | buf[0] as u32)
         as i32
@@ -591,6 +595,7 @@ impl Debug for Image {
 
 macro_rules! dummy_mod {
     ($name:ident) => {
+        #[allow(dead_code)]
         mod $name {
             use ::{Info, Image, ColFmt, ColType};
             use std::io::{self, Read, Write};
