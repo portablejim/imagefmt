@@ -1,8 +1,7 @@
 // Copyright (c) 2014-2015 Tero Hänninen, license: MIT
 
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::iter::{repeat};
-use std::io::{Seek, SeekFrom};
 use std::cmp::min;
 use super::{
     Image, Info, ColFmt, ColType, error,

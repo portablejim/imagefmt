@@ -1,8 +1,7 @@
 // Copyright (c) 2015 Tero Hänninen, license: MIT
 
-use std::io::{self, Read};
+use std::io::{self, Read, Seek, SeekFrom};
 use std::iter::{repeat};
-use std::io::{Seek, SeekFrom};
 use super::{
     Image, Info, ColFmt, ColType, error,
     copy_memory, converter,
