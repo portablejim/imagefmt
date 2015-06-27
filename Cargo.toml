@@ -1,6 +1,6 @@
 [package]
 name = "imagefmt"
-version = "0.5.1"
+version = "1.0.0"
 authors = ["Tero Hänninen"]
 description = "Decoders for PNG, TGA, BMP, JPEG. Encoders for PNG, TGA. 8-bit only, with conversions."
 license = "MIT"
