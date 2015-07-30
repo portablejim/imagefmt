@@ -70,7 +70,6 @@ struct DibV4 {
     pub gamma_red             : u32,
     pub gamma_green           : u32,
     pub gamma_blue            : u32,
-    pub intent                : u32,
 }
 
 /// Optional part of a BMP header.
@@ -102,10 +101,6 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
     };
     let mut dib_header: Vec<u8> = repeat(0).take(dib_size-4).collect();
     try!(reader.read_exact(&mut dib_header[..]));
-
-    if 6 <= dib_version {
-        return error("bmp info header version 6 or above not supported")
-    }
 
     Ok(BmpHeader {
         file_size             : u32_from_le(&bmp_header[2..6]),
@@ -155,7 +150,6 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
                     gamma_red             : u32_from_le(&dib_header[92..96]),
                     gamma_green           : u32_from_le(&dib_header[96..100]),
                     gamma_blue            : u32_from_le(&dib_header[100..104]),
-                    intent                : u32_from_le(&dib_header[104..108]),
                 })
             } else {
                 None
@@ -211,7 +205,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         } else {
             (1, true, 256, false)
         };
-    let pe_bytes_pp = if hdr.dib_v1.is_some() { 4 } else { 3 };
+    let pe_fmt = if hdr.dib_v1.is_some() { ColFmt::BGRA } else { ColFmt::BGR };
 
     fn mask_to_idx(mask: u32) -> io::Result<usize> {
         match mask {
@@ -240,14 +234,12 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
             (false, 0)
         };
 
-    // TODO check all channels have different indices
-
     let (palette, mut depaletted_line) =
         if paletted {
-            let mut palette: Vec<u8> = repeat(0).take(palette_length * pe_bytes_pp)
+            let mut palette: Vec<u8> = repeat(0).take(palette_length * pe_fmt.bytes_pp())
                                                                         .collect();
             try!(reader.read_exact(&mut palette[..]));
-            (palette, repeat(0u8).take(hdr.width as usize * pe_bytes_pp).collect())
+            (palette, repeat(0u8).take(hdr.width as usize * pe_fmt.bytes_pp()).collect())
         } else {
             (Vec::new(), Vec::new())
         };
@@ -262,10 +254,15 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         }
     };
 
-    let convert = try!(converter(ColFmt::BGRA, tgt_fmt));
+    let convert =
+        if paletted {
+            try!(converter(pe_fmt, tgt_fmt))
+        } else {
+            try!(converter(ColFmt::BGRA, tgt_fmt))
+        };
 
     let src_linesize = hdr.width as usize * bytes_pp;  // without padding
-    let src_pad = if paletted { 0 } else { 3 - ((src_linesize-1) % 4) };
+    let src_pad = 3 - ((src_linesize-1) % 4);
     let tgt_bytespp = tgt_fmt.bytes_pp();
     let tgt_linesize = (hdr.width as usize * tgt_bytespp) as isize;
 
@@ -289,9 +286,12 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         let src_line = &src_line_buf[..src_linesize];
 
         if paletted {
-            let ps = pe_bytes_pp;
+            let ps = pe_fmt.bytes_pp();
             let mut di = 0;
             for &idx in src_line {
+                if idx as usize > palette_length {
+                    return error("invalid palette index");
+                }
                 let idx = idx as usize * ps;
                 copy_memory(&palette[idx .. idx+ps], &mut depaletted_line[di .. di+ps]);
                 if ps == 4 {
