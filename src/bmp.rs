@@ -255,11 +255,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     };
 
     let convert =
-        if paletted {
-            try!(converter(pe_fmt, tgt_fmt))
-        } else {
-            try!(converter(ColFmt::BGRA, tgt_fmt))
-        };
+        try!(converter(if paletted { pe_fmt } else { ColFmt::BGRA }, tgt_fmt));
 
     let src_linesize = hdr.width as usize * bytes_pp;  // without padding
     let src_pad = 3 - ((src_linesize-1) % 4);
