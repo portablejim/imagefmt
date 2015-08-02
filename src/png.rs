@@ -548,11 +548,9 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
                                                                   chunks: &[ExtChunk])
                                                                      -> io::Result<()>
 {
-    let src_bytespp = data.len() / w / h;
-
     if w < 1 || h < 1
-    || src_bytespp * w * h != data.len()
-    || src_bytespp != src_fmt.bytes_pp() {
+    || data.len() % w != 0 || data.len() % h != 0
+    || data.len() / w / h != src_fmt.bytes_pp() {
         return error("invalid dimensions or data length");
     }
 
@@ -580,7 +578,7 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
         stream    : writer,
         w         : w,
         h         : h,
-        src_bytespp : src_bytespp,
+        src_bytespp : src_fmt.bytes_pp(),
         src_fmt   : src_fmt,
         tgt_fmt   : tgt_fmt,
         data      : data,
