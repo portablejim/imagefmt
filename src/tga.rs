@@ -271,8 +271,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
                                                           -> io::Result<()>
 {
     if w < 1 || h < 1 || 0xffff < w || 0xffff < h
-    || data.len() % w != 0 || data.len() % h != 0
-    || data.len() / w / h != src_fmt.bytes_pp() {
+    || src_fmt.bytes_pp() * w * h != data.len() {
         return error("invalid dimensions or data length");
     }
 

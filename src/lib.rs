@@ -143,11 +143,7 @@ pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
 pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt)
                                                            -> Result<Image, &str>
 {
-    let src_bytespp = data.len() / w / h;
-
-    if w < 1 || h < 1
-    || src_bytespp * w * h != data.len()
-    || src_bytespp != src_fmt.bytes_pp() {
+    if w < 1 || h < 1 || src_fmt.bytes_pp() * w * h != data.len() {
         return Err("invalid dimensions or data length");
     }
 
