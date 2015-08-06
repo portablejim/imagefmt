@@ -569,9 +569,7 @@ fn i32_from_le(buf: &[u8]) -> i32 {
 
 #[inline]
 fn copy_memory(src: &[u8], dst: &mut[u8]) {
-    if src.len() != dst.len() {
-        panic!("src.len() != dst.len()")
-    }
+    assert!(src.len() == dst.len());
     unsafe {
         ptr::copy(src.as_ptr(), dst.as_mut_ptr(), src.len());
     }
