@@ -1,7 +1,7 @@
 // Copyright (c) 2014-2015 Tero Hänninen, license: MIT
 
 use std::io::{self, Read, Seek, SeekFrom};
-use std::iter::{repeat};
+use std::vec;
 use std::mem::{zeroed};
 use super::{
     Image, Info, ColFmt, ColType, error,
@@ -103,7 +103,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         };
 
     for comp in dc.comps.iter_mut() {
-        comp.data = repeat(0u8).take(dc.num_mcu_x*comp.sfx*8*dc.num_mcu_y*comp.sfy*8).collect();
+        comp.data = vec::from_elem(0u8, dc.num_mcu_x*comp.sfx*8*dc.num_mcu_y*comp.sfy*8);
     }
 
     Ok(Image {
@@ -438,7 +438,7 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         return error("invalid / not supported");
     }
 
-    let mut compbuf: Vec<u8> = repeat(0u8).take(len-3).collect();
+    let mut compbuf = vec::from_elem(0u8, len-3);
     try!(dc.stream.read_exact(&mut compbuf));
 
     for i in (0 .. num_scan_comps) {
@@ -678,7 +678,7 @@ fn nextbit<R: Read>(stream: &mut R, mut cb: u8, mut bits_left: usize)
 
 fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
-    let mut result: Vec<u8> = repeat(0).take(dc.w * dc.h * tgt_bytespp).collect();
+    let mut result = vec::from_elem(0u8, dc.w * dc.h * tgt_bytespp);
 
     match (dc.num_comps, dc.tgt_fmt) {
         (3, ColFmt::RGB) | (3, ColFmt::RGBA) | (3, ColFmt::BGR) | (3, ColFmt::BGRA) => {

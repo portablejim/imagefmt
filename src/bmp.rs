@@ -1,7 +1,7 @@
 // Copyright (c) 2015 Tero Hänninen, license: MIT
 
 use std::io::{self, Read, Seek, SeekFrom};
-use std::iter::{repeat};
+use std::vec;
 use super::{
     Image, Info, ColFmt, ColType, error,
     copy_memory, converter,
@@ -99,7 +99,7 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
         124 => 5,
         _ => return error("unsupported dib version"),
     };
-    let mut dib_header: Vec<u8> = repeat(0).take(dib_size-4).collect();
+    let mut dib_header = vec::from_elem(0u8, dib_size-4);
     try!(reader.read_exact(&mut dib_header[..]));
 
     Ok(BmpHeader {
@@ -236,10 +236,9 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
 
     let (palette, mut depaletted_line) =
         if paletted {
-            let mut palette: Vec<u8> = repeat(0).take(palette_length * pe_fmt.bytes_pp())
-                                                                        .collect();
+            let mut palette = vec::from_elem(0u8, palette_length * pe_fmt.bytes_pp());
             try!(reader.read_exact(&mut palette[..]));
-            (palette, repeat(0u8).take(hdr.width as usize * pe_fmt.bytes_pp()).collect())
+            (palette, vec::from_elem(0u8, hdr.width as usize * pe_fmt.bytes_pp()))
         } else {
             (Vec::new(), Vec::new())
         };
@@ -269,13 +268,11 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
             (-tgt_linesize, (hdr.height-1) * tgt_linesize)
         };
 
-    let mut src_line_buf: Vec<u8> = repeat(0).take(src_linesize + src_pad).collect();
-    let mut bgra_line_buf: Vec<u8> =
-        if paletted { Vec::new() }
-        else { repeat(0).take(hdr.width as usize * 4).collect() };
-    let mut result: Vec<u8> =
-        repeat(0).take(hdr.width as usize * hdr.height.abs() as usize * tgt_bytespp)
-                                                                         .collect();
+    let mut src_line_buf = vec::from_elem(0u8, src_linesize + src_pad);
+    let mut bgra_line_buf = vec::from_elem(0u8, if paletted { 0 }
+                                                else { hdr.width as usize * 4 });
+    let mut result =
+        vec::from_elem(0u8, hdr.width as usize * hdr.height.abs() as usize * tgt_bytespp);
 
     for _ in (0 .. hdr.height.abs()) {
         try!(reader.read_exact(&mut src_line_buf[..]));
