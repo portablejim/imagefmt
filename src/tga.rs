@@ -1,7 +1,6 @@
 // Copyright (c) 2014-2015 Tero Hänninen, license: MIT
 
 use std::io::{self, Read, Write, Seek, SeekFrom};
-use std::vec;
 use std::cmp::min;
 use super::{
     Image, Info, ColFmt, ColType, error,
@@ -167,8 +166,8 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
     let tgt_linesize = (dc.w * tgt_bytespp) as isize;
     let src_linesize = dc.w * dc.src_bytespp;
 
-    let mut src_line = vec::from_elem(0u8, src_linesize);
-    let mut result = vec::from_elem(0u8, dc.w * dc.h * tgt_bytespp);
+    let mut src_line = vec![0u8; src_linesize];
+    let mut result = vec![0u8; dc.w * dc.h * tgt_bytespp];
 
     let (tgt_stride, mut ti): (isize, isize) =
         if dc.origin_at_top {
@@ -191,7 +190,7 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
     // ---- RLE ----
 
     let bytes_pp = dc.src_bytespp as usize;
-    let mut rbuf = vec::from_elem(0u8, src_linesize);
+    let mut rbuf = vec![0u8; src_linesize];
     let mut plen = 0;    // packet length
     let mut its_rle = false;
 
@@ -349,7 +348,7 @@ fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
 fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     let src_linesize = (ec.w * ec.src_bytespp) as usize;
     let tgt_linesize = (ec.w * ec.tgt_bytespp) as usize;
-    let mut tgt_line = vec::from_elem(0u8, tgt_linesize);
+    let mut tgt_line = vec![0u8; tgt_linesize];
     let mut si = ec.h as usize * src_linesize;
 
     let convert = try!(converter(ec.src_fmt, ec.tgt_fmt));
@@ -367,7 +366,7 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
 
     let bytes_pp = ec.tgt_bytespp as usize;
     let max_packets_per_line = (tgt_linesize+127) / 128;
-    let mut cmp_buf = vec::from_elem(0u8, tgt_linesize+max_packets_per_line);
+    let mut cmp_buf = vec![0u8; tgt_linesize+max_packets_per_line];
     for _ in (0 .. ec.h) {
         si -= src_linesize;
         convert(&ec.data[si .. si+src_linesize], &mut tgt_line[..]);

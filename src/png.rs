@@ -3,7 +3,6 @@
 extern crate flate2;
 use std::io::{self, Read, Write};
 use std::iter::{repeat};
-use std::vec;
 use std::cmp::min;
 use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
@@ -118,7 +117,7 @@ pub fn read_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8;
         src_fmt     : src_fmt,
         tgt_fmt     : if req_fmt == ColFmt::Auto { src_fmt } else { req_fmt },
         chunk_lentype : [0u8; 8],
-        readbuf     : vec::from_elem(0u8, 4096),
+        readbuf     : vec![0u8; 4096],
         crc         : Crc32::new(),
     };
 
@@ -201,7 +200,7 @@ fn decode<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                 if stage != IhdrParsed || len % 3 != 0 || 256 < entries {
                     return error("corrupt chunk stream");
                 }
-                palette = vec::from_elem(0u8, len);
+                palette = vec![0u8; len];
                 try!(dc.stream.read_exact(&mut palette));
                 dc.crc.put(&palette[..]);
                 try!(readcheck_crc(dc));
@@ -222,7 +221,7 @@ fn decode<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                 if chunk_names.iter().any(|name| &name[..] == &dc.chunk_lentype[4..8]) {
                     let name = [dc.chunk_lentype[4], dc.chunk_lentype[5],
                                 dc.chunk_lentype[6], dc.chunk_lentype[7]];
-                    let mut data = vec::from_elem(0u8, len);
+                    let mut data = vec![0u8; len];
                     try!(dc.stream.read_exact(&mut data));
                     dc.crc.put(&data[..]);
                     chunks.push(ExtChunk { name: name, data: data });
@@ -286,9 +285,9 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
     let tgt_linesize = dc.w * tgt_bytespp;
 
-    let mut result = vec::from_elem(0u8, dc.w * dc.h * tgt_bytespp);
+    let mut result = vec![0u8; dc.w * dc.h * tgt_bytespp];
     let mut depaletted_line = if dc.src_indexed {
-        vec::from_elem(0u8, dc.w * 3)
+        vec![0u8; dc.w * 3]
     } else {
         Vec::new()
     };
@@ -301,8 +300,8 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
     match dc.ilace {
         PngInterlace::None => {
             let src_linesize = dc.w * filter_step;
-            let mut cline = vec::from_elem(0u8, src_linesize+1);
-            let mut pline = vec::from_elem(0u8, src_linesize+1);
+            let mut cline = vec![0u8; src_linesize+1];
+            let mut pline = vec![0u8; src_linesize+1];
 
             let mut ti = 0;
             for _j in (0 .. dc.h) {
@@ -350,9 +349,9 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
             ];
 
             let max_scanline_size = dc.w * filter_step;
-            let mut linebuf0 = vec::from_elem(0u8, max_scanline_size+1);
-            let mut linebuf1 = vec::from_elem(0u8, max_scanline_size+1);
-            let mut redlinebuf = vec::from_elem(0u8, dc.w * tgt_bytespp);
+            let mut linebuf0 = vec![0u8; max_scanline_size+1];
+            let mut linebuf1 = vec![0u8; max_scanline_size+1];
+            let mut redlinebuf = vec![0u8; dc.w * tgt_bytespp];
 
             for pass in (0..7) {
                 let tgt_px: A7IdxTranslator = A7_IDX_TRANSLATORS[pass];   // target pixel
@@ -650,9 +649,9 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
 
     let filter_step = ec.tgt_fmt.bytes_pp();
     let tgt_linesize = ec.w * filter_step + 1;   // +1 for filter type
-    let mut cline = vec::from_elem(0u8, tgt_linesize);
-    let mut pline = vec::from_elem(0u8, tgt_linesize);
-    let mut filtered_image = vec::from_elem(0u8, tgt_linesize * ec.h);
+    let mut cline = vec![0u8; tgt_linesize];
+    let mut pline = vec![0u8; tgt_linesize];
+    let mut filtered_image = vec![0u8; tgt_linesize * ec.h];
 
     let src_linesize = ec.w * ec.src_bytespp;
 

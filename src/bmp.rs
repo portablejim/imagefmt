@@ -1,7 +1,6 @@
 // Copyright (c) 2015 Tero Hänninen, license: MIT
 
 use std::io::{self, Read, Seek, SeekFrom};
-use std::vec;
 use super::{
     Image, Info, ColFmt, ColType, error,
     copy_memory, converter,
@@ -99,7 +98,7 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
         124 => 5,
         _ => return error("unsupported dib version"),
     };
-    let mut dib_header = vec::from_elem(0u8, dib_size-4);
+    let mut dib_header = vec![0u8; dib_size-4];
     try!(reader.read_exact(&mut dib_header[..]));
 
     Ok(BmpHeader {
@@ -236,9 +235,9 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
 
     let (palette, mut depaletted_line) =
         if paletted {
-            let mut palette = vec::from_elem(0u8, palette_length * pe_fmt.bytes_pp());
+            let mut palette = vec![0u8; palette_length * pe_fmt.bytes_pp()];
             try!(reader.read_exact(&mut palette[..]));
-            (palette, vec::from_elem(0u8, hdr.width as usize * pe_fmt.bytes_pp()))
+            (palette, vec![0u8; hdr.width as usize * pe_fmt.bytes_pp()])
         } else {
             (Vec::new(), Vec::new())
         };
@@ -268,11 +267,10 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
             (-tgt_linesize, (hdr.height-1) * tgt_linesize)
         };
 
-    let mut src_line_buf = vec::from_elem(0u8, src_linesize + src_pad);
-    let mut bgra_line_buf = vec::from_elem(0u8, if paletted { 0 }
-                                                else { hdr.width as usize * 4 });
+    let mut src_line_buf = vec![0u8; src_linesize + src_pad];
+    let mut bgra_line_buf = vec![0u8; if paletted { 0 } else { hdr.width as usize * 4 }];
     let mut result =
-        vec::from_elem(0u8, hdr.width as usize * hdr.height.abs() as usize * tgt_bytespp);
+        vec![0u8; hdr.width as usize * hdr.height.abs() as usize * tgt_bytespp];
 
     for _ in (0 .. hdr.height.abs()) {
         try!(reader.read_exact(&mut src_line_buf[..]));
