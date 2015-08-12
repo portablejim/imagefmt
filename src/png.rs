@@ -619,10 +619,12 @@ fn write_header<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
     ec.stream.write_all(&crc.finish_be()[..])
 }
 
-fn write_custom_chunk<W: Write>(ec: &mut PngEncoder<W>, chunk: &ExtChunk) -> io::Result<()> {
-    if chunk.name[0] < 97 || 122 < chunk.name[0] { return error("invalid chunk name"); }
-    for b in &chunk.name[1..] {
-        if *b < 65 || (90 < *b && *b < 97) || 122 < *b {
+fn write_custom_chunk<W: Write>(ec: &mut PngEncoder<W>, chunk: &ExtChunk)
+                                                        -> io::Result<()>
+{
+    if chunk.name[0] < b'a' || b'z' < chunk.name[0] { return error("invalid chunk name"); }
+    for &b in &chunk.name[1..] {
+        if b < b'A' || (b'Z' < b && b < b'a') || b'z' < b {
             return error("invalid chunk name");
         }
     }
