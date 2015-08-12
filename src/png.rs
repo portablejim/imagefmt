@@ -594,25 +594,29 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
 }
 
 fn write_header<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
-    let mut hdr: [u8; 33] = [0; 33];
+    let mut crc = Crc32::new();
+    let width = &u32_to_be(ec.w as u32)[..];
+    let height = &u32_to_be(ec.h as u32)[..];
 
-    copy_memory(&PNG_FILE_HEADER[..]       , &mut hdr[0..8]  );
-    copy_memory(b"\0\0\0\x0dIHDR"          , &mut hdr[8..16] );
-    copy_memory(&u32_to_be(ec.w as u32)[..], &mut hdr[16..20]);
-    copy_memory(&u32_to_be(ec.h as u32)[..], &mut hdr[20..24]);
-    hdr[24] = 8;    // bit depth
-    hdr[25] = match ec.tgt_fmt {    // color type
-        ColFmt::Y => PngColortype::Y,
-        ColFmt::YA => PngColortype::YA,
-        ColFmt::RGB => PngColortype::RGB,
-        ColFmt::RGBA => PngColortype::RGBA,
-        _ => return error("not supported"),
-    } as u8;
-    copy_memory(&[0, 0, 0], &mut hdr[26..29]);  // compression, filter, interlace
-    ec.crc.put(&hdr[12..29]);
-    copy_memory(&ec.crc.finish_be()[..], &mut hdr[29..33]);
+    try!(ec.stream.write_all(&PNG_FILE_HEADER[..]));
+    try!(ec.stream.write_all(b"\0\0\0\x0dIHDR"));     crc.put(b"IHDR");
+    try!(ec.stream.write_all(width));                 crc.put(width);
+    try!(ec.stream.write_all(height));                crc.put(height);
+    let tmp = [
+        8,          // bit depth
+        match ec.tgt_fmt {    // color type
+            ColFmt::Y => PngColortype::Y,
+            ColFmt::YA => PngColortype::YA,
+            ColFmt::RGB => PngColortype::RGB,
+            ColFmt::RGBA => PngColortype::RGBA,
+            _ => return error("not supported"),
+        } as u8,
+        0, 0, 0     // compression, filter, interlace
+    ];
+    try!(ec.stream.write_all(&tmp));
+    crc.put(&tmp);
 
-    ec.stream.write_all(&hdr[..])
+    ec.stream.write_all(&crc.finish_be()[..])
 }
 
 fn write_custom_chunk<W: Write>(ec: &mut PngEncoder<W>, chunk: &ExtChunk) -> io::Result<()> {
