@@ -52,7 +52,7 @@ fn read_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
     let mut buf = [0u8; 18];
     try!(reader.read_exact(&mut buf));
 
-    Ok(TgaHeader {
+    let hdr = TgaHeader {
         id_length      : buf[0],
         palette_type   : buf[1],
         data_type      : buf[2],
@@ -65,7 +65,23 @@ fn read_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
         height         : u16_from_le(&buf[14..16]),
         bits_pp        : buf[16],
         flags          : buf[17],
-    })
+    };
+
+    if hdr.width < 1 && hdr.height < 1 && hdr.palette_type > 1
+    || (hdr.palette_type == 0 && (hdr.palette_start > 0 ||
+                                  hdr.palette_length > 0 ||
+                                  hdr.palette_bits > 0))
+    || !match hdr.data_type { 1...3 | 9...11 => true, _ => false } {
+        error("corrupt TGA header")
+    } else {
+        Ok(hdr)
+    }
+}
+
+pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
+    let result = read_header(reader).is_ok();
+    let _ = reader.seek(SeekFrom::Start(0));
+    result
 }
 
 /// Reads an image and converts it to requested format.
@@ -124,7 +140,6 @@ struct TgaInfo {
     rle       : bool,
 }
 
-// Returns: source color format and whether it's RLE compressed
 fn parse_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
     use self::TgaDataType::*;
 

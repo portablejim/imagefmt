@@ -1,7 +1,7 @@
 // Copyright (c) 2014-2015 Tero Hänninen, license: MIT
 
 extern crate flate2;
-use std::io::{self, Read, Write};
+use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::iter::{repeat};
 use std::cmp::min;
 use self::flate2::read::{ZlibDecoder, ZlibEncoder};
@@ -68,6 +68,14 @@ fn read_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
         filter_method      : buf[27],
         interlace_method   : buf[28],
     })
+}
+
+pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
+    let mut buf = [0u8; 8];
+    let result = reader.read_exact(&mut buf).is_ok()
+              && &buf[0..8] == &PNG_FILE_HEADER[..];
+    let _ = reader.seek(SeekFrom::Start(0));
+    result
 }
 
 /// Reads an image and converts it to requested format.

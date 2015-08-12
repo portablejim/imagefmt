@@ -53,6 +53,12 @@ pub fn read_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
     }
 }
 
+pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
+    let result = read_info(reader).is_ok();
+    let _ = reader.seek(SeekFrom::Start(0));
+    result
+}
+
 /// Reads an image and converts it to requested format.
 ///
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to `Y` or `RGB`.

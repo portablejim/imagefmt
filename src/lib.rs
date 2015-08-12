@@ -28,7 +28,7 @@
 
 use std::ffi::OsStr;
 use std::fs::{File};
-use std::io::{self, Read, BufReader, BufWriter, ErrorKind};
+use std::io::{self, Read, BufReader, BufWriter, ErrorKind, Seek, SeekFrom};
 use std::iter::{repeat};
 use std::path::Path;
 use std::fmt::{self, Debug};
@@ -84,39 +84,33 @@ pub enum ColType {
 
 /// Returns width, height and color type of the image.
 pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
-    let filepath: &Path = filepath.as_ref();
-    type F = fn(&mut BufReader<File>) -> io::Result<Info>;
-    let readfunc: F =
-        match filepath.extension().and_then(OsStr::to_str) {
-            Some("png")                if cfg!(feature = "png") => png::read_info,
-            Some("tga")                if cfg!(feature = "tga") => tga::read_info,
-            Some("bmp")                if cfg!(feature = "bmp") => bmp::read_info,
-            Some("jpg") | Some("jpeg") if cfg!(feature = "jpeg") => jpeg::read_info,
-            _ => return error("extension not recognized"),
-        };
     let file = try!(File::open(filepath));
-    let reader = &mut BufReader::new(file);
-    readfunc(reader)
+    let r = &mut BufReader::new(file);
+
+    fn s(r: &mut BufReader<File>) {
+        let _ = r.seek(SeekFrom::Start(0));
+    }
+
+    if cfg!(feature = "png") { match png::read_info(r) { Ok(i) => return Ok(i), _ => {s(r)} } }
+    if cfg!(feature = "jpeg") { match jpeg::read_info(r) { Ok(i) => return Ok(i), _ => {s(r)} } }
+    if cfg!(feature = "bmp") { match bmp::read_info(r) { Ok(i) => return Ok(i), _ => {s(r)} } }
+    if cfg!(feature = "tga") { match tga::read_info(r) { Ok(i) => return Ok(i), _ => {s(r)} } }
+    error("image type not recognized")
 }
 
 /// Reads an image and converts it to requested format.
 ///
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to one of `Y`, `YA`, `RGB`,
-/// `RGBA`.  Paletted images are auto-depaletted.
+/// `RGBA`.
 pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
-    let filepath: &Path = filepath.as_ref();
-    type F = fn(&mut BufReader<File>, ColFmt) -> io::Result<Image>;
-    let readfunc: F =
-        match filepath.extension().and_then(OsStr::to_str) {
-            Some("png")                if cfg!(feature = "png") => png::read,
-            Some("tga")                if cfg!(feature = "tga") => tga::read,
-            Some("bmp")                if cfg!(feature = "bmp") => bmp::read,
-            Some("jpg") | Some("jpeg") if cfg!(feature = "jpeg") => jpeg::read,
-            _ => return error("extension not recognized"),
-        };
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
-    readfunc(reader, req_fmt)
+
+    if cfg!(feature = "png") && png::detect(reader) { png::read(reader, req_fmt) }
+    else if cfg!(feature = "jpeg") && jpeg::detect(reader) { jpeg::read(reader, req_fmt) }
+    else if cfg!(feature = "bmp") && bmp::detect(reader) { bmp::read(reader, req_fmt) }
+    else if cfg!(feature = "tga") && tga::detect(reader) { tga::read(reader, req_fmt) }
+    else { error("image type not recognized") }
 }
 
 /// Writes an image and converts it to requested color type.
@@ -593,6 +587,7 @@ macro_rules! dummy_mod {
         mod $name {
             use ::{Info, Image, ColFmt, ColType};
             use std::io::{self, Read, Write};
+            pub fn detect<R: Read>(_: &mut R) -> bool { panic!("bug") }
             pub fn read_info<R: Read>(_: &mut R) -> io::Result<Info> { panic!("bug") }
             pub fn read<R: Read>(_: &mut R, _: ColFmt) -> io::Result<Image> { panic!("bug") }
             pub fn write<W: Write>(_: &mut W, _: usize, _: usize, _: ColFmt, _: &[u8],
