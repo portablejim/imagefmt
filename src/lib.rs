@@ -126,7 +126,7 @@ pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
         match filepath.extension().and_then(OsStr::to_str) {
             Some("png") if cfg!(feature = "png") => png::write,
             Some("tga") if cfg!(feature = "tga") => tga::write,
-            _ => return error("extension not supported for writing"),
+            _ => return error("image type not supported for writing"),
         };
     let file = try!(File::create(filepath));
     let writer = &mut BufWriter::new(file);
