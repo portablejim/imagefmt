@@ -253,7 +253,6 @@ fn decode<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
     Ok((result, chunks))
 }
 
-#[derive(Eq, PartialEq)]
 enum PngInterlace {
     None, Adam7
 }
@@ -268,7 +267,6 @@ impl PngInterlace {
     }
 }
 
-#[derive(Eq, PartialEq)]
 enum PngColortype {
     Y    = 0,
     RGB  = 2,
