@@ -105,8 +105,14 @@ pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
 pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
+    read_from_reader(reader, req_fmt)
+}
 
-    if cfg!(feature = "png") && png::detect(reader) { png::read(reader, req_fmt) }
+/// Like `read` but reads from a reader.
+pub fn read_from_reader<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt)
+                                                  -> io::Result<Image>
+{
+    if      cfg!(feature = "png") && png::detect(reader) { png::read(reader, req_fmt) }
     else if cfg!(feature = "jpeg") && jpeg::detect(reader) { jpeg::read(reader, req_fmt) }
     else if cfg!(feature = "bmp") && bmp::detect(reader) { bmp::read(reader, req_fmt) }
     else if cfg!(feature = "tga") && tga::detect(reader) { tga::read(reader, req_fmt) }
