@@ -772,18 +772,22 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
 
 fn upsample_gray<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    let si0yratio = dc.comps[0].y as f64 / dc.h as f64;
-    let si0xratio = dc.comps[0].x as f64 / dc.w as f64;
+    let si0yratio = dc.comps[0].y as f32 / dc.h as f32;
+    let si0xratio = dc.comps[0].x as f32 / dc.w as f32;
     let mut di = 0;
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
 
-    for j in (0 .. dc.h) {
-        let si0 = (j as f64 * si0yratio).floor() as usize * stride0;
-        for i in (0 .. dc.w) {
-            result[di] = dc.comps[0].data[si0 + (i as f64 * si0xratio).floor() as usize];
+    let mut j = 0.5;
+    while j < dc.h as f32 {
+        let si0 = (j * si0yratio) as usize * stride0;
+        let mut i = 0.5;
+        while i < dc.w as f32 {
+            result[di] = dc.comps[0].data[si0 + (i * si0xratio) as usize];
             if dc.tgt_fmt == ColFmt::YA { result[di+1] = 255; }
             di += tgt_bytespp;
+            i += 1.0;
         }
+        j += 1.0;
     }
 }
 
@@ -791,33 +795,37 @@ fn upsample_rgb<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: u
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     let stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
     let stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
-    let si0yratio = dc.comps[0].y as f64 / dc.h as f64;
-    let si1yratio = dc.comps[1].y as f64 / dc.h as f64;
-    let si2yratio = dc.comps[2].y as f64 / dc.h as f64;
-    let si0xratio = dc.comps[0].x as f64 / dc.w as f64;
-    let si1xratio = dc.comps[1].x as f64 / dc.w as f64;
-    let si2xratio = dc.comps[2].x as f64 / dc.w as f64;
+    let si0yratio = dc.comps[0].y as f32 / dc.h as f32;
+    let si1yratio = dc.comps[1].y as f32 / dc.h as f32;
+    let si2yratio = dc.comps[2].y as f32 / dc.h as f32;
+    let si0xratio = dc.comps[0].x as f32 / dc.w as f32;
+    let si1xratio = dc.comps[1].x as f32 / dc.w as f32;
+    let si2xratio = dc.comps[2].x as f32 / dc.w as f32;
 
     let mut di = 0;
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
 
-    for j in (0 .. dc.h) {
-        let si0 = (j as f64 * si0yratio).floor() as usize * stride0;
-        let si1 = (j as f64 * si1yratio).floor() as usize * stride1;
-        let si2 = (j as f64 * si2yratio).floor() as usize * stride2;
+    let mut j = 0.5;
+    while j < dc.h as f32 {
+        let si0 = (j * si0yratio) as usize * stride0;
+        let si1 = (j * si1yratio) as usize * stride1;
+        let si2 = (j * si2yratio) as usize * stride2;
 
-        for i in (0 .. dc.w) {
+        let mut i = 0.5;
+        while i < dc.w as f32 {
             let pixel = ycbcr_to_rgb(
-                dc.comps[0].data[si0 + (i as f64 * si0xratio).floor() as usize],
-                dc.comps[1].data[si1 + (i as f64 * si1xratio).floor() as usize],
-                dc.comps[2].data[si2 + (i as f64 * si2xratio).floor() as usize],
+                dc.comps[0].data[si0 + (i * si0xratio) as usize],
+                dc.comps[1].data[si1 + (i * si1xratio) as usize],
+                dc.comps[2].data[si2 + (i * si2xratio) as usize],
             );
             result[di+ri] = pixel[0];
             result[di+gi] = pixel[1];
             result[di+bi] = pixel[2];
             if dc.tgt_fmt.has_alpha() == Some(true) { result[di+3] = 255; }
             di += tgt_bytespp;
+            i += 1.0;
         }
+        j += 1.0;
     }
 }
 
