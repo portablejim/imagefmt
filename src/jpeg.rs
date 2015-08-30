@@ -694,8 +694,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
             };
 
             // Frequent cases where Cb & Cr channels have half resolution.
-            if (dc.comps[0].sfx == 2 || dc.comps[0].sfy == 2)
-            && dc.comps[0].sfx + dc.comps[0].sfy == 3
+            if (dc.comps[0].sfx <= 2 && dc.comps[0].sfy <= 2)
             && dc.comps[1].sfx == 1 && dc.comps[1].sfy == 1
             && dc.comps[2].sfx == 1 && dc.comps[2].sfy == 1 {
                 upsample_y_2_cbcr_1(dc, &mut result[..], ri, gi, bi);
