@@ -692,9 +692,20 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
                 ColFmt::BGR | ColFmt::BGRA => (2, 1, 0),
                 _ => return error("bug"),
             };
+
+            // Frequent cases where Cb & Cr channels have half resolution.
+            if (dc.comps[0].sfx == 2 || dc.comps[0].sfy == 2)
+            && dc.comps[0].sfx + dc.comps[0].sfy == 3
+            && dc.comps[1].sfx == 1 && dc.comps[1].sfy == 1
+            && dc.comps[2].sfx == 1 && dc.comps[2].sfy == 1 {
+                upsample_y_2_cbcr_1(dc, &mut result[..], ri, gi, bi);
+                return Ok(result)
+            }
+
+            // Generic resampling.
             for ref comp in &dc.comps {
                 if comp.sfx != dc.hmax || comp.sfy != dc.vmax {
-                    upsample_rgb(dc, &mut result[..], ri, gi, bi);
+                    upsample(dc, &mut result[..], ri, gi, bi);
                     return Ok(result);
                 }
             }
@@ -791,7 +802,43 @@ fn upsample_gray<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
     }
 }
 
-fn upsample_rgb<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize, bi: usize) {
+// Nearest neighbor. Requirement: luma.sfx and/or luma.sfy is 2, others 1
+fn upsample_y_2_cbcr_1<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize, bi: usize) {
+    let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
+    let stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
+    let stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
+
+    let mut di = 0;
+    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
+
+    let mut luma_j = 0;
+    for j in 0 .. dc.comps[1].y {
+        for _ in 0 .. dc.comps[0].sfy {
+            if luma_j == dc.h { break }
+            let mut luma_i = 0;
+            for i in 0 .. dc.comps[1].x {
+                for _ in 0 .. dc.comps[0].sfx {
+                    if luma_i == dc.w { break }
+                    let pixel = ycbcr_to_rgb(
+                        dc.comps[0].data[luma_j * stride0 + luma_i],
+                        dc.comps[1].data[j * stride1 + i],
+                        dc.comps[2].data[j * stride2 + i],
+                    );
+                    result[di+ri] = pixel[0];
+                    result[di+gi] = pixel[1];
+                    result[di+bi] = pixel[2];
+                    if dc.tgt_fmt.has_alpha() == Some(true) { result[di+3] = 255; }
+                    di += tgt_bytespp;
+                    luma_i += 1;
+                }
+            }
+            luma_j += 1;
+        }
+    }
+}
+
+// Generic nearest neighbor
+fn upsample<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize, bi: usize) {
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     let stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
     let stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
