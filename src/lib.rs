@@ -505,7 +505,7 @@ fn bgra_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
 
 trait IFRead {
     fn read_u8(&mut self) -> io::Result<u8>;
-    fn read_exact(&mut self, buf: &mut[u8]) -> io::Result<()>;
+    fn read_exact_(&mut self, buf: &mut[u8]) -> io::Result<()>;
 }
 
 impl<R: Read> IFRead for R {
@@ -518,7 +518,7 @@ impl<R: Read> IFRead for R {
         }
     }
 
-    fn read_exact(&mut self, buf: &mut[u8]) -> io::Result<()> {
+    fn read_exact_(&mut self, buf: &mut[u8]) -> io::Result<()> {
         let mut ready = 0;
         while ready < buf.len() {
             let got = try!(self.read(&mut buf[ready..]));
