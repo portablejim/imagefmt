@@ -81,7 +81,7 @@ struct DibV5 {
 /// Reads a BMP header.
 fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
     let mut bmp_header = [0u8; 18]; // bmp header + size of dib header
-    try!(reader.read_exact(&mut bmp_header[..]));
+    try!(reader.read_exact_(&mut bmp_header[..]));
 
     if &bmp_header[0..2] != [0x42, 0x4d] {
         return error("corrupt bmp header");
@@ -99,7 +99,7 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
         _ => return error("unsupported dib version"),
     };
     let mut dib_header = vec![0u8; dib_size-4];
-    try!(reader.read_exact(&mut dib_header[..]));
+    try!(reader.read_exact_(&mut dib_header[..]));
 
     Ok(BmpHeader {
         file_size             : u32_from_le(&bmp_header[2..6]),
@@ -168,7 +168,7 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
 pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
     let mut bmp_header = [0u8; 18]; // bmp header + size of dib header
     let result =
-        reader.read_exact(&mut bmp_header[..]).is_ok()
+        reader.read_exact_(&mut bmp_header[..]).is_ok()
         && &bmp_header[0..2] == [0x42, 0x4d]
         && match u32_from_le(&bmp_header[14..18]) {
             12 | 40 | 52 | 56 | 108 | 124 => true,
@@ -249,7 +249,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     let (palette, mut depaletted_line) =
         if paletted {
             let mut palette = vec![0u8; palette_length * pe_fmt.bytes_pp()];
-            try!(reader.read_exact(&mut palette[..]));
+            try!(reader.read_exact_(&mut palette[..]));
             (palette, vec![0u8; hdr.width as usize * pe_fmt.bytes_pp()])
         } else {
             (Vec::new(), Vec::new())
@@ -286,7 +286,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         vec![0u8; hdr.width as usize * hdr.height.abs() as usize * tgt_bytespp];
 
     for _ in (0 .. hdr.height.abs()) {
-        try!(reader.read_exact(&mut src_line_buf[..]));
+        try!(reader.read_exact_(&mut src_line_buf[..]));
         let src_line = &src_line_buf[..src_linesize];
 
         if paletted {
