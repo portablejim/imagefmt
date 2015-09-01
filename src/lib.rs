@@ -85,9 +85,13 @@ pub enum ColType {
 /// Returns width, height and color type of the image.
 pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
     let file = try!(File::open(filepath));
-    let r = &mut BufReader::new(file);
+    let reader = &mut BufReader::new(file);
+    read_info_from(reader)
+}
 
-    fn s(r: &mut BufReader<File>) {
+/// Like `read_info` but reads from a reader.
+pub fn read_info_from<R: Read+Seek>(r: &mut R) -> io::Result<Info> {
+    fn s<R: Read+Seek>(r: &mut R) {
         let _ = r.seek(SeekFrom::Start(0));
     }
 
@@ -105,13 +109,11 @@ pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
 pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
-    read_from_reader(reader, req_fmt)
+    read_from(reader, req_fmt)
 }
 
 /// Like `read` but reads from a reader.
-pub fn read_from_reader<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt)
-                                                  -> io::Result<Image>
-{
+pub fn read_from<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     if      cfg!(feature = "png") && png::detect(reader) { png::read(reader, req_fmt) }
     else if cfg!(feature = "jpeg") && jpeg::detect(reader) { jpeg::read(reader, req_fmt) }
     else if cfg!(feature = "bmp") && bmp::detect(reader) { bmp::read(reader, req_fmt) }
