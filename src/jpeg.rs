@@ -693,11 +693,55 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
                 _ => return error("bug"),
             };
 
-            // Frequent cases where Cb & Cr channels have half resolution.
+            // Use specialized bilinear filtering functions for the frequent cases where
+            // Cb & Cr channels have half resolution.
             if (dc.comps[0].sfx <= 2 && dc.comps[0].sfy <= 2)
+            && (dc.comps[0].sfx + dc.comps[0].sfy >= 3)
             && dc.comps[1].sfx == 1 && dc.comps[1].sfy == 1
             && dc.comps[2].sfx == 1 && dc.comps[2].sfy == 1 {
-                upsample_y_2_cbcr_1(dc, &mut result[..], ri, gi, bi);
+                let resample: fn(&[u8], &[u8], &mut[u8]) =
+                    match (dc.comps[0].sfx, dc.comps[0].sfy) {
+                        (2, 2) => upsample_h2_v2,
+                        (2, 1) => upsample_h2_v1,
+                        (1, 2) => upsample_h1_v2,
+                        (_, _) => return error("bug"),
+                    };
+
+                let mut comp1 = vec![0u8; dc.w];
+                let mut comp2 = vec![0u8; dc.w];
+
+                let mut s = 0;
+                let mut di = 0;
+                for j in (0 .. dc.h) {
+                    let mi = j / dc.comps[0].sfy;
+                    let si = if mi == 0 || mi >= (dc.h-1)/dc.comps[0].sfy { mi }
+                                                         else { mi - 1 + s * 2 };
+                    s = s ^ 1;
+
+                    let cs = dc.num_mcu_x * dc.comps[1].sfx * 8;
+                    let cl0 = mi * cs;
+                    let cl1 = si * cs;
+                    resample(&dc.comps[1].data[cl0 .. cl0 + dc.comps[1].x],
+                             &dc.comps[1].data[cl1 .. cl1 + dc.comps[1].x],
+                             &mut comp1[..]);
+                    resample(&dc.comps[2].data[cl0 .. cl0 + dc.comps[2].x],
+                             &dc.comps[2].data[cl1 .. cl1 + dc.comps[2].x],
+                             &mut comp2[..]);
+
+                    for i in (0 .. dc.w) {
+                        let pixel = ycbcr_to_rgb(
+                            dc.comps[0].data[j * dc.num_mcu_x * dc.comps[0].sfx * 8 + i],
+                            comp1[i],
+                            comp2[i],
+                        );
+                        result[di+ri] = pixel[0];
+                        result[di+gi] = pixel[1];
+                        result[di+bi] = pixel[2];
+                        if dc.tgt_fmt.has_alpha() == Some(true) { result[di+3] = 255; }
+                        di += tgt_bytespp;
+                    }
+                }
+
                 return Ok(result)
             }
 
@@ -780,98 +824,143 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
     }
 }
 
-fn upsample_gray<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
-    let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    let si0yratio = dc.comps[0].y as f32 / dc.h as f32;
-    let si0xratio = dc.comps[0].x as f32 / dc.w as f32;
-    let mut di = 0;
-    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
+fn upsample_h2_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
+    fn mix(mm: u8, ms: u8, sm: u8, ss: u8) -> u8 {
+        ( mm as f32 * 0.75 * 0.75
+        + ms as f32 * 0.75 * 0.25
+        + sm as f32 * 0.25 * 0.75
+        + ss as f32 * 0.25 * 0.25) as u8
+    }
 
-    let mut j = 0.5;
-    while j < dc.h as f32 {
-        let si0 = (j * si0yratio) as usize * stride0;
-        let mut i = 0.5;
-        while i < dc.w as f32 {
-            result[di] = dc.comps[0].data[si0 + (i * si0xratio) as usize];
-            if dc.tgt_fmt == ColFmt::YA { result[di+1] = 255; }
-            di += tgt_bytespp;
-            i += 1.0;
+    result[0] = ( line0[0] as f32 * 0.75
+                + line1[0] as f32 * 0.25 ) as u8;
+    if line0.len() == 1 { return }
+    result[1] = mix(line0[0], line0[1], line1[0], line1[1]);
+
+    let mut di = 2;
+    for i in (1 .. line0.len()) {
+        result[di] = mix(line0[i], line0[i-1], line1[i], line1[i-1]);
+        di += 1;
+        if i == line0.len()-1 {
+            if di < result.len() {
+                result[di] = ( line0[i] as f32 * 0.75
+                             + line1[i] as f32 * 0.25 ) as u8;
+            };
+            return;
         }
-        j += 1.0;
+        result[di] = mix(line0[i], line0[i+1], line1[i], line1[i+1]);
+        di += 1;
     }
 }
 
-// Nearest neighbor. Requirement: luma.sfx and/or luma.sfy is 2, others 1
-fn upsample_y_2_cbcr_1<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize, bi: usize) {
+fn upsample_h2_v1(line0: &[u8], _line1: &[u8], result: &mut[u8]) {
+    result[0] = line0[0];
+    if line0.len() == 1 { return }
+    result[1] = (line0[0] as f32 * 0.75 + line0[1] as f32 * 0.25) as u8;
+    let mut di = 2;
+    for i in (1 .. line0.len()) {
+        result[di] = ( line0[i-1] as f32 * 0.25
+                     + line0[i+0] as f32 * 0.75) as u8;
+        di += 1;
+        if i == line0.len()-1 {
+            if di < result.len() { result[di] = line0[i] };
+            return;
+        }
+        result[di] = ( line0[i+0] as f32 * 0.75
+                     + line0[i+1] as f32 * 0.25) as u8;
+        di += 1;
+    }
+}
+
+fn upsample_h1_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
+    for i in (0 .. result.len()) {
+        result[i] = ( line0[i] as f32 * 0.75
+                    + line1[i] as f32 * 0.25) as u8;
+    }
+}
+
+// Nearest neighbor.
+fn upsample_gray<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    let stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
-    let stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
+    let c0y_step = dc.comps[0].sfy as f32 / dc.vmax as f32;
+    let c0x_step = dc.comps[0].sfx as f32 / dc.hmax as f32;
+
+    let mut c0y = c0y_step * 0.5;
+    let mut c0yi = 0;
 
     let mut di = 0;
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
 
-    let mut luma_j = 0;
-    for j in 0 .. dc.comps[1].y {
-        for _ in 0 .. dc.comps[0].sfy {
-            if luma_j == dc.h { break }
-            let mut luma_i = 0;
-            for i in 0 .. dc.comps[1].x {
-                for _ in 0 .. dc.comps[0].sfx {
-                    if luma_i == dc.w { break }
-                    let pixel = ycbcr_to_rgb(
-                        dc.comps[0].data[luma_j * stride0 + luma_i],
-                        dc.comps[1].data[j * stride1 + i],
-                        dc.comps[2].data[j * stride2 + i],
-                    );
-                    result[di+ri] = pixel[0];
-                    result[di+gi] = pixel[1];
-                    result[di+bi] = pixel[2];
-                    if dc.tgt_fmt.has_alpha() == Some(true) { result[di+3] = 255; }
-                    di += tgt_bytespp;
-                    luma_i += 1;
-                }
-            }
-            luma_j += 1;
+    for _ in 0 .. dc.h {
+        let mut c0x = c0x_step * 0.5;
+        let mut c0xi = 0;
+        for _ in 0 .. dc.w {
+            result[di] = dc.comps[0].data[c0yi + c0xi];
+            if dc.tgt_fmt == ColFmt::YA { result[di+1] = 255; }
+            di += tgt_bytespp;
+            c0x += c0x_step;
+            if c0x >= 1.0 { c0x -= 1.0; c0xi += 1; }
         }
+        c0y += c0y_step;
+        if c0y >= 1.0 { c0y -= 1.0; c0yi += stride0; }
     }
 }
 
 // Generic nearest neighbor
-fn upsample<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize, bi: usize) {
+fn upsample<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize,
+                                                                       bi: usize)
+{
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     let stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
     let stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
-    let si0yratio = dc.comps[0].y as f32 / dc.h as f32;
-    let si1yratio = dc.comps[1].y as f32 / dc.h as f32;
-    let si2yratio = dc.comps[2].y as f32 / dc.h as f32;
-    let si0xratio = dc.comps[0].x as f32 / dc.w as f32;
-    let si1xratio = dc.comps[1].x as f32 / dc.w as f32;
-    let si2xratio = dc.comps[2].x as f32 / dc.w as f32;
+    let c0y_step = dc.comps[0].sfy as f32 / dc.vmax as f32;
+    let c1y_step = dc.comps[1].sfy as f32 / dc.vmax as f32;
+    let c2y_step = dc.comps[2].sfy as f32 / dc.vmax as f32;
+    let mut c0y = c0y_step * 0.5;
+    let mut c1y = c1y_step * 0.5;
+    let mut c2y = c2y_step * 0.5;
+    let mut c0yi = 0;
+    let mut c1yi = 0;
+    let mut c2yi = 0;
+
+    let c0x_step = dc.comps[0].sfx as f32 / dc.hmax as f32;
+    let c1x_step = dc.comps[1].sfx as f32 / dc.hmax as f32;
+    let c2x_step = dc.comps[2].sfx as f32 / dc.hmax as f32;
 
     let mut di = 0;
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
 
-    let mut j = 0.5;
-    while j < dc.h as f32 {
-        let si0 = (j * si0yratio) as usize * stride0;
-        let si1 = (j * si1yratio) as usize * stride1;
-        let si2 = (j * si2yratio) as usize * stride2;
-
-        let mut i = 0.5;
-        while i < dc.w as f32 {
+    for _j in 0 .. dc.h {
+        let mut c0x = c0x_step * 0.5;
+        let mut c1x = c1x_step * 0.5;
+        let mut c2x = c2x_step * 0.5;
+        let mut c0xi = 0;
+        let mut c1xi = 0;
+        let mut c2xi = 0;
+        for _i in 0 .. dc.w {
             let pixel = ycbcr_to_rgb(
-                dc.comps[0].data[si0 + (i * si0xratio) as usize],
-                dc.comps[1].data[si1 + (i * si1xratio) as usize],
-                dc.comps[2].data[si2 + (i * si2xratio) as usize],
+                dc.comps[0].data[c0yi + c0xi],
+                dc.comps[1].data[c1yi + c1xi],
+                dc.comps[2].data[c2yi + c2xi],
             );
             result[di+ri] = pixel[0];
             result[di+gi] = pixel[1];
             result[di+bi] = pixel[2];
             if dc.tgt_fmt.has_alpha() == Some(true) { result[di+3] = 255; }
             di += tgt_bytespp;
-            i += 1.0;
+            c0x += c0x_step;
+            c1x += c1x_step;
+            c2x += c2x_step;
+            if c0x >= 1.0 { c0x -= 1.0; c0xi += 1; }
+            if c1x >= 1.0 { c1x -= 1.0; c1xi += 1; }
+            if c2x >= 1.0 { c2x -= 1.0; c2xi += 1; }
         }
-        j += 1.0;
+        c0y += c0y_step;
+        c1y += c1y_step;
+        c2y += c2y_step;
+        if c0y >= 1.0 { c0y -= 1.0; c0yi += stride0; }
+        if c1y >= 1.0 { c1y -= 1.0; c1yi += stride1; }
+        if c2y >= 1.0 { c2y -= 1.0; c2yi += stride2; }
     }
 }
 
