@@ -826,14 +826,16 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
 
 fn upsample_h2_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
     fn mix(mm: u8, ms: u8, sm: u8, ss: u8) -> u8 {
-        ( mm as f32 * 0.75 * 0.75
-        + ms as f32 * 0.75 * 0.25
-        + sm as f32 * 0.25 * 0.75
-        + ss as f32 * 0.25 * 0.25) as u8
+       (( mm as u32 * 3 * 3
+        + ms as u32 * 3 * 1
+        + sm as u32 * 1 * 3
+        + ss as u32 * 1 * 1
+        + 8) / 16) as u8
     }
 
-    result[0] = ( line0[0] as f32 * 0.75
-                + line1[0] as f32 * 0.25 ) as u8;
+    result[0] = (( line0[0] as u32 * 3
+                 + line1[0] as u32 * 1
+                 + 2) / 4) as u8;
     if line0.len() == 1 { return }
     result[1] = mix(line0[0], line0[1], line1[0], line1[1]);
 
@@ -843,8 +845,9 @@ fn upsample_h2_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
         di += 1;
         if i == line0.len()-1 {
             if di < result.len() {
-                result[di] = ( line0[i] as f32 * 0.75
-                             + line1[i] as f32 * 0.25 ) as u8;
+                result[di] = (( line0[i] as u32 * 3
+                              + line1[i] as u32 * 1
+                              + 2) / 4) as u8;
             };
             return;
         }
@@ -856,26 +859,31 @@ fn upsample_h2_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
 fn upsample_h2_v1(line0: &[u8], _line1: &[u8], result: &mut[u8]) {
     result[0] = line0[0];
     if line0.len() == 1 { return }
-    result[1] = (line0[0] as f32 * 0.75 + line0[1] as f32 * 0.25) as u8;
+    result[1] = (( line0[0] as u32 * 3
+                 + line0[1] as u32 * 1
+                 + 2) / 4) as u8;
     let mut di = 2;
     for i in (1 .. line0.len()) {
-        result[di] = ( line0[i-1] as f32 * 0.25
-                     + line0[i+0] as f32 * 0.75) as u8;
+        result[di] = (( line0[i-1] as u32 * 1
+                      + line0[i+0] as u32 * 3
+                      + 2) / 4) as u8;
         di += 1;
         if i == line0.len()-1 {
             if di < result.len() { result[di] = line0[i] };
             return;
         }
-        result[di] = ( line0[i+0] as f32 * 0.75
-                     + line0[i+1] as f32 * 0.25) as u8;
+        result[di] = (( line0[i+0] as u32 * 3
+                      + line0[i+1] as u32 * 1
+                      + 2) / 4) as u8;
         di += 1;
     }
 }
 
 fn upsample_h1_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
     for i in (0 .. result.len()) {
-        result[i] = ( line0[i] as f32 * 0.75
-                    + line1[i] as f32 * 0.25) as u8;
+        result[i] = (( line0[i] as u32 * 3
+                     + line1[i] as u32 * 1
+                     + 2) / 4) as u8;
     }
 }
 
