@@ -34,6 +34,7 @@ struct BmpHeader {
     pub width                 : isize,
     pub height                : isize,
     pub planes                : u16,
+    pub bits_pp               : usize,
     pub dib_v1                : Option<DibV1>,
     pub dib_v2                : Option<DibV2>,
     pub dib_v3_alpha_mask     : Option<u32>,
@@ -44,7 +45,6 @@ struct BmpHeader {
 /// Optional part of a BMP header.
 #[derive(Debug)]
 struct DibV1 {
-    pub bits_pp               : usize,
     pub compression           : u32,
     pub idat_size             : usize,
     pub pixels_per_meter_x    : usize,
@@ -101,17 +101,30 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
     let mut dib_header = vec![0u8; dib_size-4];
     try!(reader.read_exact_(&mut dib_header[..]));
 
+    let (width, height, planes, bits_pp) =
+        if dib_version == 0 {
+            ( u16_from_le(&dib_header[0..2]) as isize
+            , u16_from_le(&dib_header[2..4]) as isize
+            , u16_from_le(&dib_header[4..6])
+            , u16_from_le(&dib_header[6..8]) as usize)
+        } else {
+            ( i32_from_le(&dib_header[0..4]) as isize
+            , i32_from_le(&dib_header[4..8]) as isize
+            , u16_from_le(&dib_header[8..10])
+            , u16_from_le(&dib_header[10..12]) as usize)
+        };
+
     Ok(BmpHeader {
         file_size             : u32_from_le(&bmp_header[2..6]),
         pixel_data_offset     : u32_from_le(&bmp_header[10..14]) as usize,
-        width                 : i32_from_le(&dib_header[0..4]) as isize,
-        height                : i32_from_le(&dib_header[4..8]) as isize,
-        planes                : u16_from_le(&dib_header[8..10]),
+        width                 : width,
+        height                : height,
+        planes                : planes,
+        bits_pp               : bits_pp,
         dib_size              : dib_size,
         dib_v1:
             if 1 <= dib_version {
                 Some(DibV1 {
-                    bits_pp               : u16_from_le(&dib_header[10..12]) as usize,
                     compression           : u32_from_le(&dib_header[12..16]),
                     idat_size             : u32_from_le(&dib_header[16..20]) as usize,
                     pixels_per_meter_x    : u32_from_le(&dib_header[20..24]) as usize,
@@ -201,7 +214,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     let (bytes_pp, paletted, palette_length, rgb_masked) =
         if let Some(ref dv1) = hdr.dib_v1 {
             if 256 < dv1.palette_length { return error("ivnalid palette length") }
-            if dv1.bits_pp <= 8
+            if hdr.bits_pp <= 8
             && (dv1.palette_length == 0 || dv1.compression != CMP_RGB) {
                  return error("invalid format")
             }
@@ -210,7 +223,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
             }
             let rgb_masked = dv1.compression == CMP_BITS;
 
-            match dv1.bits_pp {
+            match hdr.bits_pp {
                 8   => (1, true,  dv1.palette_length, rgb_masked),
                 24  => (3, false, dv1.palette_length, rgb_masked),
                 32  => (4, false, dv1.palette_length, rgb_masked),
