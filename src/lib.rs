@@ -88,11 +88,12 @@ pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
     read_info_from(reader)
 }
 
-/// Like `read_info` but reads from a reader.
+/// Like `read_info` but reads from a reader. If it fails, it seeks back to where started.
 pub fn read_info_from<R: Read+Seek>(r: &mut R) -> io::Result<Info> {
-    fn s<R: Read+Seek>(r: &mut R) {
-        let _ = r.seek(SeekFrom::Start(0));
-    }
+    let start = try!(r.seek(SeekFrom::Current(0)));
+    let s = |r: &mut R| {
+        let _ = r.seek(SeekFrom::Start(start));
+    };
 
     if cfg!(feature = "png") { match png::read_info(r) { Ok(i) => return Ok(i), _ => {s(r)} } }
     if cfg!(feature = "jpeg") { match jpeg::read_info(r) { Ok(i) => return Ok(i), _ => {s(r)} } }

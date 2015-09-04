@@ -54,8 +54,10 @@ pub fn read_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
 }
 
 pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
+    let start = match reader.seek(SeekFrom::Current(0))
+        { Ok(s) => s, Err(_) => return false };
     let result = read_info(reader).is_ok();
-    let _ = reader.seek(SeekFrom::Start(0));
+    let _ = reader.seek(SeekFrom::Start(start));
     result
 }
 

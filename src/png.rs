@@ -72,9 +72,11 @@ fn read_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
 
 pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
     let mut buf = [0u8; 8];
+    let start = match reader.seek(SeekFrom::Current(0))
+        { Ok(s) => s, Err(_) => return false };
     let result = reader.read_exact_(&mut buf).is_ok()
               && &buf[0..8] == &PNG_FILE_HEADER[..];
-    let _ = reader.seek(SeekFrom::Start(0));
+    let _ = reader.seek(SeekFrom::Start(start));
     result
 }
 

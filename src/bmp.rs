@@ -167,6 +167,8 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
 
 pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
     let mut bmp_header = [0u8; 18]; // bmp header + size of dib header
+    let start = match reader.seek(SeekFrom::Current(0))
+        { Ok(s) => s, Err(_) => return false };
     let result =
         reader.read_exact_(&mut bmp_header[..]).is_ok()
         && &bmp_header[0..2] == [0x42, 0x4d]
@@ -174,7 +176,7 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
             12 | 40 | 52 | 56 | 108 | 124 => true,
             _ => false,
         };
-    let _ = reader.seek(SeekFrom::Start(0));
+    let _ = reader.seek(SeekFrom::Start(start));
     result
 }
 
