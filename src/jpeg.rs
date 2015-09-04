@@ -777,7 +777,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
         (_, ColFmt::Y) | (_, ColFmt::YA) => {
             let comp = &dc.comps[0];
             if comp.sfx != dc.hmax || comp.sfy != dc.vmax {
-                upsample_gray(dc, &mut result[..]);
+                upsample_luma(dc, &mut result[..]);
                 return Ok(result);
             }
 
@@ -888,29 +888,29 @@ fn upsample_h1_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
 }
 
 // Nearest neighbor.
-fn upsample_gray<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
+fn upsample_luma<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
-    let c0y_step = dc.comps[0].sfy as f32 / dc.vmax as f32;
-    let c0x_step = dc.comps[0].sfx as f32 / dc.hmax as f32;
+    let y0_step = dc.comps[0].sfy as f32 / dc.vmax as f32;
+    let x0_step = dc.comps[0].sfx as f32 / dc.hmax as f32;
 
-    let mut c0y = c0y_step * 0.5;
-    let mut c0yi = 0;
+    let mut y0 = y0_step * 0.5;
+    let mut y0i = 0;
 
     let mut di = 0;
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
 
     for _ in 0 .. dc.h {
-        let mut c0x = c0x_step * 0.5;
-        let mut c0xi = 0;
+        let mut x0 = x0_step * 0.5;
+        let mut x0i = 0;
         for _ in 0 .. dc.w {
-            result[di] = dc.comps[0].data[c0yi + c0xi];
+            result[di] = dc.comps[0].data[y0i + x0i];
             if dc.tgt_fmt == ColFmt::YA { result[di+1] = 255; }
             di += tgt_bytespp;
-            c0x += c0x_step;
-            if c0x >= 1.0 { c0x -= 1.0; c0xi += 1; }
+            x0 += x0_step;
+            if x0 >= 1.0 { x0 -= 1.0; x0i += 1; }
         }
-        c0y += c0y_step;
-        if c0y >= 1.0 { c0y -= 1.0; c0yi += stride0; }
+        y0 += y0_step;
+        if y0 >= 1.0 { y0 -= 1.0; y0i += stride0; }
     }
 }
 
@@ -921,54 +921,54 @@ fn upsample<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     let stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
     let stride2 = dc.num_mcu_x * dc.comps[2].sfx * 8;
-    let c0y_step = dc.comps[0].sfy as f32 / dc.vmax as f32;
-    let c1y_step = dc.comps[1].sfy as f32 / dc.vmax as f32;
-    let c2y_step = dc.comps[2].sfy as f32 / dc.vmax as f32;
-    let mut c0y = c0y_step * 0.5;
-    let mut c1y = c1y_step * 0.5;
-    let mut c2y = c2y_step * 0.5;
-    let mut c0yi = 0;
-    let mut c1yi = 0;
-    let mut c2yi = 0;
+    let y0_step = dc.comps[0].sfy as f32 / dc.vmax as f32;
+    let y1_step = dc.comps[1].sfy as f32 / dc.vmax as f32;
+    let y2_step = dc.comps[2].sfy as f32 / dc.vmax as f32;
+    let mut y0 = y0_step * 0.5;
+    let mut y1 = y1_step * 0.5;
+    let mut y2 = y2_step * 0.5;
+    let mut y0i = 0;
+    let mut y1i = 0;
+    let mut y2i = 0;
 
-    let c0x_step = dc.comps[0].sfx as f32 / dc.hmax as f32;
-    let c1x_step = dc.comps[1].sfx as f32 / dc.hmax as f32;
-    let c2x_step = dc.comps[2].sfx as f32 / dc.hmax as f32;
+    let x0_step = dc.comps[0].sfx as f32 / dc.hmax as f32;
+    let x1_step = dc.comps[1].sfx as f32 / dc.hmax as f32;
+    let x2_step = dc.comps[2].sfx as f32 / dc.hmax as f32;
 
     let mut di = 0;
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
 
     for _j in 0 .. dc.h {
-        let mut c0x = c0x_step * 0.5;
-        let mut c1x = c1x_step * 0.5;
-        let mut c2x = c2x_step * 0.5;
-        let mut c0xi = 0;
-        let mut c1xi = 0;
-        let mut c2xi = 0;
+        let mut x0 = x0_step * 0.5;
+        let mut x1 = x1_step * 0.5;
+        let mut x2 = x2_step * 0.5;
+        let mut x0i = 0;
+        let mut x1i = 0;
+        let mut x2i = 0;
         for _i in 0 .. dc.w {
             let pixel = ycbcr_to_rgb(
-                dc.comps[0].data[c0yi + c0xi],
-                dc.comps[1].data[c1yi + c1xi],
-                dc.comps[2].data[c2yi + c2xi],
+                dc.comps[0].data[y0i + x0i],
+                dc.comps[1].data[y1i + x1i],
+                dc.comps[2].data[y2i + x2i],
             );
             result[di+ri] = pixel[0];
             result[di+gi] = pixel[1];
             result[di+bi] = pixel[2];
             if dc.tgt_fmt.has_alpha() == Some(true) { result[di+3] = 255; }
             di += tgt_bytespp;
-            c0x += c0x_step;
-            c1x += c1x_step;
-            c2x += c2x_step;
-            if c0x >= 1.0 { c0x -= 1.0; c0xi += 1; }
-            if c1x >= 1.0 { c1x -= 1.0; c1xi += 1; }
-            if c2x >= 1.0 { c2x -= 1.0; c2xi += 1; }
+            x0 += x0_step;
+            x1 += x1_step;
+            x2 += x2_step;
+            if x0 >= 1.0 { x0 -= 1.0; x0i += 1; }
+            if x1 >= 1.0 { x1 -= 1.0; x1i += 1; }
+            if x2 >= 1.0 { x2 -= 1.0; x2i += 1; }
         }
-        c0y += c0y_step;
-        c1y += c1y_step;
-        c2y += c2y_step;
-        if c0y >= 1.0 { c0y -= 1.0; c0yi += stride0; }
-        if c1y >= 1.0 { c1y -= 1.0; c1yi += stride1; }
-        if c2y >= 1.0 { c2y -= 1.0; c2yi += stride2; }
+        y0 += y0_step;
+        y1 += y1_step;
+        y2 += y2_step;
+        if y0 >= 1.0 { y0 -= 1.0; y0i += stride0; }
+        if y1 >= 1.0 { y1 -= 1.0; y1i += stride1; }
+        if y2 >= 1.0 { y2 -= 1.0; y2i += stride2; }
     }
 }
 
