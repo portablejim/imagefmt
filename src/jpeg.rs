@@ -848,7 +848,7 @@ fn upsample_h2_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
                 result[di] = (( line0[i] as u32 * 3
                               + line1[i] as u32 * 1
                               + 2) / 4) as u8;
-            };
+            }
             return;
         }
         result[di] = mix(line0[i], line0[i+1], line1[i], line1[i+1]);
