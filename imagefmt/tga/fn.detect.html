@@ -4,12 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `write` fn in crate `imagefmt`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, write">
+    <meta name="description" content="API documentation for the Rust `detect` fn in crate `imagefmt`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, detect">
 
-    <title>imagefmt::write - Rust</title>
+    <title>imagefmt::tga::detect - Rust</title>
 
-    <link rel="stylesheet" type="text/css" href="../main.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
 
     
     
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='index.html'>imagefmt</a></p><script>window.sidebarCurrent = {name: 'write', ty: 'fn', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+        <p class='location'><a href='../index.html'>imagefmt</a>::<wbr><a href='index.html'>tga</a></p><script>window.sidebarCurrent = {name: 'detect', ty: 'fn', relpath: ''};</script><script defer src="sidebar-items.js"></script>
     </section>
 
     <nav class="sub">
@@ -41,13 +41,12 @@
     </nav>
 
     <section id='main' class="content fn">
-<h1 class='fqn'><span class='in-band'>Function <a href='index.html'>imagefmt</a>::<wbr><a class='fn' href=''>write</a></span><span class='out-of-band'><span id='render-detail'>
+<h1 class='fqn'><span class='in-band'>Function <a href='../index.html'>imagefmt</a>::<wbr><a href='index.html'>tga</a>::<wbr><a class='fn' href=''>detect</a></span><span class='out-of-band'><span id='render-detail'>
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-17846' class='srclink' href='../src/imagefmt/lib.rs.html#125-142' title='goto source code'>[src]</a></span></h1>
-<pre class='rust fn'>pub fn write&lt;P&gt;(filepath: P, w: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, h: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, src_fmt: <a class='enum' href='../imagefmt/enum.ColFmt.html' title='imagefmt::ColFmt'>ColFmt</a>, data: <a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a><a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, tgt_type: <a class='enum' href='../imagefmt/enum.ColType.html' title='imagefmt::ColType'>ColType</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/std/io/error/type.Result.html' title='std::io::error::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt; <span class='where'>where P: <a class='trait' href='http://doc.rust-lang.org/nightly/core/convert/trait.AsRef.html' title='core::convert::AsRef'>AsRef</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/std/path/struct.Path.html' title='std::path::Path'>Path</a>&gt;</span></pre><div class='docblock'><p>Writes an image and converts it to requested color type.</p>
-</div></section>
+        </span><a id='src-5106' class='srclink' href='../../src/imagefmt/tga.rs.html#81-87' title='goto source code'>[src]</a></span></h1>
+<pre class='rust fn'>pub fn detect&lt;R: <a class='trait' href='http://doc.rust-lang.org/nightly/std/io/trait.Read.html' title='std::io::Read'>Read</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/std/io/trait.Seek.html' title='std::io::Seek'>Seek</a>&gt;(reader: &amp;mut R) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></pre></section>
     <section id='search' class="content hidden"></section>
 
     <section class="footer"></section>
@@ -90,13 +89,13 @@
     
 
     <script>
-        window.rootPath = "../";
+        window.rootPath = "../../";
         window.currentCrate = "imagefmt";
         window.playgroundUrl = "";
     </script>
-    <script src="../jquery.js"></script>
-    <script src="../main.js"></script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
     
-    <script async src="../search-index.js"></script>
+    <script async src="../../search-index.js"></script>
 </body>
 </html>

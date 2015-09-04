@@ -834,11 +834,21 @@
 <span id="792">792</span>
 <span id="793">793</span>
 <span id="794">794</span>
+<span id="795">795</span>
+<span id="796">796</span>
+<span id="797">797</span>
+<span id="798">798</span>
+<span id="799">799</span>
+<span id="800">800</span>
+<span id="801">801</span>
+<span id="802">802</span>
+<span id="803">803</span>
+<span id="804">804</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright (c) 2014-2015 Tero Hänninen, license: MIT</span>
 
 <span class='kw'>extern</span> <span class='kw'>crate</span> <span class='ident'>flate2</span>;
-<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::{<span class='self'>self</span>, <span class='ident'>Read</span>, <span class='ident'>Write</span>};
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::{<span class='self'>self</span>, <span class='ident'>Read</span>, <span class='ident'>Write</span>, <span class='ident'>Seek</span>, <span class='ident'>SeekFrom</span>};
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>iter</span>::{<span class='ident'>repeat</span>};
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>cmp</span>::<span class='ident'>min</span>;
 <span class='kw'>use</span> <span class='self'>self</span>::<span class='ident'>flate2</span>::<span class='ident'>read</span>::{<span class='ident'>ZlibDecoder</span>, <span class='ident'>ZlibEncoder</span>};
@@ -887,7 +897,7 @@
 <span class='doccomment'>/// The fields are not parsed into enums or anything like that.</span>
 <span class='kw'>fn</span> <span class='ident'>read_header</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>PngHeader</span><span class='op'>&gt;</span> {
     <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>buf</span> <span class='op'>=</span> [<span class='number'>0u8</span>; <span class='number'>33</span>];  <span class='comment'>// file header + IHDR</span>
-    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>buf</span>));
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>buf</span>));
 
     <span class='kw'>if</span> <span class='kw-2'>&amp;</span><span class='ident'>buf</span>[<span class='number'>0</span>..<span class='number'>8</span>] <span class='op'>!=</span> <span class='kw-2'>&amp;</span><span class='ident'>PNG_FILE_HEADER</span>[..] <span class='op'>||</span>
        <span class='kw-2'>&amp;</span><span class='ident'>buf</span>[<span class='number'>8</span>..<span class='number'>16</span>] <span class='op'>!=</span> <span class='string'>b&quot;\0\0\0\x0dIHDR&quot;</span> <span class='op'>||</span>
@@ -905,6 +915,16 @@
         <span class='ident'>filter_method</span>      : <span class='ident'>buf</span>[<span class='number'>27</span>],
         <span class='ident'>interlace_method</span>   : <span class='ident'>buf</span>[<span class='number'>28</span>],
     })
+}
+
+<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>detect</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>+</span><span class='ident'>Seek</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> <span class='ident'>bool</span> {
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>buf</span> <span class='op'>=</span> [<span class='number'>0u8</span>; <span class='number'>8</span>];
+    <span class='kw'>let</span> <span class='ident'>start</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>reader</span>.<span class='ident'>seek</span>(<span class='ident'>SeekFrom</span>::<span class='ident'>Current</span>(<span class='number'>0</span>))
+        { <span class='prelude-val'>Ok</span>(<span class='ident'>s</span>) <span class='op'>=&gt;</span> <span class='ident'>s</span>, <span class='prelude-val'>Err</span>(_) <span class='op'>=&gt;</span> <span class='kw'>return</span> <span class='boolval'>false</span> };
+    <span class='kw'>let</span> <span class='ident'>result</span> <span class='op'>=</span> <span class='ident'>reader</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>buf</span>).<span class='ident'>is_ok</span>()
+              <span class='op'>&amp;&amp;</span> <span class='kw-2'>&amp;</span><span class='ident'>buf</span>[<span class='number'>0</span>..<span class='number'>8</span>] <span class='op'>==</span> <span class='kw-2'>&amp;</span><span class='ident'>PNG_FILE_HEADER</span>[..];
+    <span class='kw'>let</span> _ <span class='op'>=</span> <span class='ident'>reader</span>.<span class='ident'>seek</span>(<span class='ident'>SeekFrom</span>::<span class='ident'>Start</span>(<span class='ident'>start</span>));
+    <span class='ident'>result</span>
 }
 
 <span class='doccomment'>/// Reads an image and converts it to requested format.</span>
@@ -954,7 +974,7 @@
         <span class='ident'>src_fmt</span>     : <span class='ident'>src_fmt</span>,
         <span class='ident'>tgt_fmt</span>     : <span class='kw'>if</span> <span class='ident'>req_fmt</span> <span class='op'>==</span> <span class='ident'>ColFmt</span>::<span class='ident'>Auto</span> { <span class='ident'>src_fmt</span> } <span class='kw'>else</span> { <span class='ident'>req_fmt</span> },
         <span class='ident'>chunk_lentype</span> : [<span class='number'>0u8</span>; <span class='number'>8</span>],
-        <span class='ident'>readbuf</span>     : <span class='ident'>repeat</span>(<span class='number'>0u8</span>).<span class='ident'>take</span>(<span class='number'>4096</span>).<span class='ident'>collect</span>(),
+        <span class='ident'>readbuf</span>     : <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='number'>4096</span>],
         <span class='ident'>crc</span>         : <span class='ident'>Crc32</span>::<span class='ident'>new</span>(),
     };
 
@@ -990,7 +1010,7 @@
 }
 
 <span class='kw'>fn</span> <span class='ident'>read_chunkmeta</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>dc</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>PngDecoder</span><span class='op'>&lt;</span><span class='ident'>R</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>usize</span><span class='op'>&gt;</span> {
-    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>dc</span>.<span class='ident'>chunk_lentype</span>[<span class='number'>0</span>..<span class='number'>8</span>]));
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>dc</span>.<span class='ident'>chunk_lentype</span>[<span class='number'>0</span>..<span class='number'>8</span>]));
     <span class='kw'>let</span> <span class='ident'>len</span> <span class='op'>=</span> <span class='ident'>u32_from_be</span>(<span class='kw-2'>&amp;</span><span class='ident'>dc</span>.<span class='ident'>chunk_lentype</span>[<span class='number'>0</span>..<span class='number'>4</span>]) <span class='kw'>as</span> <span class='ident'>usize</span>;
     <span class='kw'>if</span> <span class='number'>0x7fff_ffff</span> <span class='op'>&lt;</span> <span class='ident'>len</span> { <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;chunk too long&quot;</span>); }
     <span class='ident'>dc</span>.<span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='kw-2'>&amp;</span><span class='ident'>dc</span>.<span class='ident'>chunk_lentype</span>[<span class='number'>4</span>..<span class='number'>8</span>]);   <span class='comment'>// type</span>
@@ -1000,7 +1020,7 @@
 <span class='attribute'>#[<span class='ident'>inline</span>]</span>
 <span class='kw'>fn</span> <span class='ident'>readcheck_crc</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(<span class='ident'>dc</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>PngDecoder</span><span class='op'>&lt;</span><span class='ident'>R</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span> {
     <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>tmp</span> <span class='op'>=</span> [<span class='number'>0u8</span>; <span class='number'>4</span>];
-    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>tmp</span>));
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>tmp</span>));
     <span class='kw'>if</span> <span class='kw-2'>&amp;</span><span class='ident'>dc</span>.<span class='ident'>crc</span>.<span class='ident'>finish_be</span>()[..] <span class='op'>!=</span> <span class='kw-2'>&amp;</span><span class='ident'>tmp</span>[<span class='number'>0</span>..<span class='number'>4</span>] {
         <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;corrupt chunk&quot;</span>);
     }
@@ -1037,8 +1057,8 @@
                 <span class='kw'>if</span> <span class='ident'>stage</span> <span class='op'>!=</span> <span class='ident'>IhdrParsed</span> <span class='op'>||</span> <span class='ident'>len</span> <span class='op'>%</span> <span class='number'>3</span> <span class='op'>!=</span> <span class='number'>0</span> <span class='op'>||</span> <span class='number'>256</span> <span class='op'>&lt;</span> <span class='ident'>entries</span> {
                     <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;corrupt chunk stream&quot;</span>);
                 }
-                <span class='ident'>palette</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0u8</span>).<span class='ident'>take</span>(<span class='ident'>len</span>).<span class='ident'>collect</span>();
-                <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>palette</span>));
+                <span class='ident'>palette</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>len</span>];
+                <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>palette</span>));
                 <span class='ident'>dc</span>.<span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='kw-2'>&amp;</span><span class='ident'>palette</span>[..]);
                 <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>readcheck_crc</span>(<span class='ident'>dc</span>));
                 <span class='ident'>stage</span> <span class='op'>=</span> <span class='ident'>PlteParsed</span>;
@@ -1048,7 +1068,7 @@
                     <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;corrupt chunk stream&quot;</span>);
                 }
                 <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>crc</span> <span class='op'>=</span> [<span class='number'>0u8</span>; <span class='number'>4</span>];
-                <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>crc</span>));
+                <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>crc</span>));
                 <span class='kw'>if</span> <span class='ident'>len</span> <span class='op'>!=</span> <span class='number'>0</span> <span class='op'>||</span> <span class='kw-2'>&amp;</span><span class='ident'>crc</span>[<span class='number'>0</span>..<span class='number'>4</span>] <span class='op'>!=</span> <span class='kw-2'>&amp;</span>[<span class='number'>0xae</span>, <span class='number'>0x42</span>, <span class='number'>0x60</span>, <span class='number'>0x82</span>][..] {
                     <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;corrupt chunk&quot;</span>);
                 }
@@ -1058,15 +1078,15 @@
                 <span class='kw'>if</span> <span class='ident'>chunk_names</span>.<span class='ident'>iter</span>().<span class='ident'>any</span>(<span class='op'>|</span><span class='ident'>name</span><span class='op'>|</span> <span class='kw-2'>&amp;</span><span class='ident'>name</span>[..] <span class='op'>==</span> <span class='kw-2'>&amp;</span><span class='ident'>dc</span>.<span class='ident'>chunk_lentype</span>[<span class='number'>4</span>..<span class='number'>8</span>]) {
                     <span class='kw'>let</span> <span class='ident'>name</span> <span class='op'>=</span> [<span class='ident'>dc</span>.<span class='ident'>chunk_lentype</span>[<span class='number'>4</span>], <span class='ident'>dc</span>.<span class='ident'>chunk_lentype</span>[<span class='number'>5</span>],
                                 <span class='ident'>dc</span>.<span class='ident'>chunk_lentype</span>[<span class='number'>6</span>], <span class='ident'>dc</span>.<span class='ident'>chunk_lentype</span>[<span class='number'>7</span>]];
-                    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>data</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0u8</span>).<span class='ident'>take</span>(<span class='ident'>len</span>).<span class='ident'>collect</span>();
-                    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>data</span>));
+                    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>data</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>len</span>];
+                    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>data</span>));
                     <span class='ident'>dc</span>.<span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='kw-2'>&amp;</span><span class='ident'>data</span>[..]);
                     <span class='ident'>chunks</span>.<span class='ident'>push</span>(<span class='ident'>ExtChunk</span> { <span class='ident'>name</span>: <span class='ident'>name</span>, <span class='ident'>data</span>: <span class='ident'>data</span> });
                 } <span class='kw'>else</span> {
                     <span class='comment'>// unknown chunk, ignore but check crc... or should crc be ignored?</span>
                     <span class='kw'>while</span> <span class='number'>0</span> <span class='op'>&lt;</span> <span class='ident'>len</span> {
                         <span class='kw'>let</span> <span class='ident'>amount</span> <span class='op'>=</span> <span class='ident'>min</span>(<span class='ident'>len</span>, <span class='ident'>dc</span>.<span class='ident'>readbuf</span>.<span class='ident'>len</span>());
-                        <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>dc</span>.<span class='ident'>readbuf</span>[<span class='number'>0</span>..<span class='ident'>amount</span>]));
+                        <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>dc</span>.<span class='ident'>readbuf</span>[<span class='number'>0</span>..<span class='ident'>amount</span>]));
                         <span class='ident'>len</span> <span class='op'>-=</span> <span class='ident'>amount</span>;
                         <span class='ident'>dc</span>.<span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='kw-2'>&amp;</span><span class='ident'>dc</span>.<span class='ident'>readbuf</span>[<span class='number'>0</span>..<span class='ident'>amount</span>]);
                     }
@@ -1082,7 +1102,6 @@
     <span class='prelude-val'>Ok</span>((<span class='ident'>result</span>, <span class='ident'>chunks</span>))
 }
 
-<span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Eq</span>, <span class='ident'>PartialEq</span>)]</span>
 <span class='kw'>enum</span> <span class='ident'>PngInterlace</span> {
     <span class='prelude-val'>None</span>, <span class='ident'>Adam7</span>
 }
@@ -1097,7 +1116,6 @@
     }
 }
 
-<span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Eq</span>, <span class='ident'>PartialEq</span>)]</span>
 <span class='kw'>enum</span> <span class='ident'>PngColortype</span> {
     <span class='ident'>Y</span>    <span class='op'>=</span> <span class='number'>0</span>,
     <span class='ident'>RGB</span>  <span class='op'>=</span> <span class='number'>2</span>,
@@ -1122,9 +1140,9 @@
     <span class='kw'>let</span> <span class='ident'>tgt_bytespp</span> <span class='op'>=</span> <span class='ident'>dc</span>.<span class='ident'>tgt_fmt</span>.<span class='ident'>bytes_pp</span>();
     <span class='kw'>let</span> <span class='ident'>tgt_linesize</span> <span class='op'>=</span> <span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>;
 
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>result</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>dc</span>.<span class='ident'>h</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>).<span class='ident'>collect</span>();
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>depaletted_line</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='kw'>if</span> <span class='ident'>dc</span>.<span class='ident'>src_indexed</span> {
-        <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='number'>3</span>).<span class='ident'>collect</span>()
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>result</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>dc</span>.<span class='ident'>h</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>];
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>depaletted_line</span> <span class='op'>=</span> <span class='kw'>if</span> <span class='ident'>dc</span>.<span class='ident'>src_indexed</span> {
+        <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='number'>3</span>]
     } <span class='kw'>else</span> {
         <span class='ident'>Vec</span>::<span class='ident'>new</span>()
     };
@@ -1137,12 +1155,12 @@
     <span class='kw'>match</span> <span class='ident'>dc</span>.<span class='ident'>ilace</span> {
         <span class='ident'>PngInterlace</span>::<span class='prelude-val'>None</span> <span class='op'>=&gt;</span> {
             <span class='kw'>let</span> <span class='ident'>src_linesize</span> <span class='op'>=</span> <span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>filter_step</span>;
-            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>cline</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>src_linesize</span><span class='op'>+</span><span class='number'>1</span>).<span class='ident'>collect</span>();
-            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>pline</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>src_linesize</span><span class='op'>+</span><span class='number'>1</span>).<span class='ident'>collect</span>();
+            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>cline</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>src_linesize</span><span class='op'>+</span><span class='number'>1</span>];
+            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>pline</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>src_linesize</span><span class='op'>+</span><span class='number'>1</span>];
 
             <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ti</span> <span class='op'>=</span> <span class='number'>0</span>;
             <span class='kw'>for</span> <span class='ident'>_j</span> <span class='kw'>in</span> (<span class='number'>0</span> .. <span class='ident'>dc</span>.<span class='ident'>h</span>) {
-                <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>zlib</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>cline</span>[..]));
+                <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>zlib</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>cline</span>[..]));
                 <span class='kw'>let</span> <span class='ident'>filter_type</span>: <span class='ident'>u8</span> <span class='op'>=</span> <span class='ident'>cline</span>[<span class='number'>0</span>];
 
                 <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>recon</span>(
@@ -1186,9 +1204,9 @@
             ];
 
             <span class='kw'>let</span> <span class='ident'>max_scanline_size</span> <span class='op'>=</span> <span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>filter_step</span>;
-            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>linebuf0</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>max_scanline_size</span><span class='op'>+</span><span class='number'>1</span>).<span class='ident'>collect</span>();
-            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>linebuf1</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>max_scanline_size</span><span class='op'>+</span><span class='number'>1</span>).<span class='ident'>collect</span>();
-            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>redlinebuf</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>).<span class='ident'>collect</span>();
+            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>linebuf0</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>max_scanline_size</span><span class='op'>+</span><span class='number'>1</span>];
+            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>linebuf1</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>max_scanline_size</span><span class='op'>+</span><span class='number'>1</span>];
+            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>redlinebuf</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>dc</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>];
 
             <span class='kw'>for</span> <span class='ident'>pass</span> <span class='kw'>in</span> (<span class='number'>0</span>..<span class='number'>7</span>) {
                 <span class='kw'>let</span> <span class='ident'>tgt_px</span>: <span class='ident'>A7IdxTranslator</span> <span class='op'>=</span> <span class='ident'>A7_IDX_TRANSLATORS</span>[<span class='ident'>pass</span>];   <span class='comment'>// target pixel</span>
@@ -1203,7 +1221,7 @@
                         <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>linebuf0</span>[<span class='number'>0</span> .. <span class='ident'>src_linesize</span><span class='op'>+</span><span class='number'>1</span>])
                     };
 
-                    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>zlib</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>cline</span>[..]));
+                    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>zlib</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>cline</span>[..]));
                     <span class='kw'>let</span> <span class='ident'>filter_type</span>: <span class='ident'>u8</span> <span class='op'>=</span> <span class='ident'>cline</span>[<span class='number'>0</span>];
 
                     <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>recon</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>cline</span>[<span class='number'>1</span>..], <span class='kw-2'>&amp;</span><span class='ident'>pline</span>[<span class='number'>1</span>..], <span class='ident'>filter_type</span>, <span class='ident'>filter_step</span>));
@@ -1259,7 +1277,7 @@
     <span class='kw'>loop</span> {
         <span class='ident'>all</span>.<span class='ident'>extend</span>(<span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='op'>*</span><span class='ident'>len</span>));
         <span class='kw'>let</span> <span class='ident'>start</span> <span class='op'>=</span> <span class='ident'>all</span>.<span class='ident'>len</span>() <span class='op'>-</span> <span class='op'>*</span><span class='ident'>len</span>;
-        <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>all</span>[<span class='ident'>start</span>..]));
+        <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>dc</span>.<span class='ident'>stream</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>all</span>[<span class='ident'>start</span>..]));
         <span class='ident'>dc</span>.<span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='kw-2'>&amp;</span><span class='ident'>all</span>[<span class='ident'>start</span>..]);
         <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>readcheck_crc</span>(<span class='ident'>dc</span>));
         <span class='op'>*</span><span class='ident'>len</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>read_chunkmeta</span>(<span class='ident'>dc</span>));    <span class='comment'>// next chunk&#39;s len and type</span>
@@ -1385,11 +1403,7 @@
                                                                   <span class='ident'>chunks</span>: <span class='kw-2'>&amp;</span>[<span class='ident'>ExtChunk</span>])
                                                                      <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span>
 {
-    <span class='kw'>let</span> <span class='ident'>src_bytespp</span> <span class='op'>=</span> <span class='ident'>data</span>.<span class='ident'>len</span>() <span class='op'>/</span> <span class='ident'>w</span> <span class='op'>/</span> <span class='ident'>h</span>;
-
-    <span class='kw'>if</span> <span class='ident'>w</span> <span class='op'>&lt;</span> <span class='number'>1</span> <span class='op'>||</span> <span class='ident'>h</span> <span class='op'>&lt;</span> <span class='number'>1</span>
-    <span class='op'>||</span> <span class='ident'>src_bytespp</span> <span class='op'>*</span> <span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>h</span> <span class='op'>!=</span> <span class='ident'>data</span>.<span class='ident'>len</span>()
-    <span class='op'>||</span> <span class='ident'>src_bytespp</span> <span class='op'>!=</span> <span class='ident'>src_fmt</span>.<span class='ident'>bytes_pp</span>() {
+    <span class='kw'>if</span> <span class='ident'>w</span> <span class='op'>&lt;</span> <span class='number'>1</span> <span class='op'>||</span> <span class='ident'>h</span> <span class='op'>&lt;</span> <span class='number'>1</span> <span class='op'>||</span> <span class='ident'>src_fmt</span>.<span class='ident'>bytes_pp</span>() <span class='op'>*</span> <span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>h</span> <span class='op'>!=</span> <span class='ident'>data</span>.<span class='ident'>len</span>() {
         <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;invalid dimensions or data length&quot;</span>);
     }
 
@@ -1417,7 +1431,7 @@
         <span class='ident'>stream</span>    : <span class='ident'>writer</span>,
         <span class='ident'>w</span>         : <span class='ident'>w</span>,
         <span class='ident'>h</span>         : <span class='ident'>h</span>,
-        <span class='ident'>src_bytespp</span> : <span class='ident'>src_bytespp</span>,
+        <span class='ident'>src_bytespp</span> : <span class='ident'>src_fmt</span>.<span class='ident'>bytes_pp</span>(),
         <span class='ident'>src_fmt</span>   : <span class='ident'>src_fmt</span>,
         <span class='ident'>tgt_fmt</span>   : <span class='ident'>tgt_fmt</span>,
         <span class='ident'>data</span>      : <span class='ident'>data</span>,
@@ -1435,31 +1449,37 @@
 }
 
 <span class='kw'>fn</span> <span class='ident'>write_header</span><span class='op'>&lt;</span><span class='ident'>W</span>: <span class='ident'>Write</span><span class='op'>&gt;</span>(<span class='ident'>ec</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>PngEncoder</span><span class='op'>&lt;</span><span class='ident'>W</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span> {
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>hdr</span>: [<span class='ident'>u8</span>; <span class='number'>33</span>] <span class='op'>=</span> [<span class='number'>0</span>; <span class='number'>33</span>];
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>crc</span> <span class='op'>=</span> <span class='ident'>Crc32</span>::<span class='ident'>new</span>();
+    <span class='kw'>let</span> <span class='ident'>width</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='ident'>u32_to_be</span>(<span class='ident'>ec</span>.<span class='ident'>w</span> <span class='kw'>as</span> <span class='ident'>u32</span>)[..];
+    <span class='kw'>let</span> <span class='ident'>height</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='ident'>u32_to_be</span>(<span class='ident'>ec</span>.<span class='ident'>h</span> <span class='kw'>as</span> <span class='ident'>u32</span>)[..];
 
-    <span class='ident'>copy_memory</span>(<span class='kw-2'>&amp;</span><span class='ident'>PNG_FILE_HEADER</span>[..]       , <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>hdr</span>[<span class='number'>0</span>..<span class='number'>8</span>]  );
-    <span class='ident'>copy_memory</span>(<span class='string'>b&quot;\0\0\0\x0dIHDR&quot;</span>          , <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>hdr</span>[<span class='number'>8</span>..<span class='number'>16</span>] );
-    <span class='ident'>copy_memory</span>(<span class='kw-2'>&amp;</span><span class='ident'>u32_to_be</span>(<span class='ident'>ec</span>.<span class='ident'>w</span> <span class='kw'>as</span> <span class='ident'>u32</span>)[..], <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>hdr</span>[<span class='number'>16</span>..<span class='number'>20</span>]);
-    <span class='ident'>copy_memory</span>(<span class='kw-2'>&amp;</span><span class='ident'>u32_to_be</span>(<span class='ident'>ec</span>.<span class='ident'>h</span> <span class='kw'>as</span> <span class='ident'>u32</span>)[..], <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>hdr</span>[<span class='number'>20</span>..<span class='number'>24</span>]);
-    <span class='ident'>hdr</span>[<span class='number'>24</span>] <span class='op'>=</span> <span class='number'>8</span>;    <span class='comment'>// bit depth</span>
-    <span class='ident'>hdr</span>[<span class='number'>25</span>] <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>ec</span>.<span class='ident'>tgt_fmt</span> {    <span class='comment'>// color type</span>
-        <span class='ident'>ColFmt</span>::<span class='ident'>Y</span> <span class='op'>=&gt;</span> <span class='ident'>PngColortype</span>::<span class='ident'>Y</span>,
-        <span class='ident'>ColFmt</span>::<span class='ident'>YA</span> <span class='op'>=&gt;</span> <span class='ident'>PngColortype</span>::<span class='ident'>YA</span>,
-        <span class='ident'>ColFmt</span>::<span class='ident'>RGB</span> <span class='op'>=&gt;</span> <span class='ident'>PngColortype</span>::<span class='ident'>RGB</span>,
-        <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span> <span class='op'>=&gt;</span> <span class='ident'>PngColortype</span>::<span class='ident'>RGBA</span>,
-        _ <span class='op'>=&gt;</span> <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;not supported&quot;</span>),
-    } <span class='kw'>as</span> <span class='ident'>u8</span>;
-    <span class='ident'>copy_memory</span>(<span class='kw-2'>&amp;</span>[<span class='number'>0</span>, <span class='number'>0</span>, <span class='number'>0</span>], <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>hdr</span>[<span class='number'>26</span>..<span class='number'>29</span>]);  <span class='comment'>// compression, filter, interlace</span>
-    <span class='ident'>ec</span>.<span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='kw-2'>&amp;</span><span class='ident'>hdr</span>[<span class='number'>12</span>..<span class='number'>29</span>]);
-    <span class='ident'>copy_memory</span>(<span class='kw-2'>&amp;</span><span class='ident'>ec</span>.<span class='ident'>crc</span>.<span class='ident'>finish_be</span>()[..], <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>hdr</span>[<span class='number'>29</span>..<span class='number'>33</span>]);
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>ec</span>.<span class='ident'>stream</span>.<span class='ident'>write_all</span>(<span class='kw-2'>&amp;</span><span class='ident'>PNG_FILE_HEADER</span>[..]));
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>ec</span>.<span class='ident'>stream</span>.<span class='ident'>write_all</span>(<span class='string'>b&quot;\0\0\0\x0dIHDR&quot;</span>));     <span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='string'>b&quot;IHDR&quot;</span>);
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>ec</span>.<span class='ident'>stream</span>.<span class='ident'>write_all</span>(<span class='ident'>width</span>));                 <span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='ident'>width</span>);
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>ec</span>.<span class='ident'>stream</span>.<span class='ident'>write_all</span>(<span class='ident'>height</span>));                <span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='ident'>height</span>);
+    <span class='kw'>let</span> <span class='ident'>tmp</span> <span class='op'>=</span> [
+        <span class='number'>8</span>,          <span class='comment'>// bit depth</span>
+        <span class='kw'>match</span> <span class='ident'>ec</span>.<span class='ident'>tgt_fmt</span> {    <span class='comment'>// color type</span>
+            <span class='ident'>ColFmt</span>::<span class='ident'>Y</span> <span class='op'>=&gt;</span> <span class='ident'>PngColortype</span>::<span class='ident'>Y</span>,
+            <span class='ident'>ColFmt</span>::<span class='ident'>YA</span> <span class='op'>=&gt;</span> <span class='ident'>PngColortype</span>::<span class='ident'>YA</span>,
+            <span class='ident'>ColFmt</span>::<span class='ident'>RGB</span> <span class='op'>=&gt;</span> <span class='ident'>PngColortype</span>::<span class='ident'>RGB</span>,
+            <span class='ident'>ColFmt</span>::<span class='ident'>RGBA</span> <span class='op'>=&gt;</span> <span class='ident'>PngColortype</span>::<span class='ident'>RGBA</span>,
+            _ <span class='op'>=&gt;</span> <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;not supported&quot;</span>),
+        } <span class='kw'>as</span> <span class='ident'>u8</span>,
+        <span class='number'>0</span>, <span class='number'>0</span>, <span class='number'>0</span>     <span class='comment'>// compression, filter, interlace</span>
+    ];
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>ec</span>.<span class='ident'>stream</span>.<span class='ident'>write_all</span>(<span class='kw-2'>&amp;</span><span class='ident'>tmp</span>));
+    <span class='ident'>crc</span>.<span class='ident'>put</span>(<span class='kw-2'>&amp;</span><span class='ident'>tmp</span>);
 
-    <span class='ident'>ec</span>.<span class='ident'>stream</span>.<span class='ident'>write_all</span>(<span class='kw-2'>&amp;</span><span class='ident'>hdr</span>[..])
+    <span class='ident'>ec</span>.<span class='ident'>stream</span>.<span class='ident'>write_all</span>(<span class='kw-2'>&amp;</span><span class='ident'>crc</span>.<span class='ident'>finish_be</span>()[..])
 }
 
-<span class='kw'>fn</span> <span class='ident'>write_custom_chunk</span><span class='op'>&lt;</span><span class='ident'>W</span>: <span class='ident'>Write</span><span class='op'>&gt;</span>(<span class='ident'>ec</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>PngEncoder</span><span class='op'>&lt;</span><span class='ident'>W</span><span class='op'>&gt;</span>, <span class='ident'>chunk</span>: <span class='kw-2'>&amp;</span><span class='ident'>ExtChunk</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span> {
-    <span class='kw'>if</span> <span class='ident'>chunk</span>.<span class='ident'>name</span>[<span class='number'>0</span>] <span class='op'>&lt;</span> <span class='number'>97</span> <span class='op'>||</span> <span class='number'>122</span> <span class='op'>&lt;</span> <span class='ident'>chunk</span>.<span class='ident'>name</span>[<span class='number'>0</span>] { <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;invalid chunk name&quot;</span>); }
-    <span class='kw'>for</span> <span class='ident'>b</span> <span class='kw'>in</span> <span class='kw-2'>&amp;</span><span class='ident'>chunk</span>.<span class='ident'>name</span>[<span class='number'>1</span>..] {
-        <span class='kw'>if</span> <span class='op'>*</span><span class='ident'>b</span> <span class='op'>&lt;</span> <span class='number'>65</span> <span class='op'>||</span> (<span class='number'>90</span> <span class='op'>&lt;</span> <span class='op'>*</span><span class='ident'>b</span> <span class='op'>&amp;&amp;</span> <span class='op'>*</span><span class='ident'>b</span> <span class='op'>&lt;</span> <span class='number'>97</span>) <span class='op'>||</span> <span class='number'>122</span> <span class='op'>&lt;</span> <span class='op'>*</span><span class='ident'>b</span> {
+<span class='kw'>fn</span> <span class='ident'>write_custom_chunk</span><span class='op'>&lt;</span><span class='ident'>W</span>: <span class='ident'>Write</span><span class='op'>&gt;</span>(<span class='ident'>ec</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>PngEncoder</span><span class='op'>&lt;</span><span class='ident'>W</span><span class='op'>&gt;</span>, <span class='ident'>chunk</span>: <span class='kw-2'>&amp;</span><span class='ident'>ExtChunk</span>)
+                                                        <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span>()<span class='op'>&gt;</span>
+{
+    <span class='kw'>if</span> <span class='ident'>chunk</span>.<span class='ident'>name</span>[<span class='number'>0</span>] <span class='op'>&lt;</span> <span class='string'>b&#39;a&#39;</span> <span class='op'>||</span> <span class='string'>b&#39;z&#39;</span> <span class='op'>&lt;</span> <span class='ident'>chunk</span>.<span class='ident'>name</span>[<span class='number'>0</span>] { <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;invalid chunk name&quot;</span>); }
+    <span class='kw'>for</span> <span class='kw-2'>&amp;</span><span class='ident'>b</span> <span class='kw'>in</span> <span class='kw-2'>&amp;</span><span class='ident'>chunk</span>.<span class='ident'>name</span>[<span class='number'>1</span>..] {
+        <span class='kw'>if</span> <span class='ident'>b</span> <span class='op'>&lt;</span> <span class='string'>b&#39;A&#39;</span> <span class='op'>||</span> (<span class='string'>b&#39;Z&#39;</span> <span class='op'>&lt;</span> <span class='ident'>b</span> <span class='op'>&amp;&amp;</span> <span class='ident'>b</span> <span class='op'>&lt;</span> <span class='string'>b&#39;a&#39;</span>) <span class='op'>||</span> <span class='string'>b&#39;z&#39;</span> <span class='op'>&lt;</span> <span class='ident'>b</span> {
             <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;invalid chunk name&quot;</span>);
         }
     }
@@ -1490,9 +1510,9 @@
 
     <span class='kw'>let</span> <span class='ident'>filter_step</span> <span class='op'>=</span> <span class='ident'>ec</span>.<span class='ident'>tgt_fmt</span>.<span class='ident'>bytes_pp</span>();
     <span class='kw'>let</span> <span class='ident'>tgt_linesize</span> <span class='op'>=</span> <span class='ident'>ec</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>filter_step</span> <span class='op'>+</span> <span class='number'>1</span>;   <span class='comment'>// +1 for filter type</span>
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>cline</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>tgt_linesize</span>).<span class='ident'>collect</span>();
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>pline</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>tgt_linesize</span>).<span class='ident'>collect</span>();
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>filtered_image</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>tgt_linesize</span> <span class='op'>*</span> <span class='ident'>ec</span>.<span class='ident'>h</span>).<span class='ident'>collect</span>();
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>cline</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>tgt_linesize</span>];
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>pline</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>tgt_linesize</span>];
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>filtered_image</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>tgt_linesize</span> <span class='op'>*</span> <span class='ident'>ec</span>.<span class='ident'>h</span>];
 
     <span class='kw'>let</span> <span class='ident'>src_linesize</span> <span class='op'>=</span> <span class='ident'>ec</span>.<span class='ident'>w</span> <span class='op'>*</span> <span class='ident'>ec</span>.<span class='ident'>src_bytespp</span>;
 

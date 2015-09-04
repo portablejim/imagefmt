@@ -367,11 +367,29 @@
 <span id="325">325</span>
 <span id="326">326</span>
 <span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+<span id="340">340</span>
+<span id="341">341</span>
+<span id="342">342</span>
+<span id="343">343</span>
+<span id="344">344</span>
+<span id="345">345</span>
+<span id="346">346</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright (c) 2015 Tero Hänninen, license: MIT</span>
 
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::{<span class='self'>self</span>, <span class='ident'>Read</span>, <span class='ident'>Seek</span>, <span class='ident'>SeekFrom</span>};
-<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>iter</span>::{<span class='ident'>repeat</span>};
 <span class='kw'>use</span> <span class='ident'>super</span>::{
     <span class='ident'>Image</span>, <span class='ident'>Info</span>, <span class='ident'>ColFmt</span>, <span class='ident'>ColType</span>, <span class='ident'>error</span>,
     <span class='ident'>copy_memory</span>, <span class='ident'>converter</span>,
@@ -405,6 +423,7 @@
     <span class='kw'>pub</span> <span class='ident'>width</span>                 : <span class='ident'>isize</span>,
     <span class='kw'>pub</span> <span class='ident'>height</span>                : <span class='ident'>isize</span>,
     <span class='kw'>pub</span> <span class='ident'>planes</span>                : <span class='ident'>u16</span>,
+    <span class='kw'>pub</span> <span class='ident'>bits_pp</span>               : <span class='ident'>usize</span>,
     <span class='kw'>pub</span> <span class='ident'>dib_v1</span>                : <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>DibV1</span><span class='op'>&gt;</span>,
     <span class='kw'>pub</span> <span class='ident'>dib_v2</span>                : <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>DibV2</span><span class='op'>&gt;</span>,
     <span class='kw'>pub</span> <span class='ident'>dib_v3_alpha_mask</span>     : <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>u32</span><span class='op'>&gt;</span>,
@@ -415,7 +434,6 @@
 <span class='doccomment'>/// Optional part of a BMP header.</span>
 <span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Debug</span>)]</span>
 <span class='kw'>struct</span> <span class='ident'>DibV1</span> {
-    <span class='kw'>pub</span> <span class='ident'>bits_pp</span>               : <span class='ident'>usize</span>,
     <span class='kw'>pub</span> <span class='ident'>compression</span>           : <span class='ident'>u32</span>,
     <span class='kw'>pub</span> <span class='ident'>idat_size</span>             : <span class='ident'>usize</span>,
     <span class='kw'>pub</span> <span class='ident'>pixels_per_meter_x</span>    : <span class='ident'>usize</span>,
@@ -440,7 +458,6 @@
     <span class='kw'>pub</span> <span class='ident'>gamma_red</span>             : <span class='ident'>u32</span>,
     <span class='kw'>pub</span> <span class='ident'>gamma_green</span>           : <span class='ident'>u32</span>,
     <span class='kw'>pub</span> <span class='ident'>gamma_blue</span>            : <span class='ident'>u32</span>,
-    <span class='kw'>pub</span> <span class='ident'>intent</span>                : <span class='ident'>u32</span>,
 }
 
 <span class='doccomment'>/// Optional part of a BMP header.</span>
@@ -453,7 +470,7 @@
 <span class='doccomment'>/// Reads a BMP header.</span>
 <span class='kw'>fn</span> <span class='ident'>read_header</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>+</span><span class='ident'>Seek</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>BmpHeader</span><span class='op'>&gt;</span> {
     <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>bmp_header</span> <span class='op'>=</span> [<span class='number'>0u8</span>; <span class='number'>18</span>]; <span class='comment'>// bmp header + size of dib header</span>
-    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>bmp_header</span>[..]));
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>bmp_header</span>[..]));
 
     <span class='kw'>if</span> <span class='kw-2'>&amp;</span><span class='ident'>bmp_header</span>[<span class='number'>0</span>..<span class='number'>2</span>] <span class='op'>!=</span> [<span class='number'>0x42</span>, <span class='number'>0x4d</span>] {
         <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;corrupt bmp header&quot;</span>);
@@ -470,24 +487,33 @@
         <span class='number'>124</span> <span class='op'>=&gt;</span> <span class='number'>5</span>,
         _ <span class='op'>=&gt;</span> <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;unsupported dib version&quot;</span>),
     };
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>dib_header</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>dib_size</span><span class='op'>-</span><span class='number'>4</span>).<span class='ident'>collect</span>();
-    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>dib_header</span>[..]));
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>dib_header</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>dib_size</span><span class='op'>-</span><span class='number'>4</span>];
+    <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>dib_header</span>[..]));
 
-    <span class='kw'>if</span> <span class='number'>6</span> <span class='op'>&lt;=</span> <span class='ident'>dib_version</span> {
-        <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;bmp info header version 6 or above not supported&quot;</span>)
-    }
+    <span class='kw'>let</span> (<span class='ident'>width</span>, <span class='ident'>height</span>, <span class='ident'>planes</span>, <span class='ident'>bits_pp</span>) <span class='op'>=</span>
+        <span class='kw'>if</span> <span class='ident'>dib_version</span> <span class='op'>==</span> <span class='number'>0</span> {
+            ( <span class='ident'>u16_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>0</span>..<span class='number'>2</span>]) <span class='kw'>as</span> <span class='ident'>isize</span>
+            , <span class='ident'>u16_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>2</span>..<span class='number'>4</span>]) <span class='kw'>as</span> <span class='ident'>isize</span>
+            , <span class='ident'>u16_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>4</span>..<span class='number'>6</span>])
+            , <span class='ident'>u16_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>6</span>..<span class='number'>8</span>]) <span class='kw'>as</span> <span class='ident'>usize</span>)
+        } <span class='kw'>else</span> {
+            ( <span class='ident'>i32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>0</span>..<span class='number'>4</span>]) <span class='kw'>as</span> <span class='ident'>isize</span>
+            , <span class='ident'>i32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>4</span>..<span class='number'>8</span>]) <span class='kw'>as</span> <span class='ident'>isize</span>
+            , <span class='ident'>u16_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>8</span>..<span class='number'>10</span>])
+            , <span class='ident'>u16_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>10</span>..<span class='number'>12</span>]) <span class='kw'>as</span> <span class='ident'>usize</span>)
+        };
 
     <span class='prelude-val'>Ok</span>(<span class='ident'>BmpHeader</span> {
         <span class='ident'>file_size</span>             : <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>bmp_header</span>[<span class='number'>2</span>..<span class='number'>6</span>]),
         <span class='ident'>pixel_data_offset</span>     : <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>bmp_header</span>[<span class='number'>10</span>..<span class='number'>14</span>]) <span class='kw'>as</span> <span class='ident'>usize</span>,
-        <span class='ident'>width</span>                 : <span class='ident'>i32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>0</span>..<span class='number'>4</span>]) <span class='kw'>as</span> <span class='ident'>isize</span>,
-        <span class='ident'>height</span>                : <span class='ident'>i32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>4</span>..<span class='number'>8</span>]) <span class='kw'>as</span> <span class='ident'>isize</span>,
-        <span class='ident'>planes</span>                : <span class='ident'>u16_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>8</span>..<span class='number'>10</span>]),
+        <span class='ident'>width</span>                 : <span class='ident'>width</span>,
+        <span class='ident'>height</span>                : <span class='ident'>height</span>,
+        <span class='ident'>planes</span>                : <span class='ident'>planes</span>,
+        <span class='ident'>bits_pp</span>               : <span class='ident'>bits_pp</span>,
         <span class='ident'>dib_size</span>              : <span class='ident'>dib_size</span>,
         <span class='ident'>dib_v1</span>:
             <span class='kw'>if</span> <span class='number'>1</span> <span class='op'>&lt;=</span> <span class='ident'>dib_version</span> {
                 <span class='prelude-val'>Some</span>(<span class='ident'>DibV1</span> {
-                    <span class='ident'>bits_pp</span>               : <span class='ident'>u16_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>10</span>..<span class='number'>12</span>]) <span class='kw'>as</span> <span class='ident'>usize</span>,
                     <span class='ident'>compression</span>           : <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>12</span>..<span class='number'>16</span>]),
                     <span class='ident'>idat_size</span>             : <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>16</span>..<span class='number'>20</span>]) <span class='kw'>as</span> <span class='ident'>usize</span>,
                     <span class='ident'>pixels_per_meter_x</span>    : <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>20</span>..<span class='number'>24</span>]) <span class='kw'>as</span> <span class='ident'>usize</span>,
@@ -525,7 +551,6 @@
                     <span class='ident'>gamma_red</span>             : <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>92</span>..<span class='number'>96</span>]),
                     <span class='ident'>gamma_green</span>           : <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>96</span>..<span class='number'>100</span>]),
                     <span class='ident'>gamma_blue</span>            : <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>100</span>..<span class='number'>104</span>]),
-                    <span class='ident'>intent</span>                : <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>dib_header</span>[<span class='number'>104</span>..<span class='number'>108</span>]),
                 })
             } <span class='kw'>else</span> {
                 <span class='prelude-val'>None</span>
@@ -540,6 +565,21 @@
                 <span class='prelude-val'>None</span>
             }
     })
+}
+
+<span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>detect</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>+</span><span class='ident'>Seek</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> <span class='ident'>bool</span> {
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>bmp_header</span> <span class='op'>=</span> [<span class='number'>0u8</span>; <span class='number'>18</span>]; <span class='comment'>// bmp header + size of dib header</span>
+    <span class='kw'>let</span> <span class='ident'>start</span> <span class='op'>=</span> <span class='kw'>match</span> <span class='ident'>reader</span>.<span class='ident'>seek</span>(<span class='ident'>SeekFrom</span>::<span class='ident'>Current</span>(<span class='number'>0</span>))
+        { <span class='prelude-val'>Ok</span>(<span class='ident'>s</span>) <span class='op'>=&gt;</span> <span class='ident'>s</span>, <span class='prelude-val'>Err</span>(_) <span class='op'>=&gt;</span> <span class='kw'>return</span> <span class='boolval'>false</span> };
+    <span class='kw'>let</span> <span class='ident'>result</span> <span class='op'>=</span>
+        <span class='ident'>reader</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>bmp_header</span>[..]).<span class='ident'>is_ok</span>()
+        <span class='op'>&amp;&amp;</span> <span class='kw-2'>&amp;</span><span class='ident'>bmp_header</span>[<span class='number'>0</span>..<span class='number'>2</span>] <span class='op'>==</span> [<span class='number'>0x42</span>, <span class='number'>0x4d</span>]
+        <span class='op'>&amp;&amp;</span> <span class='kw'>match</span> <span class='ident'>u32_from_le</span>(<span class='kw-2'>&amp;</span><span class='ident'>bmp_header</span>[<span class='number'>14</span>..<span class='number'>18</span>]) {
+            <span class='number'>12</span> <span class='op'>|</span> <span class='number'>40</span> <span class='op'>|</span> <span class='number'>52</span> <span class='op'>|</span> <span class='number'>56</span> <span class='op'>|</span> <span class='number'>108</span> <span class='op'>|</span> <span class='number'>124</span> <span class='op'>=&gt;</span> <span class='boolval'>true</span>,
+            _ <span class='op'>=&gt;</span> <span class='boolval'>false</span>,
+        };
+    <span class='kw'>let</span> _ <span class='op'>=</span> <span class='ident'>reader</span>.<span class='ident'>seek</span>(<span class='ident'>SeekFrom</span>::<span class='ident'>Start</span>(<span class='ident'>start</span>));
+    <span class='ident'>result</span>
 }
 
 <span class='kw'>const</span> <span class='ident'>CMP_RGB</span>: <span class='ident'>u32</span>        <span class='op'>=</span> <span class='number'>0</span>;
@@ -563,7 +603,7 @@
     <span class='kw'>let</span> (<span class='ident'>bytes_pp</span>, <span class='ident'>paletted</span>, <span class='ident'>palette_length</span>, <span class='ident'>rgb_masked</span>) <span class='op'>=</span>
         <span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>Some</span>(<span class='kw-2'>ref</span> <span class='ident'>dv1</span>) <span class='op'>=</span> <span class='ident'>hdr</span>.<span class='ident'>dib_v1</span> {
             <span class='kw'>if</span> <span class='number'>256</span> <span class='op'>&lt;</span> <span class='ident'>dv1</span>.<span class='ident'>palette_length</span> { <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;ivnalid palette length&quot;</span>) }
-            <span class='kw'>if</span> <span class='ident'>dv1</span>.<span class='ident'>bits_pp</span> <span class='op'>&lt;=</span> <span class='number'>8</span>
+            <span class='kw'>if</span> <span class='ident'>hdr</span>.<span class='ident'>bits_pp</span> <span class='op'>&lt;=</span> <span class='number'>8</span>
             <span class='op'>&amp;&amp;</span> (<span class='ident'>dv1</span>.<span class='ident'>palette_length</span> <span class='op'>==</span> <span class='number'>0</span> <span class='op'>||</span> <span class='ident'>dv1</span>.<span class='ident'>compression</span> <span class='op'>!=</span> <span class='ident'>CMP_RGB</span>) {
                  <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;invalid format&quot;</span>)
             }
@@ -572,7 +612,7 @@
             }
             <span class='kw'>let</span> <span class='ident'>rgb_masked</span> <span class='op'>=</span> <span class='ident'>dv1</span>.<span class='ident'>compression</span> <span class='op'>==</span> <span class='ident'>CMP_BITS</span>;
 
-            <span class='kw'>match</span> <span class='ident'>dv1</span>.<span class='ident'>bits_pp</span> {
+            <span class='kw'>match</span> <span class='ident'>hdr</span>.<span class='ident'>bits_pp</span> {
                 <span class='number'>8</span>   <span class='op'>=&gt;</span> (<span class='number'>1</span>, <span class='boolval'>true</span>,  <span class='ident'>dv1</span>.<span class='ident'>palette_length</span>, <span class='ident'>rgb_masked</span>),
                 <span class='number'>24</span>  <span class='op'>=&gt;</span> (<span class='number'>3</span>, <span class='boolval'>false</span>, <span class='ident'>dv1</span>.<span class='ident'>palette_length</span>, <span class='ident'>rgb_masked</span>),
                 <span class='number'>32</span>  <span class='op'>=&gt;</span> (<span class='number'>4</span>, <span class='boolval'>false</span>, <span class='ident'>dv1</span>.<span class='ident'>palette_length</span>, <span class='ident'>rgb_masked</span>),
@@ -581,7 +621,7 @@
         } <span class='kw'>else</span> {
             (<span class='number'>1</span>, <span class='boolval'>true</span>, <span class='number'>256</span>, <span class='boolval'>false</span>)
         };
-    <span class='kw'>let</span> <span class='ident'>pe_bytes_pp</span> <span class='op'>=</span> <span class='kw'>if</span> <span class='ident'>hdr</span>.<span class='ident'>dib_v1</span>.<span class='ident'>is_some</span>() { <span class='number'>4</span> } <span class='kw'>else</span> { <span class='number'>3</span> };
+    <span class='kw'>let</span> <span class='ident'>pe_fmt</span> <span class='op'>=</span> <span class='kw'>if</span> <span class='ident'>hdr</span>.<span class='ident'>dib_v1</span>.<span class='ident'>is_some</span>() { <span class='ident'>ColFmt</span>::<span class='ident'>BGRA</span> } <span class='kw'>else</span> { <span class='ident'>ColFmt</span>::<span class='ident'>BGR</span> };
 
     <span class='kw'>fn</span> <span class='ident'>mask_to_idx</span>(<span class='ident'>mask</span>: <span class='ident'>u32</span>) <span class='op'>-&gt;</span> <span class='ident'>io</span>::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>usize</span><span class='op'>&gt;</span> {
         <span class='kw'>match</span> <span class='ident'>mask</span> {
@@ -610,14 +650,11 @@
             (<span class='boolval'>false</span>, <span class='number'>0</span>)
         };
 
-    <span class='comment'>// TODO check all channels have different indices</span>
-
     <span class='kw'>let</span> (<span class='ident'>palette</span>, <span class='kw-2'>mut</span> <span class='ident'>depaletted_line</span>) <span class='op'>=</span>
         <span class='kw'>if</span> <span class='ident'>paletted</span> {
-            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>palette</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>palette_length</span> <span class='op'>*</span> <span class='ident'>pe_bytes_pp</span>)
-                                                                        .<span class='ident'>collect</span>();
-            <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>palette</span>[..]));
-            (<span class='ident'>palette</span>, <span class='ident'>repeat</span>(<span class='number'>0u8</span>).<span class='ident'>take</span>(<span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='ident'>pe_bytes_pp</span>).<span class='ident'>collect</span>())
+            <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>palette</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>palette_length</span> <span class='op'>*</span> <span class='ident'>pe_fmt</span>.<span class='ident'>bytes_pp</span>()];
+            <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>palette</span>[..]));
+            (<span class='ident'>palette</span>, <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='ident'>pe_fmt</span>.<span class='ident'>bytes_pp</span>()])
         } <span class='kw'>else</span> {
             (<span class='ident'>Vec</span>::<span class='ident'>new</span>(), <span class='ident'>Vec</span>::<span class='ident'>new</span>())
         };
@@ -632,10 +669,11 @@
         }
     };
 
-    <span class='kw'>let</span> <span class='ident'>convert</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>converter</span>(<span class='ident'>ColFmt</span>::<span class='ident'>BGRA</span>, <span class='ident'>tgt_fmt</span>));
+    <span class='kw'>let</span> <span class='ident'>convert</span> <span class='op'>=</span>
+        <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>converter</span>(<span class='kw'>if</span> <span class='ident'>paletted</span> { <span class='ident'>pe_fmt</span> } <span class='kw'>else</span> { <span class='ident'>ColFmt</span>::<span class='ident'>BGRA</span> }, <span class='ident'>tgt_fmt</span>));
 
     <span class='kw'>let</span> <span class='ident'>src_linesize</span> <span class='op'>=</span> <span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='ident'>bytes_pp</span>;  <span class='comment'>// without padding</span>
-    <span class='kw'>let</span> <span class='ident'>src_pad</span> <span class='op'>=</span> <span class='kw'>if</span> <span class='ident'>paletted</span> { <span class='number'>0</span> } <span class='kw'>else</span> { <span class='number'>3</span> <span class='op'>-</span> ((<span class='ident'>src_linesize</span><span class='op'>-</span><span class='number'>1</span>) <span class='op'>%</span> <span class='number'>4</span>) };
+    <span class='kw'>let</span> <span class='ident'>src_pad</span> <span class='op'>=</span> <span class='number'>3</span> <span class='op'>-</span> ((<span class='ident'>src_linesize</span><span class='op'>-</span><span class='number'>1</span>) <span class='op'>%</span> <span class='number'>4</span>);
     <span class='kw'>let</span> <span class='ident'>tgt_bytespp</span> <span class='op'>=</span> <span class='ident'>tgt_fmt</span>.<span class='ident'>bytes_pp</span>();
     <span class='kw'>let</span> <span class='ident'>tgt_linesize</span> <span class='op'>=</span> (<span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>) <span class='kw'>as</span> <span class='ident'>isize</span>;
 
@@ -646,22 +684,22 @@
             (<span class='op'>-</span><span class='ident'>tgt_linesize</span>, (<span class='ident'>hdr</span>.<span class='ident'>height</span><span class='op'>-</span><span class='number'>1</span>) <span class='op'>*</span> <span class='ident'>tgt_linesize</span>)
         };
 
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>src_line_buf</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>src_linesize</span> <span class='op'>+</span> <span class='ident'>src_pad</span>).<span class='ident'>collect</span>();
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>bgra_line_buf</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span>
-        <span class='kw'>if</span> <span class='ident'>paletted</span> { <span class='ident'>Vec</span>::<span class='ident'>new</span>() }
-        <span class='kw'>else</span> { <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='number'>4</span>).<span class='ident'>collect</span>() };
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>result</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>u8</span><span class='op'>&gt;</span> <span class='op'>=</span>
-        <span class='ident'>repeat</span>(<span class='number'>0</span>).<span class='ident'>take</span>(<span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='ident'>hdr</span>.<span class='ident'>height</span>.<span class='ident'>abs</span>() <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>)
-                                                                         .<span class='ident'>collect</span>();
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>src_line_buf</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>src_linesize</span> <span class='op'>+</span> <span class='ident'>src_pad</span>];
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>bgra_line_buf</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='kw'>if</span> <span class='ident'>paletted</span> { <span class='number'>0</span> } <span class='kw'>else</span> { <span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='number'>4</span> }];
+    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>result</span> <span class='op'>=</span>
+        <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0u8</span>; <span class='ident'>hdr</span>.<span class='ident'>width</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='ident'>hdr</span>.<span class='ident'>height</span>.<span class='ident'>abs</span>() <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='ident'>tgt_bytespp</span>];
 
     <span class='kw'>for</span> _ <span class='kw'>in</span> (<span class='number'>0</span> .. <span class='ident'>hdr</span>.<span class='ident'>height</span>.<span class='ident'>abs</span>()) {
-        <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>src_line_buf</span>[..]));
+        <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>reader</span>.<span class='ident'>read_exact_</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>src_line_buf</span>[..]));
         <span class='kw'>let</span> <span class='ident'>src_line</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='ident'>src_line_buf</span>[..<span class='ident'>src_linesize</span>];
 
         <span class='kw'>if</span> <span class='ident'>paletted</span> {
-            <span class='kw'>let</span> <span class='ident'>ps</span> <span class='op'>=</span> <span class='ident'>pe_bytes_pp</span>;
+            <span class='kw'>let</span> <span class='ident'>ps</span> <span class='op'>=</span> <span class='ident'>pe_fmt</span>.<span class='ident'>bytes_pp</span>();
             <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>di</span> <span class='op'>=</span> <span class='number'>0</span>;
             <span class='kw'>for</span> <span class='kw-2'>&amp;</span><span class='ident'>idx</span> <span class='kw'>in</span> <span class='ident'>src_line</span> {
+                <span class='kw'>if</span> <span class='ident'>idx</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>&gt;</span> <span class='ident'>palette_length</span> {
+                    <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;invalid palette index&quot;</span>);
+                }
                 <span class='kw'>let</span> <span class='ident'>idx</span> <span class='op'>=</span> <span class='ident'>idx</span> <span class='kw'>as</span> <span class='ident'>usize</span> <span class='op'>*</span> <span class='ident'>ps</span>;
                 <span class='ident'>copy_memory</span>(<span class='kw-2'>&amp;</span><span class='ident'>palette</span>[<span class='ident'>idx</span> .. <span class='ident'>idx</span><span class='op'>+</span><span class='ident'>ps</span>], <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>depaletted_line</span>[<span class='ident'>di</span> .. <span class='ident'>di</span><span class='op'>+</span><span class='ident'>ps</span>]);
                 <span class='kw'>if</span> <span class='ident'>ps</span> <span class='op'>==</span> <span class='number'>4</span> {

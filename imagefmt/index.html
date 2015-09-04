@@ -45,10 +45,10 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-0' class='srclink' href='../src/imagefmt/lib.rs.html#3-613' title='goto source code'>[src]</a></span></h1>
+        </span><a id='src-0' class='srclink' href='../src/imagefmt/lib.rs.html#3-610' title='goto source code'>[src]</a></span></h1>
 <div class='docblock'>
 <h1 id="example" class='section-header'><a
-                           href="#example">Example</a></h1><pre id='rust-example-rendered' class='rust '>
+                           href="#example">Example</a></h1><pre class='rust rust-example-rendered'>
 <span class='kw'>extern</span> <span class='kw'>crate</span> <span class='ident'>imagefmt</span>;
 <span class='kw'>use</span> <span class='ident'>imagefmt</span>::{<span class='ident'>ColFmt</span>, <span class='ident'>ColType</span>};
 
@@ -163,10 +163,28 @@
                     </tr>
                 
                     <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_from.html'
+                               title='imagefmt::read_from'>read_from</a></td>
+                        <td class='docblock short'>
+                             <p>Like <code>read</code> but reads from a reader.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
                         <td><a class='fn' href='fn.read_info.html'
                                title='imagefmt::read_info'>read_info</a></td>
                         <td class='docblock short'>
                              <p>Returns width, height and color type of the image.</p>
+
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='fn' href='fn.read_info_from.html'
+                               title='imagefmt::read_info_from'>read_info_from</a></td>
+                        <td class='docblock short'>
+                             <p>Like <code>read_info</code> but reads from a reader. If it fails, it seeks back to where started.</p>
 
                         </td>
                     </tr>
