@@ -29,7 +29,6 @@
 use std::ffi::OsStr;
 use std::fs::{File};
 use std::io::{self, Read, BufReader, BufWriter, ErrorKind, Seek, SeekFrom};
-use std::iter::{repeat};
 use std::path::Path;
 use std::fmt::{self, Debug};
 use std::ptr;
@@ -154,7 +153,7 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
     }
 
     if tgt_fmt == src_fmt || tgt_fmt == ColFmt::Auto {
-        let mut result: Vec<u8> = repeat(0).take(data.len()).collect();
+        let mut result = vec![0u8; data.len()];
         copy_memory(data, &mut result[..]);
         return Ok(Image {
             w   : w,
@@ -168,7 +167,7 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
 
     let src_linesize = w * src_fmt.bytes_pp();
     let tgt_linesize = w * tgt_fmt.bytes_pp();
-    let mut result: Vec<u8> = repeat(0).take(h * tgt_linesize).collect();
+    let mut result = vec![0u8; h * tgt_linesize];
 
     let mut si = 0;
     let mut ti = 0;
