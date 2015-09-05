@@ -974,17 +974,19 @@ fn upsample<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize
     }
 }
 
+#[inline]
 fn ycbcr_to_rgb(y: u8, cb: u8, cr: u8) -> [u8; 3] {
-    let cb = cb as f32;
-    let cr = cr as f32;
-    [clamp_to_u8(y as f32 + 1.402*(cr-128.0)),
-     clamp_to_u8(y as f32 - 0.34414*(cb-128.0) - 0.71414*(cr-128.0)),
-     clamp_to_u8(y as f32 + 1.772*(cb-128.0))]
+    let cb = cb as f32 - 128.0;
+    let cr = cr as f32 - 128.0;
+    [clamp_to_u8(y as f32 + 1.402*cr),
+     clamp_to_u8(y as f32 - 0.34414*cb - 0.71414*cr),
+     clamp_to_u8(y as f32 + 1.772*cb)]
 }
 
+#[inline]
 fn clamp_to_u8(x: f32) -> u8 {
-    if x < 0.0 { return 0; }
-    if 255.0 < x { return 255; }
+    if x <= 0.0 { return 0; }
+    if 255.0 <= x { return 255; }
     x as u8
 }
 
