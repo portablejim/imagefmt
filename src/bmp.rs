@@ -1,10 +1,10 @@
 // Copyright (c) 2015 Tero Hänninen, license: MIT
 
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use super::{
     Image, Info, ColFmt, ColType, error,
-    copy_memory, converter,
-    u32_from_le, i32_from_le, u16_from_le, IFRead,
+    copy_memory, converter, IFRead,
+    u32_from_le, i32_from_le, u16_from_le, u32_to_le, u16_to_le,
 };
 
 /// Returns width, height and color type of the image.
@@ -343,4 +343,64 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         fmt : tgt_fmt,
         buf : result,
     })
+}
+
+// --------------------------------------------------
+// BMP encoder
+
+/// Writes an image (only with colors and without alpha).
+///
+/// `tgt_type` can be `ColType::Color` or `ColType::Auto`. Both do the same thing here.
+pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
+                                                                      tgt_type: ColType)
+                                                                       -> io::Result<()>
+{
+    if w < 1 || h < 1 || 0x7fff < w || 0x7fff < h
+    || src_fmt.bytes_pp() * w * h != data.len() {
+        return error("invalid dimensions or data length");
+    }
+
+    match src_fmt {
+        ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA
+                               | ColFmt::BGR | ColFmt::BGRA => {}
+        ColFmt::Auto => return error("invalid format"),
+    }
+
+    match tgt_type {
+        ColType::Color | ColType::Auto => {}
+        _ => return error("unsupported target color type"),
+    }
+
+    let tgt_linesize = w * 3;
+    let pad = 3 - ((tgt_linesize-1) & 3);
+    let idat_offset = 14 + 40;       // bmp file header + dib header
+    let filesize = idat_offset + h * (tgt_linesize + pad);
+    if filesize > 0xffff_ffff {
+        return error("image too large")
+    }
+
+    try!(writer.write_all(b"BM"));
+    try!(writer.write_all(&u32_to_le(filesize as u32)[..]));
+    try!(writer.write_all(&[0u8; 4]));                      // reserved
+    try!(writer.write_all(&u32_to_le(idat_offset as u32)[..])); // offset of pixel data
+    try!(writer.write_all(&u32_to_le(40)[..]));             // dib header size
+    try!(writer.write_all(&u32_to_le(w as u32)[..]));
+    try!(writer.write_all(&u32_to_le(h as u32)[..]));       // positive -> bottom-up
+    try!(writer.write_all(&u16_to_le(1)[..]));              // planes
+    try!(writer.write_all(&u16_to_le(24)[..]));             // bits per pixel
+    try!(writer.write_all(&[0u8; 6 * 4]));     // DibV1
+
+    let convert = try!(converter(src_fmt, ColFmt::BGR));
+
+    let mut tgt_line = vec![0u8; tgt_linesize + pad];
+    let src_linesize = w * src_fmt.bytes_pp();
+    let mut si = h * src_linesize;
+
+    for _ in (0 .. h) {
+        si -= src_linesize;
+        convert(&data[si .. si + src_linesize], &mut tgt_line[..tgt_linesize]);
+        try!(writer.write_all(&tgt_line));
+    }
+
+    Ok(())
 }

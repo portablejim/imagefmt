@@ -134,6 +134,7 @@ pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
         match filepath.extension().and_then(OsStr::to_str) {
             Some("png") if cfg!(feature = "png") => png::write,
             Some("tga") if cfg!(feature = "tga") => tga::write,
+            Some("bmp") if cfg!(feature = "bmp") => bmp::write,
             _ => return error("image type not supported for writing"),
         };
     let file = try!(File::create(filepath));
@@ -556,6 +557,11 @@ fn u32_from_be(buf: &[u8]) -> u32 {
 #[allow(dead_code)]
 fn u32_to_be(x: u32) -> [u8; 4] {
     [(x >> 24) as u8, (x >> 16) as u8, (x >> 8) as u8, (x) as u8]
+}
+
+#[allow(dead_code)]
+fn u32_to_le(x: u32) -> [u8; 4] {
+    [(x) as u8, (x >> 8) as u8, (x >> 16) as u8, (x >> 24) as u8]
 }
 
 #[allow(dead_code)]
