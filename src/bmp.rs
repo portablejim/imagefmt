@@ -346,9 +346,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
 // --------------------------------------------------
 // BMP encoder
 
-/// Writes an image (only with colors and without alpha).
-///
-/// `tgt_type` can be `ColType::Color` or `ColType::Auto`. Both do the same thing here.
+/// Writes an image and converts it to requested color type (grayscale not supported).
 pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
                                                                       tgt_type: ColType)
                                                                        -> io::Result<()>
@@ -364,31 +362,52 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
         ColFmt::Auto => return error("invalid format"),
     }
 
-    match tgt_type {
-        ColType::Color | ColType::Auto => {}
+    let tgt_fmt = match tgt_type {
+        ColType::Color      => ColFmt::BGR,
+        ColType::ColorAlpha => ColFmt::BGRA,
+        ColType::Auto => if src_fmt.has_alpha() == Some(true) {
+                             ColFmt::BGRA
+                         } else {
+                             ColFmt::BGR
+                         },
         _ => return error("unsupported target color type"),
-    }
+    };
 
-    let tgt_linesize = w * 3;
+    let dib_size = 108;
+    let tgt_linesize = w * tgt_fmt.bytes_pp();
     let pad = 3 - ((tgt_linesize-1) & 3);
-    let idat_offset = 14 + 40;       // bmp file header + dib header
+    let idat_offset = 14 + dib_size;       // bmp file header + dib header
     let filesize = idat_offset + h * (tgt_linesize + pad);
     if filesize > 0xffff_ffff {
         return error("image too large")
     }
 
+    let tgt_has_alpha = tgt_fmt.has_alpha() == Some(true);
+
     try!(writer.write_all(b"BM"));
     try!(writer.write_all(&u32_to_le(filesize as u32)[..]));
     try!(writer.write_all(&[0u8; 4]));                      // reserved
     try!(writer.write_all(&u32_to_le(idat_offset as u32)[..])); // offset of pixel data
-    try!(writer.write_all(&u32_to_le(40)[..]));             // dib header size
+    try!(writer.write_all(&u32_to_le(dib_size as u32)[..]));    // dib header size
     try!(writer.write_all(&u32_to_le(w as u32)[..]));
     try!(writer.write_all(&u32_to_le(h as u32)[..]));       // positive -> bottom-up
     try!(writer.write_all(&u16_to_le(1)[..]));              // planes
-    try!(writer.write_all(&u16_to_le(24)[..]));             // bits per pixel
-    try!(writer.write_all(&[0u8; 6 * 4]));     // DibV1
+    try!(writer.write_all(&u16_to_le((tgt_fmt.bytes_pp() * 8) as u16)[..])); // bpp
+    try!(writer.write_all(&u32_to_le(if tgt_has_alpha { CMP_BITS } else { CMP_RGB })));
+    try!(writer.write_all(&[0u8; 5 * 4]));   // rest of DibV1
+    if tgt_has_alpha {
+        // red, green, blue and alpha masks
+        try!(writer.write_all(&[0, 0, 0xff, 0,
+                                0, 0xff, 0, 0,
+                                0xff, 0, 0, 0,
+                                0, 0, 0, 0xff]));
+    } else {
+        try!(writer.write_all(&[0u8; 4 * 4]));   // DibV2 & DibV3
+    }
+    try!(writer.write_all(b"BGRs"));
+    try!(writer.write_all(&[0u8; 12 * 4]));   // rest of DibV4
 
-    let convert = try!(converter(src_fmt, ColFmt::BGR));
+    let convert = try!(converter(src_fmt, tgt_fmt));
 
     let mut tgt_line = vec![0u8; tgt_linesize + pad];
     let src_linesize = w * src_fmt.bytes_pp();
