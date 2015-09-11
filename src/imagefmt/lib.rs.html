@@ -650,6 +650,12 @@
 <span id="608">608</span>
 <span id="609">609</span>
 <span id="610">610</span>
+<span id="611">611</span>
+<span id="612">612</span>
+<span id="613">613</span>
+<span id="614">614</span>
+<span id="615">615</span>
+<span id="616">616</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright (c) 2014-2015 Tero Hänninen</span>
 <span class='comment'>//</span>
@@ -787,6 +793,7 @@
         <span class='kw'>match</span> <span class='ident'>filepath</span>.<span class='ident'>extension</span>().<span class='ident'>and_then</span>(<span class='ident'>OsStr</span>::<span class='ident'>to_str</span>) {
             <span class='prelude-val'>Some</span>(<span class='string'>&quot;png&quot;</span>) <span class='kw'>if</span> <span class='macro'>cfg</span><span class='macro'>!</span>(<span class='ident'>feature</span> <span class='op'>=</span> <span class='string'>&quot;png&quot;</span>) <span class='op'>=&gt;</span> <span class='ident'>png</span>::<span class='ident'>write</span>,
             <span class='prelude-val'>Some</span>(<span class='string'>&quot;tga&quot;</span>) <span class='kw'>if</span> <span class='macro'>cfg</span><span class='macro'>!</span>(<span class='ident'>feature</span> <span class='op'>=</span> <span class='string'>&quot;tga&quot;</span>) <span class='op'>=&gt;</span> <span class='ident'>tga</span>::<span class='ident'>write</span>,
+            <span class='prelude-val'>Some</span>(<span class='string'>&quot;bmp&quot;</span>) <span class='kw'>if</span> <span class='macro'>cfg</span><span class='macro'>!</span>(<span class='ident'>feature</span> <span class='op'>=</span> <span class='string'>&quot;bmp&quot;</span>) <span class='op'>=&gt;</span> <span class='ident'>bmp</span>::<span class='ident'>write</span>,
             _ <span class='op'>=&gt;</span> <span class='kw'>return</span> <span class='ident'>error</span>(<span class='string'>&quot;image type not supported for writing&quot;</span>),
         };
     <span class='kw'>let</span> <span class='ident'>file</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>File</span>::<span class='ident'>create</span>(<span class='ident'>filepath</span>));
@@ -1209,6 +1216,11 @@
 <span class='attribute'>#[<span class='ident'>allow</span>(<span class='ident'>dead_code</span>)]</span>
 <span class='kw'>fn</span> <span class='ident'>u32_to_be</span>(<span class='ident'>x</span>: <span class='ident'>u32</span>) <span class='op'>-&gt;</span> [<span class='ident'>u8</span>; <span class='number'>4</span>] {
     [(<span class='ident'>x</span> <span class='op'>&gt;&gt;</span> <span class='number'>24</span>) <span class='kw'>as</span> <span class='ident'>u8</span>, (<span class='ident'>x</span> <span class='op'>&gt;&gt;</span> <span class='number'>16</span>) <span class='kw'>as</span> <span class='ident'>u8</span>, (<span class='ident'>x</span> <span class='op'>&gt;&gt;</span> <span class='number'>8</span>) <span class='kw'>as</span> <span class='ident'>u8</span>, (<span class='ident'>x</span>) <span class='kw'>as</span> <span class='ident'>u8</span>]
+}
+
+<span class='attribute'>#[<span class='ident'>allow</span>(<span class='ident'>dead_code</span>)]</span>
+<span class='kw'>fn</span> <span class='ident'>u32_to_le</span>(<span class='ident'>x</span>: <span class='ident'>u32</span>) <span class='op'>-&gt;</span> [<span class='ident'>u8</span>; <span class='number'>4</span>] {
+    [(<span class='ident'>x</span>) <span class='kw'>as</span> <span class='ident'>u8</span>, (<span class='ident'>x</span> <span class='op'>&gt;&gt;</span> <span class='number'>8</span>) <span class='kw'>as</span> <span class='ident'>u8</span>, (<span class='ident'>x</span> <span class='op'>&gt;&gt;</span> <span class='number'>16</span>) <span class='kw'>as</span> <span class='ident'>u8</span>, (<span class='ident'>x</span> <span class='op'>&gt;&gt;</span> <span class='number'>24</span>) <span class='kw'>as</span> <span class='ident'>u8</span>]
 }
 
 <span class='attribute'>#[<span class='ident'>allow</span>(<span class='ident'>dead_code</span>)]</span>

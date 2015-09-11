@@ -1167,6 +1167,8 @@
 <span id="1125">1125</span>
 <span id="1126">1126</span>
 <span id="1127">1127</span>
+<span id="1128">1128</span>
+<span id="1129">1129</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright (c) 2014-2015 Tero Hänninen, license: MIT</span>
 
@@ -2144,17 +2146,19 @@
     }
 }
 
+<span class='attribute'>#[<span class='ident'>inline</span>]</span>
 <span class='kw'>fn</span> <span class='ident'>ycbcr_to_rgb</span>(<span class='ident'>y</span>: <span class='ident'>u8</span>, <span class='ident'>cb</span>: <span class='ident'>u8</span>, <span class='ident'>cr</span>: <span class='ident'>u8</span>) <span class='op'>-&gt;</span> [<span class='ident'>u8</span>; <span class='number'>3</span>] {
-    <span class='kw'>let</span> <span class='ident'>cb</span> <span class='op'>=</span> <span class='ident'>cb</span> <span class='kw'>as</span> <span class='ident'>f32</span>;
-    <span class='kw'>let</span> <span class='ident'>cr</span> <span class='op'>=</span> <span class='ident'>cr</span> <span class='kw'>as</span> <span class='ident'>f32</span>;
-    [<span class='ident'>clamp_to_u8</span>(<span class='ident'>y</span> <span class='kw'>as</span> <span class='ident'>f32</span> <span class='op'>+</span> <span class='number'>1.402</span><span class='op'>*</span>(<span class='ident'>cr</span><span class='op'>-</span><span class='number'>128.0</span>)),
-     <span class='ident'>clamp_to_u8</span>(<span class='ident'>y</span> <span class='kw'>as</span> <span class='ident'>f32</span> <span class='op'>-</span> <span class='number'>0.34414</span><span class='op'>*</span>(<span class='ident'>cb</span><span class='op'>-</span><span class='number'>128.0</span>) <span class='op'>-</span> <span class='number'>0.71414</span><span class='op'>*</span>(<span class='ident'>cr</span><span class='op'>-</span><span class='number'>128.0</span>)),
-     <span class='ident'>clamp_to_u8</span>(<span class='ident'>y</span> <span class='kw'>as</span> <span class='ident'>f32</span> <span class='op'>+</span> <span class='number'>1.772</span><span class='op'>*</span>(<span class='ident'>cb</span><span class='op'>-</span><span class='number'>128.0</span>))]
+    <span class='kw'>let</span> <span class='ident'>cb</span> <span class='op'>=</span> <span class='ident'>cb</span> <span class='kw'>as</span> <span class='ident'>f32</span> <span class='op'>-</span> <span class='number'>128.0</span>;
+    <span class='kw'>let</span> <span class='ident'>cr</span> <span class='op'>=</span> <span class='ident'>cr</span> <span class='kw'>as</span> <span class='ident'>f32</span> <span class='op'>-</span> <span class='number'>128.0</span>;
+    [<span class='ident'>clamp_to_u8</span>(<span class='ident'>y</span> <span class='kw'>as</span> <span class='ident'>f32</span> <span class='op'>+</span> <span class='number'>1.402</span><span class='op'>*</span><span class='ident'>cr</span>),
+     <span class='ident'>clamp_to_u8</span>(<span class='ident'>y</span> <span class='kw'>as</span> <span class='ident'>f32</span> <span class='op'>-</span> <span class='number'>0.34414</span><span class='op'>*</span><span class='ident'>cb</span> <span class='op'>-</span> <span class='number'>0.71414</span><span class='op'>*</span><span class='ident'>cr</span>),
+     <span class='ident'>clamp_to_u8</span>(<span class='ident'>y</span> <span class='kw'>as</span> <span class='ident'>f32</span> <span class='op'>+</span> <span class='number'>1.772</span><span class='op'>*</span><span class='ident'>cb</span>)]
 }
 
+<span class='attribute'>#[<span class='ident'>inline</span>]</span>
 <span class='kw'>fn</span> <span class='ident'>clamp_to_u8</span>(<span class='ident'>x</span>: <span class='ident'>f32</span>) <span class='op'>-&gt;</span> <span class='ident'>u8</span> {
-    <span class='kw'>if</span> <span class='ident'>x</span> <span class='op'>&lt;</span> <span class='number'>0.0</span> { <span class='kw'>return</span> <span class='number'>0</span>; }
-    <span class='kw'>if</span> <span class='number'>255.0</span> <span class='op'>&lt;</span> <span class='ident'>x</span> { <span class='kw'>return</span> <span class='number'>255</span>; }
+    <span class='kw'>if</span> <span class='ident'>x</span> <span class='op'>&lt;=</span> <span class='number'>0.0</span> { <span class='kw'>return</span> <span class='number'>0</span>; }
+    <span class='kw'>if</span> <span class='number'>255.0</span> <span class='op'>&lt;=</span> <span class='ident'>x</span> { <span class='kw'>return</span> <span class='number'>255</span>; }
     <span class='ident'>x</span> <span class='kw'>as</span> <span class='ident'>u8</span>
 }
 
