@@ -14,11 +14,10 @@ pub fn read_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
     Ok(Info {
         w: hdr.width.abs() as usize,
         h: hdr.height.abs() as usize,
-        ct: if let Some(mask) = hdr.dib_v3_alpha_mask {
-               if mask != 0 { ColType::ColorAlpha } else { ColType::Color }
-           } else {
-               ColType::Color
-           },
+        ct: match (hdr.bits_pp, hdr.dib_v3_alpha_mask) {
+                (32, Some(mask)) if mask != 0 => ColType::ColorAlpha,
+                                            _ => ColType::Color,
+        },
     })
 }
 
@@ -255,10 +254,9 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     };
 
     let (alpha_masked, alphai) =
-        if let Some(mask) = hdr.dib_v3_alpha_mask {
-            if mask == 0 { (false, 0) } else { (true, try!(mask_to_idx(mask))) }
-        } else {
-            (false, 0)
+        match (bytes_pp, hdr.dib_v3_alpha_mask) {
+            (4, Some(mask)) if mask != 0 => (true, try!(mask_to_idx(mask))),
+                                       _ => (false, 0),
         };
 
     let (palette, mut depaletted_line) =
