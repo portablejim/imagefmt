@@ -27,21 +27,13 @@ struct TgaHeader {
 
 /// Returns width, height and color type of the image.
 pub fn read_info<R: Read>(reader: &mut R) -> io::Result<Info> {
-    use super::ColFmt::*;
-
     let hdr = try!(read_header(reader));
     let TgaInfo { src_fmt, .. } = try!(parse_header(&hdr));
 
     Ok(Info {
         w: hdr.width as usize,
         h: hdr.height as usize,
-        ct: match src_fmt {
-               ColFmt::Y => ColType::Gray,
-               ColFmt::YA => ColType::GrayAlpha,
-               ColFmt::BGR => ColType::Color,
-               ColFmt::BGRA => ColType::ColorAlpha,
-                           _ => ColType::Auto,      // unknown type
-           },
+        ct: src_fmt.color_type(),
     })
 }
 
