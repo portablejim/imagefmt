@@ -695,17 +695,21 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
                 _ => return error("bug"),
             };
 
+            let (sx1, sy1) = (dc.hmax / dc.comps[1].sfx, dc.vmax / dc.comps[1].sfy);
+            let (sx2, sy2) = (dc.hmax / dc.comps[2].sfx, dc.vmax / dc.comps[2].sfy);
+            let rem = dc.hmax % dc.comps[1].sfx + dc.vmax % dc.comps[1].sfy
+                    + dc.hmax % dc.comps[2].sfx + dc.vmax % dc.comps[2].sfy;
+
             // Use specialized bilinear filtering functions for the frequent cases where
             // Cb & Cr channels have half resolution.
-            if (dc.comps[0].sfx <= 2 && dc.comps[0].sfy <= 2)
-            && (dc.comps[0].sfx + dc.comps[0].sfy >= 3)
-            && dc.comps[1].sfx == 1 && dc.comps[1].sfy == 1
-            && dc.comps[2].sfx == 1 && dc.comps[2].sfy == 1 {
+            if dc.comps[0].sfx == dc.hmax && dc.comps[0].sfy == dc.vmax
+            && sx1 <= 2 && sx1 <= 2 && sx1 == sx2 && sy1 == sy2 && rem == 0 {
                 let resample: fn(&[u8], &[u8], &mut[u8]) =
-                    match (dc.comps[0].sfx, dc.comps[0].sfy) {
+                    match (sx1, sy1) {
                         (2, 2) => upsample_h2_v2,
                         (2, 1) => upsample_h2_v1,
                         (1, 2) => upsample_h1_v2,
+                        (1, 1) => samples_h1_v1,
                         (_, _) => return error("bug"),
                     };
 
@@ -748,32 +752,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
             }
 
             // Generic resampling.
-            for ref comp in &dc.comps {
-                if comp.sfx != dc.hmax || comp.sfy != dc.vmax {
-                    upsample(dc, &mut result[..], ri, gi, bi);
-                    return Ok(result);
-                }
-            }
-
-            let mut si = 0;
-            let mut di = 0;
-            for _j in (0 .. dc.h) {
-                for i in (0 .. dc.w) {
-                    let pixel = ycbcr_to_rgb(
-                        dc.comps[0].data[si+i],
-                        dc.comps[1].data[si+i],
-                        dc.comps[2].data[si+i],
-                    );
-                    result[di+ri] = pixel[0];
-                    result[di+gi] = pixel[1];
-                    result[di+bi] = pixel[2];
-                    if dc.tgt_fmt.has_alpha() == Some(true) {
-                        result[di+3] = 255;
-                    }
-                    di += tgt_bytespp;
-                }
-                si += dc.num_mcu_x * dc.comps[0].sfx * 8;
-            }
+            upsample(dc, &mut result[..], ri, gi, bi);
             return Ok(result);
         },
         (_, ColFmt::Y) | (_, ColFmt::YA) => {
@@ -887,6 +866,10 @@ fn upsample_h1_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
                      + line1[i] as u32 * 1
                      + 2) / 4) as u8;
     }
+}
+
+fn samples_h1_v1(line0: &[u8], _line1: &[u8], result: &mut[u8]) {
+    copy_memory(line0, result)
 }
 
 // Nearest neighbor.
