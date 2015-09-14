@@ -88,7 +88,6 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         restart_interval : 0,
         correct_comp_ids : true,
         comps       : unsafe { zeroed() },
-        index_for   : [0, 0, 0],
         num_comps   : 0,
         hmax        : 0,
         vmax        : 0,
@@ -148,7 +147,6 @@ struct JpegDecoder<'r, R: Read + 'r> {
 
     correct_comp_ids : bool,
     comps       : [Component; 3],
-    index_for   : [usize; 3],
     num_comps   : usize,
     hmax        : usize,
     vmax        : usize,
@@ -395,7 +393,6 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         }
         if dc.correct_comp_ids { ci -= 1 };
 
-        dc.index_for[i] = ci;
         let sampling_factors = buf[i*3 + 1];
         dc.comps[ci] = Component {
             id      : ci as u8,
@@ -493,22 +490,21 @@ fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
 
             // decode mcu
             for c in (0 .. dc.num_comps) {
-                let comp_idx = dc.index_for[c];
-                let comp_sfx = dc.comps[comp_idx].sfx;
-                let comp_sfy = dc.comps[comp_idx].sfy;
-                let comp_qtab = dc.comps[comp_idx].qtable;
+                let comp_sfx = dc.comps[c].sfx;
+                let comp_sfy = dc.comps[c].sfy;
+                let comp_qtab = dc.comps[c].qtable;
 
                 for du_j in (0 .. comp_sfy) {
                     for du_i in (0 .. comp_sfx) {
                         // decode entropy, dequantize & dezigzag
                         //let data = try!(decode_block(dc, comp, &dc.qtables[comp.qtable]));
-                        let data = try!(decode_block(dc, comp_idx, comp_qtab));
+                        let data = try!(decode_block(dc, c, comp_qtab));
 
                         // idct & level-shift
                         let outx = (mcu_i * comp_sfx + du_i) * 8;
                         let outy = (mcu_j * comp_sfy + du_j) * 8;
                         let dst_stride = dc.num_mcu_x * comp_sfx * 8;
-                        let base = &mut dc.comps[comp_idx].data[0] as *mut u8;
+                        let base = &mut dc.comps[c].data[0] as *mut u8;
                         let offset = (outy * dst_stride + outx) as isize;
                         unsafe {
                             let dst = base.offset(offset);
