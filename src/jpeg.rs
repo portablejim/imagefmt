@@ -65,11 +65,6 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
 ///
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to `Y` or `RGB`.
 pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
-    use super::ColFmt::*;
-    let req_fmt = match req_fmt {
-        Auto | Y | YA | RGB | RGBA | BGR | BGRA => req_fmt,
-        //_ => return error("conversion not supported")
-    };
 
     let dc = &mut JpegDecoder {
         stream      : reader,
@@ -683,14 +678,11 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
     let mut result = vec![0u8; dc.w * dc.h * tgt_bytespp];
 
-    match (dc.num_comps, dc.tgt_fmt) {
-        (3, ColFmt::RGB) | (3, ColFmt::RGBA) | (3, ColFmt::BGR) | (3, ColFmt::BGRA) => {
-            let (ri, gi, bi) = match dc.tgt_fmt {
-                ColFmt::RGB | ColFmt::RGBA => (0, 1, 2),
-                ColFmt::BGR | ColFmt::BGRA => (2, 1, 0),
-                _ => return error("bug"),
-            };
+    let (yi, ri, gi, bi, ai) = dc.tgt_fmt.indices_yrgba();
 
+    match (dc.num_comps, dc.tgt_fmt) {
+        (3, ColFmt::RGB) | (3, ColFmt::BGR) | (3, ColFmt::RGBA) | (3, ColFmt::BGRA)
+                                            | (3, ColFmt::ARGB) | (3, ColFmt::ABGR) => {
             let (sx1, sy1) = (dc.hmax / dc.comps[1].sfx, dc.vmax / dc.comps[1].sfy);
             let (sx2, sy2) = (dc.hmax / dc.comps[2].sfx, dc.vmax / dc.comps[2].sfy);
             let rem = dc.hmax % dc.comps[1].sfx + dc.vmax % dc.comps[1].sfy
@@ -739,7 +731,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
                         result[di+ri] = pixel[0];
                         result[di+gi] = pixel[1];
                         result[di+bi] = pixel[2];
-                        if dc.tgt_fmt.has_alpha() == Some(true) { result[di+3] = 255; }
+                        if dc.tgt_fmt.has_alpha() == Some(true) { result[di+ai] = 255; }
                         di += tgt_bytespp;
                     }
                 }
@@ -748,24 +740,24 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
             }
 
             // Generic resampling.
-            upsample(dc, &mut result[..], ri, gi, bi);
+            upsample(dc, &mut result[..], ri, gi, bi, ai);
             return Ok(result);
         },
-        (_, ColFmt::Y) | (_, ColFmt::YA) => {
+        (_, ColFmt::Y) | (_, ColFmt::YA) | (_, ColFmt::AY) => {
             let comp = &dc.comps[0];
             if comp.sfx != dc.hmax || comp.sfy != dc.vmax {
-                upsample_luma(dc, &mut result[..]);
+                upsample_luma(dc, &mut result[..], yi, ai);
                 return Ok(result);
             }
 
             // no resampling
             let mut si = 0;
             let mut di = 0;
-            if dc.tgt_fmt == ColFmt::YA {
+            if dc.tgt_fmt.has_alpha() == Some(true) {
                 for _j in (0 .. dc.h) {
                     for i in (0 .. dc.w) {
-                        result[di  ] = comp.data[si+i];
-                        result[di+1] = 255;
+                        result[di+yi] = comp.data[si+i];
+                        result[di+ai] = 255;
                         di += 2;
                     }
                     si += dc.num_mcu_x * comp.sfx * 8;
@@ -779,17 +771,18 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
             }
             return Ok(result);
         },
-        (1, ColFmt::RGB) | (1, ColFmt::RGBA) | (1, ColFmt::BGR) | (1, ColFmt::BGRA) => {
+        (1, ColFmt::RGB) | (1, ColFmt::BGR) | (1, ColFmt::RGBA) | (1, ColFmt::BGRA)
+                                            | (1, ColFmt::ARGB) | (1, ColFmt::ABGR) => {
             let comp = &dc.comps[0];
             let mut si = 0;
             let mut di = 0;
             for _j in (0 .. dc.h) {
                 for i in (0 .. dc.w) {
-                    result[di  ] = comp.data[si+i];
-                    result[di+1] = comp.data[si+i];
-                    result[di+2] = comp.data[si+i];
+                    result[di+ri] = comp.data[si+i];
+                    result[di+gi] = comp.data[si+i];
+                    result[di+bi] = comp.data[si+i];
                     if dc.tgt_fmt.has_alpha() == Some(true) {
-                        result[di+3] = 255;
+                        result[di+ai] = 255;
                     }
                     di += tgt_bytespp;
                 }
@@ -869,7 +862,7 @@ fn samples_h1_v1(line0: &[u8], _line1: &[u8], result: &mut[u8]) {
 }
 
 // Nearest neighbor.
-fn upsample_luma<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
+fn upsample_luma<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], li: usize, ai: usize) {
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     let y0_step = dc.comps[0].sfy as f32 / dc.vmax as f32;
     let x0_step = dc.comps[0].sfx as f32 / dc.hmax as f32;
@@ -884,8 +877,8 @@ fn upsample_luma<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
         let mut x0 = x0_step * 0.5;
         let mut x0i = 0;
         for _ in 0 .. dc.w {
-            result[di] = dc.comps[0].data[y0i + x0i];
-            if dc.tgt_fmt == ColFmt::YA { result[di+1] = 255; }
+            result[di+li] = dc.comps[0].data[y0i + x0i];
+            if dc.tgt_fmt == ColFmt::YA { result[di+ai] = 255; }
             di += tgt_bytespp;
             x0 += x0_step;
             if x0 >= 1.0 { x0 -= 1.0; x0i += 1; }
@@ -897,7 +890,7 @@ fn upsample_luma<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8]) {
 
 // Generic nearest neighbor
 fn upsample<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize,
-                                                                       bi: usize)
+                                                            bi: usize, ai: usize)
 {
     let stride0 = dc.num_mcu_x * dc.comps[0].sfx * 8;
     let stride1 = dc.num_mcu_x * dc.comps[1].sfx * 8;
@@ -935,7 +928,7 @@ fn upsample<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize
             result[di+ri] = pixel[0];
             result[di+gi] = pixel[1];
             result[di+bi] = pixel[2];
-            if dc.tgt_fmt.has_alpha() == Some(true) { result[di+3] = 255; }
+            if dc.tgt_fmt.has_alpha() == Some(true) { result[di+ai] = 255; }
             di += tgt_bytespp;
             x0 += x0_step;
             x1 += x1_step;

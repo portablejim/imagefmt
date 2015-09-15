@@ -95,7 +95,6 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     let tgt_fmt = {
         use super::ColFmt::*;
         match req_fmt {
-            Y | YA | RGB | RGBA | BGR | BGRA => req_fmt,
             Auto => match src_fmt {
                 Y => Y,
                 YA => YA,
@@ -103,7 +102,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
                 BGRA => RGBA,
                 _ => return error("not supported"),
             },
-            //_ => return error("conversion not supported"),
+            _ => req_fmt,
         }
     };
 
@@ -185,12 +184,13 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
             (-tgt_linesize, (dc.h-1) as isize * tgt_linesize)
         };
 
-    let convert = try!(converter(dc.src_fmt, dc.tgt_fmt));
+    let (convert, c0, c1, c2, c3) = try!(converter(dc.src_fmt, dc.tgt_fmt));
 
     if !dc.rle {
         for _j in (0 .. dc.h) {
             try!(dc.stream.read_exact_(&mut src_line[0..src_linesize]));
-            convert(&src_line[..], &mut result[ti as usize..(ti+tgt_linesize) as usize]);
+            convert(&src_line[..], &mut result[ti as usize..(ti+tgt_linesize) as usize],
+                    c0, c1, c2, c3);
             ti += tgt_stride;
         }
         return Ok(result);
@@ -228,7 +228,8 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
             plen -= copysize;
         }
 
-        convert(&src_line[..], &mut result[ti as usize .. (ti+tgt_linesize) as usize]);
+        convert(&src_line[..], &mut result[ti as usize .. (ti+tgt_linesize) as usize],
+                c0, c1, c2, c3);
         ti += tgt_stride;
     }
 
@@ -283,12 +284,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
         return error("invalid dimensions or data length");
     }
 
-    match src_fmt {
-        ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA
-                                             | ColFmt::BGR
-                                             | ColFmt::BGRA => {}
-        ColFmt::Auto => return error("invalid format"),
-    }
+    if src_fmt == ColFmt::Auto { return error("invalid format") }
 
     let tgt_fmt = match tgt_type {
         ColType::Gray       => ColFmt::Y,
@@ -296,9 +292,11 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
         ColType::Color      => ColFmt::BGR,
         ColType::ColorAlpha => ColFmt::BGRA,
         ColType::Auto => match src_fmt {
-            ColFmt::Y    | ColFmt::YA => src_fmt,
+            ColFmt::Y                 => ColFmt::Y,
+            ColFmt::YA   | ColFmt::AY => ColFmt::YA,
             ColFmt::RGB  | ColFmt::BGR => ColFmt::BGR,
             ColFmt::RGBA | ColFmt::BGRA => ColFmt::BGRA,
+            ColFmt::ARGB | ColFmt::ABGR => ColFmt::BGRA,
             ColFmt::Auto => return error("invalid format"),
         },
     };
@@ -360,12 +358,13 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     let mut tgt_line = vec![0u8; tgt_linesize];
     let mut si = ec.h as usize * src_linesize;
 
-    let convert = try!(converter(ec.src_fmt, ec.tgt_fmt));
+    let (convert, c0, c1, c2, c3) = try!(converter(ec.src_fmt, ec.tgt_fmt));
 
     if !ec.rle {
         for _ in (0 .. ec.h) {
             si -= src_linesize; // origin at bottom
-            convert(&ec.data[si..si+src_linesize], &mut tgt_line[..]);
+            convert(&ec.data[si..si+src_linesize], &mut tgt_line[..],
+                    c0, c1, c2, c3);
             try!(ec.stream.write_all(&tgt_line[..]));
         }
         return Ok(());
@@ -378,7 +377,8 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     let mut cmp_buf = vec![0u8; tgt_linesize+max_packets_per_line];
     for _ in (0 .. ec.h) {
         si -= src_linesize;
-        convert(&ec.data[si .. si+src_linesize], &mut tgt_line[..]);
+        convert(&ec.data[si .. si+src_linesize], &mut tgt_line[..],
+                c0, c1, c2, c3);
         let compressed_line = rle_compress(&tgt_line[..], &mut cmp_buf[..], ec.w, bytes_pp);
         try!(ec.stream.write_all(&compressed_line[..]));
     }

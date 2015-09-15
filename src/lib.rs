@@ -31,6 +31,7 @@ use std::fs::{File};
 use std::io::{self, Read, BufReader, BufWriter, ErrorKind, Seek, SeekFrom};
 use std::path::Path;
 use std::fmt::{self, Debug};
+use std::cmp::min;
 use std::ptr;
 
 #[cfg(feature = "png")] pub mod png;
@@ -63,10 +64,13 @@ pub enum ColFmt {
     Auto,
     Y,
     YA,
+    AY,
     RGB,
     RGBA,
     BGR,
     BGRA,
+    ARGB,
+    ABGR,
 }
 
 /// Color type – these are categories of color formats.
@@ -165,7 +169,8 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
         })
     }
 
-    let convert = try!(converter(src_fmt, tgt_fmt).map_err(|_| "no such converter"));
+    let (convert, c0, c1, c2, c3) =
+        try!(converter(src_fmt, tgt_fmt).map_err(|_| "no such converter"));
 
     let src_linesize = w * src_fmt.bytes_pp();
     let tgt_linesize = w * tgt_fmt.bytes_pp();
@@ -174,7 +179,8 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
     let mut si = 0;
     let mut ti = 0;
     for _j in (0 .. h) {
-        convert(&data[si .. si+src_linesize], &mut result[ti .. ti+tgt_linesize]);
+        convert(&data[si .. si+src_linesize], &mut result[ti .. ti+tgt_linesize],
+                c0, c1, c2, c3);
         si += src_linesize;
         ti += tgt_linesize;
     }
@@ -207,20 +213,19 @@ impl ColFmt {
     /// Returns the color type of the color format.
     pub fn color_type(self) -> ColType {
         match self {
-            ColFmt::Y => ColType::Gray,
-            ColFmt::YA => ColType::GrayAlpha,
-            ColFmt::RGB => ColType::Color,
-            ColFmt::RGBA => ColType::ColorAlpha,
-            ColFmt::BGR => ColType::Color,
-            ColFmt::BGRA => ColType::ColorAlpha,
-            ColFmt::Auto => ColType::Auto,
+            ColFmt::Y                     => ColType::Gray,
+            ColFmt::YA | ColFmt::AY       => ColType::GrayAlpha,
+            ColFmt::RGB | ColFmt::BGR     => ColType::Color,
+            ColFmt::RGBA | ColFmt::BGRA
+            | ColFmt::ARGB | ColFmt::ABGR => ColType::ColorAlpha,
+            ColFmt::Auto                  => ColType::Auto,
         }
     }
 
     pub fn has_alpha(self) -> Option<bool> {
         use ColFmt::*;
         match self {
-            YA | RGBA | BGRA => Some(true),
+            YA | AY | RGBA | BGRA | ARGB | ABGR => Some(true),
             Y | RGB | BGR => Some(false),
             Auto => None,
         }
@@ -229,214 +234,256 @@ impl ColFmt {
     fn bytes_pp(&self) -> usize {
         use self::ColFmt::*;
         match *self {
-            Auto        => 0,
-            Y           => 1,
-            YA          => 2,
-            RGB  | BGR  => 3,
-            RGBA | BGRA => 4,
+            Auto                      => 0,
+            Y                         => 1,
+            YA | AY                   => 2,
+            RGB  | BGR                => 3,
+            RGBA | BGRA | ARGB | ABGR => 4,
+        }
+    }
+
+    fn indices_yrgba(self) -> (usize, usize, usize, usize, usize) {
+        match self {
+            ColFmt::Y    => (0, 0, 0, 0, 0),
+            ColFmt::YA   => (0, 0, 0, 0, 1),
+            ColFmt::AY   => (1, 0, 0, 0, 0),
+            ColFmt::RGB  => (0, 0, 1, 2, 0),
+            ColFmt::BGR  => (0, 2, 1, 0, 0),
+            ColFmt::RGBA => (0, 0, 1, 2, 3),
+            ColFmt::BGRA => (0, 2, 1, 0, 3),
+            ColFmt::ARGB => (0, 1, 2, 3, 0),
+            ColFmt::ABGR => (0, 3, 2, 1, 0),
+            ColFmt::Auto => (0, 0, 0, 0, 0),
         }
     }
 }
 
 // ------------------------------------------------------------
 
-type LineConverter = fn(&[u8], &mut[u8]);
+type LineConverter = fn(&[u8], &mut[u8], usize, usize, usize, usize);
 
-fn converter(src_fmt: ColFmt, tgt_fmt: ColFmt) -> io::Result<LineConverter> {
+fn converter(src_fmt: ColFmt, tgt_fmt: ColFmt)
+        -> io::Result<(LineConverter, usize, usize, usize, usize)>
+{
     use self::ColFmt::*;
+
+    let (syi, sri, sgi, sbi, sai) = src_fmt.indices_yrgba();
+    let (tyi, tri, tgi, tbi, tai) = tgt_fmt.indices_yrgba();
+    let tci = min(tri, min(tgi, tbi));
+
     match (src_fmt, tgt_fmt) {
-        (ref s, ref t) if (*s == *t) => Ok(copy_memory),
-        (Y, YA)      => Ok(y_to_ya),
-        (Y, RGB)     => Ok(y_to_rgb),
-        (Y, RGBA)    => Ok(y_to_rgba),
-        (Y, BGR)     => Ok(Y_TO_BGR),
-        (Y, BGRA)    => Ok(Y_TO_BGRA),
-        (YA, Y)      => Ok(ya_to_y),
-        (YA, RGB)    => Ok(ya_to_rgb),
-        (YA, RGBA)   => Ok(ya_to_rgba),
-        (YA, BGR)    => Ok(YA_TO_BGR),
-        (YA, BGRA)   => Ok(YA_TO_BGRA),
-        (RGB, Y)     => Ok(rgb_to_y),
-        (RGB, YA)    => Ok(rgb_to_ya),
-        (RGB, RGBA)  => Ok(rgb_to_rgba),
-        (RGB, BGR)   => Ok(RGB_TO_BGR),
-        (RGB, BGRA)  => Ok(RGB_TO_BGRA),
-        (RGBA, Y)    => Ok(rgba_to_y),
-        (RGBA, YA)   => Ok(rgba_to_ya),
-        (RGBA, RGB)  => Ok(rgba_to_rgb),
-        (RGBA, BGR)  => Ok(RGBA_TO_BGR),
-        (RGBA, BGRA) => Ok(RGBA_TO_BGRA),
-        (BGR, Y)     => Ok(bgr_to_y),
-        (BGR, YA)    => Ok(bgr_to_ya),
-        (BGR, RGB)   => Ok(bgr_to_rgb),
-        (BGR, RGBA)  => Ok(bgr_to_rgba),
-        (BGR, BGRA)  => Ok(BGR_TO_BGRA),
-        (BGRA, Y)    => Ok(bgra_to_y),
-        (BGRA, YA)   => Ok(bgra_to_ya),
-        (BGRA, RGB)  => Ok(bgra_to_rgb),
-        (BGRA, RGBA) => Ok(bgra_to_rgba),
-        (BGRA, BGR)  => Ok(BGRA_TO_BGR),
-        _ => error("no such converter"),
+        (Y,Y)|(YA,YA)|(AY,AY)|(RGB,RGB)|(BGR,BGR)
+        |(RGBA,RGBA)|(BGRA,BGRA)|(ARGB,ARGB)|(ABGR,ABGR)
+                                => Ok((copy_line, 0, 0, 0, 0)),
+        (Y, YA) | (Y, AY)       => Ok((y_to_any_ya, tyi, 0, 0, tai)),
+        (Y, RGB) | (Y, BGR)     => Ok((y_to_any_rgb, tri, tgi, tbi, 0)),
+        (Y, RGBA)
+        | (Y, BGRA)
+        | (Y, ABGR)
+        | (Y, ARGB)             => Ok((y_to_any_rgba, tri, tgi, tbi, tai)),
+        (YA, Y) | (AY, Y)       => Ok((any_ya_to_y, syi, 0, 0, 0)),
+        (YA, AY) | (AY, YA)     => Ok((ya_to_ay, 0, 0, 0, 0)),
+        (YA, RGB)
+        | (YA, BGR)
+        | (AY, RGB)
+        | (AY, BGR)             => Ok((any_ya_to_any_rgb, tri, tgi, tbi, sai)),
+        (YA, RGBA)
+        | (YA, BGRA)
+        | (YA, ARGB)
+        | (YA, ABGR)
+        | (AY, RGBA)
+        | (AY, BGRA)
+        | (AY, ARGB)
+        | (AY, ABGR)            => Ok((any_ya_to_any_rgba, syi, sai, tci, tai)),
+        (RGB, Y) | (BGR, Y)     => Ok((any_rgba_to_y, sri, sgi, sbi, src_fmt.bytes_pp())),
+        (RGB, YA) | (BGR, YA)
+        | (RGB, AY) | (BGR, AY) => Ok((any_rgb_to_any_ya, sri, sgi, sbi, tai)),
+        (RGB, BGR) | (BGR, RGB) => Ok((rgb_to_bgr, 0, 0, 0, 0)),
+        (RGB, RGBA)
+        | (RGB, BGRA)
+        | (RGB, ARGB)
+        | (RGB, ABGR)           => Ok((rgb_to_any_rgba, tri, tgi, tbi, tai)),
+        (BGR, RGBA)
+        | (BGR, BGRA)
+        | (BGR, ARGB)
+        | (BGR, ABGR)           => Ok((bgr_to_any_rgba, tri, tgi, tbi, tai)),
+        (RGBA, Y)
+        | (BGRA, Y)
+        | (ARGB, Y)
+        | (ABGR, Y)             => Ok((any_rgba_to_y, sri, sgi, sbi, src_fmt.bytes_pp())),
+        (RGBA, YA)
+        | (BGRA, YA)
+        | (ARGB, YA)
+        | (ABGR, YA)            => Ok((any_rgba_to_ya, sri, sgi, sbi, sai)),
+        (RGBA, AY)
+        | (BGRA, AY)
+        | (ARGB, AY)
+        | (ABGR, AY)            => Ok((any_rgba_to_ay, sri, sgi, sbi, sai)),
+        (RGBA, RGB)
+        | (BGRA, RGB)
+        | (ARGB, RGB)
+        | (ABGR, RGB)           => Ok((any_rgba_to_rgb, sri, sgi, sbi, sai)),
+        (RGBA, BGR)
+        | (BGRA, BGR)
+        | (ARGB, BGR)
+        | (ABGR, BGR)           => Ok((any_rgba_to_bgr, sri, sgi, sbi, sai)),
+        (RGBA, BGRA)
+        | (RGBA, ARGB)
+        | (RGBA, ABGR)          => Ok((rgba_to_any_rgba, tri, tgi, tbi, tai)),
+        (BGRA, RGBA)
+        | (BGRA, ARGB)
+        | (BGRA, ABGR)          => Ok((bgra_to_any_rgba, tri, tgi, tbi, tai)),
+        (ARGB, RGBA)
+        | (ARGB, BGRA)
+        | (ARGB, ABGR)          => Ok((argb_to_any_rgba, tri, tgi, tbi, tai)),
+        (ABGR, RGBA)
+        | (ABGR, BGRA)
+        | (ABGR, ARGB)          => Ok((abgr_to_any_rgba, tri, tgi, tbi, tai)),
+        (Auto, _) | (_, Auto) => error("no such converter"),
     }
 }
 
-fn luminance(r: u8, g: u8, b: u8) -> u8 {
-    (0.21 * r as f32 + 0.64 * g as f32 + 0.15 * b as f32) as u8
+fn copy_line(src_line: &[u8], tgt_line: &mut[u8], _: usize, _: usize, _: usize, _: usize)
+{
+    copy_memory(src_line, tgt_line)
 }
 
-fn y_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
+fn y_to_any_ya(src_line: &[u8], tgt_line: &mut[u8], yi: usize, _: usize, _: usize,
+                                                                        ai: usize)
+{
     let mut t = 0;
     for &sb in src_line {
-        tgt_line[t  ] = sb;
-        tgt_line[t+1] = 255;
+        tgt_line[t+yi] = sb;
+        tgt_line[t+ai] = 255;
         t += 2;
     }
 }
 
-const Y_TO_BGR: LineConverter = y_to_rgb;
-fn y_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
+fn y_to_any_rgb(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                            _: usize)
+{
     let mut t = 0;
     for &sb in src_line {
-        tgt_line[t  ] = sb;
-        tgt_line[t+1] = sb;
-        tgt_line[t+2] = sb;
+        tgt_line[t+ri] = sb;
+        tgt_line[t+gi] = sb;
+        tgt_line[t+bi] = sb;
         t += 3;
     }
 }
 
-const Y_TO_BGRA: LineConverter = y_to_rgba;
-fn y_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
+fn y_to_any_rgba(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                            ai: usize)
+{
     let mut t = 0;
     for &sb in src_line {
-        tgt_line[t  ] = sb;
-        tgt_line[t+1] = sb;
-        tgt_line[t+2] = sb;
-        tgt_line[t+3] = 255;
+        tgt_line[t+ri] = sb;
+        tgt_line[t+gi] = sb;
+        tgt_line[t+bi] = sb;
+        tgt_line[t+ai] = 255;
         t += 4;
     }
 }
 
-fn ya_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
+fn ya_to_ay(src_line: &[u8], tgt_line: &mut[u8], _: usize, _: usize, _: usize, _: usize) {
+    let mut st = 0;
+    while st < src_line.len() {
+        tgt_line[st  ] = src_line[st+1];
+        tgt_line[st+1] = src_line[st  ];
+        st += 2;
+    }
+}
+
+fn any_ya_to_y(src_line: &[u8], tgt_line: &mut[u8], yi: usize, _: usize, _: usize,
+                                                                         _: usize)
+{
     let mut s = 0;
     for tb in tgt_line {
-        *tb = src_line[s];
+        *tb = src_line[s+yi];
         s += 2;
     }
 }
 
-const YA_TO_BGR: LineConverter = ya_to_rgb;
-fn ya_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
+fn any_ya_to_any_rgb(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                               sai: usize)
+{
     let mut s = 0;
     let mut t = 0;
     while s < src_line.len() {
-        tgt_line[t  ] = src_line[s];
-        tgt_line[t+1] = src_line[s];
-        tgt_line[t+2] = src_line[s];
+        tgt_line[t+ri] = src_line[s+(1-sai)];
+        tgt_line[t+gi] = src_line[s+(1-sai)];
+        tgt_line[t+bi] = src_line[s+(1-sai)];
         s += 2;
         t += 3;
     }
 }
 
-const YA_TO_BGRA: LineConverter = ya_to_rgba;
-fn ya_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
+fn any_ya_to_any_rgba(src_line: &[u8], tgt_line: &mut[u8], syi: usize, sai: usize,
+                                                                       tci: usize,
+                                                                       tai: usize)
+{
     let mut s = 0;
     let mut t = 0;
     while s < src_line.len() {
-        tgt_line[t  ] = src_line[s];
-        tgt_line[t+1] = src_line[s];
-        tgt_line[t+2] = src_line[s];
-        tgt_line[t+3] = src_line[s+1];
+        tgt_line[t+tci  ] = src_line[s+syi];
+        tgt_line[t+tci+1] = src_line[s+syi];
+        tgt_line[t+tci+2] = src_line[s+syi];
+        tgt_line[t+tai]   = src_line[s+sai];
         s += 2;
         t += 4;
     }
 }
 
-fn rgb_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
+fn any_rgba_to_y(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                      bytes_pp: usize)
+{
     let mut s = 0;
     for tb in tgt_line {
-        *tb = luminance(src_line[s], src_line[s+1], src_line[s+2]);
-        s += 3;
+        *tb = luminance(src_line[s+ri], src_line[s+gi], src_line[s+bi]);
+        s += bytes_pp;
     }
 }
 
-fn rgb_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
+fn any_rgb_to_any_ya(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                               tai: usize)
+{
     let mut s = 0;
     let mut t = 0;
     while s < src_line.len() {
-        tgt_line[t  ] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
-        tgt_line[t+1] = 255;
+        tgt_line[t+1-tai] = luminance(src_line[s+ri], src_line[s+gi], src_line[s+bi]);
+        tgt_line[t+tai] = 255;
         s += 3;
         t += 2;
     }
 }
 
-const BGR_TO_BGRA: LineConverter = rgb_to_rgba;
-fn rgb_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
+fn any_rgba_to_ya(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                             ai: usize)
+{
     let mut s = 0;
     let mut t = 0;
     while s < src_line.len() {
-        tgt_line[t  ] = src_line[s  ];
-        tgt_line[t+1] = src_line[s+1];
-        tgt_line[t+2] = src_line[s+2];
-        tgt_line[t+3] = 255;
-        s += 3;
-        t += 4;
-    }
-}
-
-fn rgba_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut s = 0;
-    for tb in tgt_line {
-        *tb = luminance(src_line[s], src_line[s+1], src_line[s+2]);
-        s += 4;
-    }
-}
-
-fn rgba_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut s = 0;
-    let mut t = 0;
-    while s < src_line.len() {
-        tgt_line[t  ] = luminance(src_line[s], src_line[s+1], src_line[s+2]);
-        tgt_line[t+1] = src_line[s+3];
+        tgt_line[t  ] = luminance(src_line[s+ri], src_line[s+gi], src_line[s+bi]);
+        tgt_line[t+1] = src_line[s+ai];
         s += 4;
         t += 2;
     }
 }
 
-const BGRA_TO_BGR: LineConverter = rgba_to_rgb;
-fn rgba_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
+fn any_rgba_to_ay(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                             ai: usize)
+{
     let mut s = 0;
     let mut t = 0;
     while s < src_line.len() {
-        tgt_line[t  ] = src_line[s  ];
-        tgt_line[t+1] = src_line[s+1];
-        tgt_line[t+2] = src_line[s+2];
+        tgt_line[t+1] = luminance(src_line[s+ri], src_line[s+gi], src_line[s+bi]);
+        tgt_line[t  ] = src_line[s+ai];
         s += 4;
-        t += 3;
-    }
-}
-
-fn bgr_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut s = 0;
-    for tb in tgt_line {
-        *tb = luminance(src_line[s+2], src_line[s+1], src_line[s]);
-        s += 3;
-    }
-}
-
-fn bgr_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut s = 0;
-    let mut t = 0;
-    while s < src_line.len() {
-        tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
-        tgt_line[t+1] = 255;
-        s += 3;
         t += 2;
     }
 }
 
-const RGB_TO_BGR: LineConverter = bgr_to_rgb;
-fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
+fn rgb_to_bgr(src_line: &[u8], tgt_line: &mut[u8], _: usize, _: usize, _: usize, _: usize)
+{
     let mut st = 0;
     while st < src_line.len() {
         tgt_line[st  ] = src_line[st+2];
@@ -446,62 +493,118 @@ fn bgr_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
     }
 }
 
-const RGB_TO_BGRA: LineConverter = bgr_to_rgba;
-fn bgr_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
+fn rgb_to_any_rgba(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                              ai: usize)
+{
     let mut s = 0;
     let mut t = 0;
     while s < src_line.len() {
-        tgt_line[t  ] = src_line[s+2];
-        tgt_line[t+1] = src_line[s+1];
-        tgt_line[t+2] = src_line[s  ];
-        tgt_line[t+3] = 255;
+        tgt_line[t+ri] = src_line[s  ];
+        tgt_line[t+gi] = src_line[s+1];
+        tgt_line[t+bi] = src_line[s+2];
+        tgt_line[t+ai] = 255;
         s += 3;
         t += 4;
     }
 }
 
-fn bgra_to_y(src_line: &[u8], tgt_line: &mut[u8]) {
-    let mut s = 0;
-    for tb in tgt_line {
-        *tb = luminance(src_line[s+2], src_line[s+1], src_line[s]);
-        s += 4;
-    }
-}
-
-fn bgra_to_ya(src_line: &[u8], tgt_line: &mut[u8]) {
+fn bgr_to_any_rgba(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                              ai: usize)
+{
     let mut s = 0;
     let mut t = 0;
     while s < src_line.len() {
-        tgt_line[t  ] = luminance(src_line[s+2], src_line[s+1], src_line[s]);
-        tgt_line[t+1] = src_line[s+3];
-        s += 4;
-        t += 2;
+        tgt_line[t+ri] = src_line[s+2];
+        tgt_line[t+gi] = src_line[s+1];
+        tgt_line[t+bi] = src_line[s  ];
+        tgt_line[t+ai] = 255;
+        s += 3;
+        t += 4;
     }
 }
 
-const RGBA_TO_BGR: LineConverter = bgra_to_rgb;
-fn bgra_to_rgb(src_line: &[u8], tgt_line: &mut[u8]) {
+fn any_rgba_to_rgb(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                             _ai: usize)
+{
     let mut s = 0;
     let mut t = 0;
     while s < src_line.len() {
-        tgt_line[t  ] = src_line[s+2];
-        tgt_line[t+1] = src_line[s+1];
-        tgt_line[t+2] = src_line[s  ];
+        tgt_line[t  ] = src_line[s+ri];
+        tgt_line[t+1] = src_line[s+gi];
+        tgt_line[t+2] = src_line[s+bi];
         s += 4;
         t += 3;
     }
 }
 
-const RGBA_TO_BGRA: LineConverter = bgra_to_rgba;
-fn bgra_to_rgba(src_line: &[u8], tgt_line: &mut[u8]) {
+fn any_rgba_to_bgr(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                               _: usize)
+{
+    let mut s = 0;
+    let mut t = 0;
+    while s < src_line.len() {
+        tgt_line[t+2] = src_line[s+ri];
+        tgt_line[t+1] = src_line[s+gi];
+        tgt_line[t  ] = src_line[s+bi];
+        s += 4;
+        t += 3;
+    }
+}
+
+fn rgba_to_any_rgba(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                               ai: usize)
+{
     let mut st = 0;
     while st < src_line.len() {
-        tgt_line[st  ] = src_line[st+2];
-        tgt_line[st+1] = src_line[st+1];
-        tgt_line[st+2] = src_line[st  ];
-        tgt_line[st+3] = src_line[st+3];
+        tgt_line[st+ri] = src_line[st+0];
+        tgt_line[st+gi] = src_line[st+1];
+        tgt_line[st+bi] = src_line[st+2];
+        tgt_line[st+ai] = src_line[st+3];
         st += 4;
     }
+}
+
+fn bgra_to_any_rgba(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                               ai: usize)
+{
+    let mut st = 0;
+    while st < src_line.len() {
+        tgt_line[st+ri] = src_line[st+2];
+        tgt_line[st+gi] = src_line[st+1];
+        tgt_line[st+bi] = src_line[st+0];
+        tgt_line[st+ai] = src_line[st+3];
+        st += 4;
+    }
+}
+
+fn argb_to_any_rgba(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                               ai: usize)
+{
+    let mut st = 0;
+    while st < src_line.len() {
+        tgt_line[st+ri] = src_line[st+1];
+        tgt_line[st+gi] = src_line[st+2];
+        tgt_line[st+bi] = src_line[st+3];
+        tgt_line[st+ai] = src_line[st+0];
+        st += 4;
+    }
+}
+
+fn abgr_to_any_rgba(src_line: &[u8], tgt_line: &mut[u8], ri: usize, gi: usize, bi: usize,
+                                                                               ai: usize)
+{
+    let mut st = 0;
+    while st < src_line.len() {
+        tgt_line[st+ri] = src_line[st+3];
+        tgt_line[st+gi] = src_line[st+2];
+        tgt_line[st+bi] = src_line[st+1];
+        tgt_line[st+ai] = src_line[st+0];
+        st += 4;
+    }
+}
+
+fn luminance(r: u8, g: u8, b: u8) -> u8 {
+    (0.21 * r as f32 + 0.64 * g as f32 + 0.15 * b as f32) as u8
 }
 
 // ------------------------------------------------------------

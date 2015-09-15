@@ -300,7 +300,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
         Vec::new()
     };
 
-    let convert = try!(converter(dc.src_fmt, dc.tgt_fmt));
+    let (convert, c0, c1, c2, c3) = try!(converter(dc.src_fmt, dc.tgt_fmt));
 
     let compressed_data = try!(read_idat_chunks(dc, len));
     let mut zlib = ZlibDecoder::new(&compressed_data[..]);
@@ -324,9 +324,11 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                 if dc.src_indexed {
                     depalettize(&cline[1..], &palette, &mut depaletted_line);
                     convert(&depaletted_line[0 .. src_linesize*3],
-                            &mut result[ti .. ti+tgt_linesize])
+                            &mut result[ti .. ti+tgt_linesize],
+                            c0, c1, c2, c3)
                 } else {
-                    convert(&cline[1..], &mut result[ti .. ti+tgt_linesize]);
+                    convert(&cline[1..], &mut result[ti .. ti+tgt_linesize],
+                            c0, c1, c2, c3);
                 }
 
                 ti += tgt_linesize;
@@ -382,9 +384,11 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                     if dc.src_indexed {
                         depalettize(&cline[1..], &palette, &mut depaletted_line);
                         convert(&depaletted_line[0 .. src_linesize*3],
-                                &mut redlinebuf[0..redw[pass] * tgt_bytespp])
+                                &mut redlinebuf[0..redw[pass] * tgt_bytespp],
+                                c0, c1, c2, c3)
                     } else {
-                        convert(&cline[1..], &mut redlinebuf[0..redw[pass] * tgt_bytespp]);
+                        convert(&cline[1..], &mut redlinebuf[0..redw[pass] * tgt_bytespp],
+                                c0, c1, c2, c3);
                     }
 
                     let mut redi = 0;
@@ -560,12 +564,7 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
         return error("invalid dimensions or data length");
     }
 
-    match src_fmt {
-        ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA
-                                             | ColFmt::BGR
-                                             | ColFmt::BGRA => {}
-        ColFmt::Auto => return error("invalid format"),
-    }
+    if src_fmt == ColFmt::Auto { return error("invalid format") }
 
     let tgt_fmt = match tgt_type {
         ColType::Gray       => ColFmt::Y,
@@ -573,9 +572,11 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
         ColType::Color      => ColFmt::RGB,
         ColType::ColorAlpha => ColFmt::RGBA,
         ColType::Auto => match src_fmt {
-            ColFmt::Y    | ColFmt::YA => src_fmt,
+            ColFmt::Y                 => ColFmt::Y,
+            ColFmt::YA   | ColFmt::AY => ColFmt::YA,
             ColFmt::RGB  | ColFmt::BGR => ColFmt::RGB,
             ColFmt::RGBA | ColFmt::BGRA => ColFmt::RGBA,
+            ColFmt::ARGB | ColFmt::ABGR => ColFmt::RGBA,
             ColFmt::Auto => return error("invalid format"),
         },
     };
@@ -659,7 +660,7 @@ struct PngEncoder<'r, W:'r> {
 }
 
 fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
-    let convert = try!(converter(ec.src_fmt, ec.tgt_fmt));
+    let (convert, c0, c1, c2, c3) = try!(converter(ec.src_fmt, ec.tgt_fmt));
 
     let filter_step = ec.tgt_fmt.bytes_pp();
     let tgt_linesize = ec.w * filter_step + 1;   // +1 for filter type
@@ -672,7 +673,8 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
     let mut si = 0;
     let mut ti = 0;
     while si < ec.h * src_linesize {
-        convert(&ec.data[si .. si+src_linesize], &mut cline[1 .. tgt_linesize]);
+        convert(&ec.data[si .. si+src_linesize], &mut cline[1 .. tgt_linesize],
+                c0, c1, c2, c3);
 
         for i in (1 .. filter_step+1) {
             filtered_image[ti+i] = cline[i].wrapping_sub(paeth(0, pline[i], 0));

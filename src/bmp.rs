@@ -273,12 +273,12 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     let tgt_fmt = {
         use super::ColFmt::*;
         match req_fmt {
-            Y | YA | RGB | RGBA | BGR | BGRA => req_fmt,
             Auto => if alpha_masked { RGBA } else { RGB },
+               _ => req_fmt,
         }
     };
 
-    let convert =
+    let (convert, c0, c1, c2, c3) =
         try!(converter(if paletted { pe_fmt } else { ColFmt::BGRA }, tgt_fmt));
 
     let src_linesize = hdr.width as usize * bytes_pp;  // without padding
@@ -316,7 +316,8 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
                 }
                 di += ps;
             }
-            convert(&depaletted_line, &mut result[ti as usize..(ti+tgt_linesize) as usize]);
+            convert(&depaletted_line, &mut result[ti as usize..(ti+tgt_linesize) as usize],
+                    c0, c1, c2, c3);
         } else {
             let mut si = 0;
             let mut di = 0;
@@ -329,7 +330,8 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
                 si += bytes_pp;
                 di += 4;
             }
-            convert(&bgra_line_buf, &mut result[ti as usize..(ti+tgt_linesize) as usize]);
+            convert(&bgra_line_buf, &mut result[ti as usize..(ti+tgt_linesize) as usize],
+                    c0, c1, c2, c3);
         }
 
         ti += tgt_stride;
@@ -356,11 +358,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
         return error("invalid dimensions or data length");
     }
 
-    match src_fmt {
-        ColFmt::Y | ColFmt::YA | ColFmt::RGB | ColFmt::RGBA
-                               | ColFmt::BGR | ColFmt::BGRA => {}
-        ColFmt::Auto => return error("invalid format"),
-    }
+    if src_fmt == ColFmt::Auto { return error("invalid format") }
 
     let tgt_fmt = match tgt_type {
         ColType::Color      => ColFmt::BGR,
@@ -407,7 +405,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
     try!(writer.write_all(b"BGRs"));
     try!(writer.write_all(&[0u8; 12 * 4]));   // rest of DibV4
 
-    let convert = try!(converter(src_fmt, tgt_fmt));
+    let (convert, c0, c1, c2, c3) = try!(converter(src_fmt, tgt_fmt));
 
     let mut tgt_line = vec![0u8; tgt_linesize + pad];
     let src_linesize = w * src_fmt.bytes_pp();
@@ -415,7 +413,8 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
 
     for _ in (0 .. h) {
         si -= src_linesize;
-        convert(&data[si .. si + src_linesize], &mut tgt_line[..tgt_linesize]);
+        convert(&data[si .. si + src_linesize], &mut tgt_line[..tgt_linesize],
+                c0, c1, c2, c3);
         try!(writer.write_all(&tgt_line));
     }
 
