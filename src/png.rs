@@ -3,7 +3,6 @@
 extern crate flate2;
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::iter::{repeat};
-use std::cmp::min;
 use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
 use super::{
@@ -85,7 +84,7 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to one of `Y`, `YA`, `RGB`,
 /// `RGBA`.  Paletted images are auto-depaletted.
 #[inline]
-pub fn read<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
     let (image, _) = try!(read_chunks(reader, req_fmt, &[]));
     Ok(image)
 }
@@ -93,7 +92,7 @@ pub fn read<R: Read>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
 /// Like `png::read` but also returns the requested extension chunks.
 ///
 /// If the requested chunks are not present they are ignored.
-pub fn read_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
+pub fn read_chunks<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
                                           -> io::Result<(Image, Vec<ExtChunk>)>
 {
     let hdr = try!(read_header(reader));
@@ -127,7 +126,6 @@ pub fn read_chunks<R: Read>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8;
         src_fmt     : src_fmt,
         tgt_fmt     : if req_fmt == ColFmt::Auto { src_fmt } else { req_fmt },
         chunk_lentype : [0u8; 8],
-        readbuf     : vec![0u8; 4096],
         crc         : Crc32::new(),
     };
 
@@ -150,7 +148,6 @@ struct PngDecoder<'r, R:'r> {
     tgt_fmt       : ColFmt,
 
     chunk_lentype: [u8; 8],   // for reading len, type
-    readbuf: Vec<u8>,
     crc: Crc32,
 }
 
@@ -180,7 +177,7 @@ fn readcheck_crc<R: Read>(dc: &mut PngDecoder<R>) -> io::Result<()> {
     Ok(())
 }
 
-fn decode<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
+fn decode<R: Read+Seek>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                               -> io::Result<(Vec<u8>, Vec<ExtChunk>)>
 {
     use self::PngStage::*;
@@ -235,17 +232,12 @@ fn decode<R: Read>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                     try!(dc.stream.read_exact_(&mut data));
                     dc.crc.put(&data[..]);
                     chunks.push(ExtChunk { name: name, data: data });
+                    try!(readcheck_crc(dc));
                 } else {
-                    // unknown chunk, ignore but check crc... or should crc be ignored?
-                    while 0 < len {
-                        let amount = min(len, dc.readbuf.len());
-                        try!(dc.stream.read_exact_(&mut dc.readbuf[0..amount]));
-                        len -= amount;
-                        dc.crc.put(&dc.readbuf[0..amount]);
-                    }
+                    // unknown chunk, skip data and crc, and reset crc
+                    try!(dc.stream.seek(SeekFrom::Current(len as i64 + 4)));
+                    dc.crc.finish_be();
                 }
-
-                try!(readcheck_crc(dc));
             }
         }
 
