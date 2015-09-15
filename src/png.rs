@@ -687,7 +687,7 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
     }
 
     let mut zlibenc = ZlibEncoder::new(&filtered_image[..], Compression::Fast);
-    let mut compressed = [0u8; 1024*8];
+    let mut compressed = [0u8; 1024*32];
 
     loop {
         let n = try!(zlibenc.read(&mut compressed[..]));
