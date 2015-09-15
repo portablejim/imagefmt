@@ -53,7 +53,7 @@ fn read_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
 
     if &buf[0..8] != &PNG_FILE_HEADER[..] ||
        &buf[8..16] != b"\0\0\0\x0dIHDR" ||
-       &buf[29..33] != &crc32be(&buf[12..29])[..]
+       &buf[29..33] != &Crc32::new().put(&buf[12..29]).finish_be()[..]
     {
         return error("corrupt png header");
     }
@@ -702,10 +702,6 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
     }
 
     Ok(())
-}
-
-fn crc32be(data: &[u8]) -> [u8; 4] {
-    Crc32::new().put(data).finish_be()
 }
 
 struct Crc32 {
