@@ -156,7 +156,6 @@ struct HuffTab {
 }
 
 struct Component {
-    id       : u8,
     sfx      : usize,            // sampling factor, aka. h
     sfy      : usize,            // sampling factor, aka. v
     x        : usize,          // total number of samples without fill samples
@@ -377,7 +376,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     try!(dc.stream.read_exact_(&mut buf[0 .. dc.num_comps*3]));
 
     for i in (0 .. dc.num_comps) {
-        let mut ci = buf[i*3] as usize;
+        let ci = buf[i*3] as usize;
 
         // JFIF says ci should be i+1, but there are images where ci is i. Normalize ids
         // so that ci == i, always. So much for standards...
@@ -386,11 +385,9 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         || (!dc.correct_comp_ids && ci != i) {
             return error("invalid component id")
         }
-        if dc.correct_comp_ids { ci -= 1 };
 
         let sampling_factors = buf[i*3 + 1];
-        dc.comps[ci] = Component {
-            id      : ci as u8,
+        dc.comps[i] = Component {
             sfx     : (sampling_factors >> 4) as usize,
             sfy     : (sampling_factors & 0xf) as usize,
             x       : 0,
@@ -401,7 +398,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
             pred    : 0,
             data    : Vec::<u8>::new(),
         };
-        let comp = &dc.comps[ci];
+        let comp = &dc.comps[i];
         if comp.sfy < 1 || 4 < comp.sfy ||
            comp.sfx < 1 || 4 < comp.sfx ||
            3 < comp.qtable {
@@ -441,18 +438,16 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     try!(dc.stream.read_exact_(&mut compbuf));
 
     for i in (0 .. num_scan_comps) {
-        let comp_id = compbuf[i*2] - if dc.correct_comp_ids { 1 } else { 0 };
+        let ci = compbuf[i*2] as usize - if dc.correct_comp_ids { 1 } else { 0 };
 
-        let mut ci = 0;
-        while ci < dc.num_comps && dc.comps[ci].id != comp_id { ci+=1 }
-        if dc.num_comps <= ci {
+        if ci >= dc.num_comps {
             return error("invalid / not supported");
         }
 
         let tables = compbuf[i*2+1];
         dc.comps[ci].dc_table = (tables >> 4) as usize;
         dc.comps[ci].ac_table = (tables & 0xf) as usize;
-        if 1 < dc.comps[ci].dc_table || 1 < dc.comps[i].ac_table {
+        if 1 < dc.comps[ci].dc_table || 1 < dc.comps[ci].ac_table {
             return error("invalid / not supported");
         }
     }
