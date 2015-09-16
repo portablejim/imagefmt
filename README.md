@@ -1,9 +1,7 @@
-[![Build Status](https://travis-ci.org/lgvz/imagefmt.svg)](https://travis-ci.org/lgvz/imagefmt)
-
-# imagefmt
+# imagefmt  [![Build Status](https://travis-ci.org/lgvz/imagefmt.svg)](https://travis-ci.org/lgvz/imagefmt)
 
 * [Documentation](http://lgvz.github.io/imagefmt/imagefmt/)
-* Returned data is always 8-bit (Y/YA/RGB/RGBA/BGR/BGRA)
+* Returned data is always 8-bit (Y/YA/RGB/RGBA/etc.)
 * All formats are optional via Cargo features (all enabled by default)
 
 | Format | Decoder                  | Encoder                           |
