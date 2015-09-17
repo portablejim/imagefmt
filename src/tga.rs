@@ -90,7 +90,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     if 0 < (hdr.flags & 0xc0) { return error("interlaced TGAs not supported"); }
     if 0 < (hdr.flags & 0x10) { return error("right-to-left TGAs not supported"); }
 
-    let TgaInfo { src_bytespp, src_fmt, rle } = try!(parse_header(&hdr));
+    let TgaInfo { src_fmt, rle } = try!(parse_header(&hdr));
 
     let tgt_fmt = {
         use super::ColFmt::*;
@@ -113,7 +113,6 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
         w              : hdr.width as usize,
         h              : hdr.height as usize,
         origin_at_top  : 0 < (hdr.flags & 0x20),
-        src_bytespp    : src_bytespp,
         rle            : rle,
         src_fmt        : src_fmt,
         tgt_fmt        : tgt_fmt,
@@ -128,7 +127,6 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
 }
 
 struct TgaInfo {
-    src_bytespp : usize,
     src_fmt   : ColFmt,
     rle       : bool,
 }
@@ -153,8 +151,7 @@ fn parse_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
         _ => return error("data type not supported")
     }
 
-    let src_bytespp = hdr.bits_pp as usize / 8;
-    let src_fmt = match src_bytespp {
+    let src_fmt = match hdr.bits_pp as usize / 8 {
         1 => ColFmt::Y,
         2 => ColFmt::YA,
         3 => ColFmt::BGR,
@@ -163,19 +160,17 @@ fn parse_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
     };
 
     Ok(TgaInfo {
-        src_bytespp : src_bytespp,
         src_fmt   : src_fmt,
         rle       : rle,
     })
 }
 
 fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
-    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
-    let tgt_linesize = (dc.w * tgt_bytespp) as isize;
-    let src_linesize = dc.w * dc.src_bytespp;
+    let tgt_linesize = (dc.w * dc.tgt_fmt.bytes_pp()) as isize;
+    let src_linesize = dc.w * dc.src_fmt.bytes_pp();
 
     let mut src_line = vec![0u8; src_linesize];
-    let mut result = vec![0u8; dc.w * dc.h * tgt_bytespp];
+    let mut result = vec![0u8; dc.w * dc.h * dc.tgt_fmt.bytes_pp()];
 
     let (tgt_stride, mut ti): (isize, isize) =
         if dc.origin_at_top {
@@ -198,7 +193,7 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
 
     // ---- RLE ----
 
-    let bytes_pp = dc.src_bytespp as usize;
+    let bytes_pp = dc.src_fmt.bytes_pp();
     let mut rbuf = vec![0u8; src_linesize];
     let mut plen = 0;    // packet length
     let mut its_rle = false;
@@ -241,7 +236,6 @@ struct TgaDecoder<'r, R:'r> {
     w             : usize,
     h             : usize,
     origin_at_top : bool,
-    src_bytespp   : usize,
     rle           : bool,          // run length compressed
     src_fmt       : ColFmt,
     tgt_fmt       : ColFmt,
@@ -308,8 +302,6 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
         w         : w,
         h         : h,
         src_stride: stride,
-        src_bytespp : src_fmt.bytes_pp(),
-        tgt_bytespp : tgt_fmt.bytes_pp(),
         src_fmt   : src_fmt,
         tgt_fmt   : tgt_fmt,
         rle       : true,
@@ -331,7 +323,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
 
 fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     use self::TgaDataType::*;
-    let (data_type, has_alpha) = match ec.tgt_bytespp {
+    let (data_type, has_alpha) = match ec.tgt_fmt.bytes_pp() {
         1 => (if ec.rle { GrayRLE      } else { Gray      }, false),
         2 => (if ec.rle { GrayRLE      } else { Gray      }, true),
         3 => (if ec.rle { TrueColorRLE } else { TrueColor }, false),
@@ -348,7 +340,7 @@ fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
         0, 0, 0, 0,
         w[0], w[1],
         h[0], h[1],
-        (ec.tgt_bytespp * 8) as u8,
+        (ec.tgt_fmt.bytes_pp() * 8) as u8,
         if has_alpha {8u8} else {0u8},  // flags
     ];
 
@@ -356,8 +348,8 @@ fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
 }
 
 fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
-    let src_linesize = (ec.w * ec.src_bytespp) as usize;
-    let tgt_linesize = (ec.w * ec.tgt_bytespp) as usize;
+    let src_linesize = ec.w * ec.src_fmt.bytes_pp();
+    let tgt_linesize = ec.w * ec.tgt_fmt.bytes_pp();
     let mut tgt_line = vec![0u8; tgt_linesize];
     let mut si = ec.h as usize * ec.src_stride;
 
@@ -375,14 +367,14 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
 
     // ----- RLE -----
 
-    let bytes_pp = ec.tgt_bytespp as usize;
     let max_packets_per_line = (tgt_linesize+127) / 128;
     let mut cmp_buf = vec![0u8; tgt_linesize+max_packets_per_line];
     for _ in (0 .. ec.h) {
         si -= ec.src_stride;
         convert(&ec.data[si .. si+src_linesize], &mut tgt_line[..],
                 c0, c1, c2, c3);
-        let compressed_line = rle_compress(&tgt_line[..], &mut cmp_buf[..], ec.w, bytes_pp);
+        let compressed_line =
+            rle_compress(&tgt_line[..], &mut cmp_buf[..], ec.w, ec.tgt_fmt.bytes_pp());
         try!(ec.stream.write_all(&compressed_line[..]));
     }
     return Ok(());
@@ -469,8 +461,6 @@ struct TgaEncoder<'r, R:'r> {
     w             : usize,
     h             : usize,
     src_stride    : usize,
-    src_bytespp   : usize,
-    tgt_bytespp   : usize,
     tgt_fmt       : ColFmt,
     src_fmt       : ColFmt,
     rle           : bool,          // run length compressed
