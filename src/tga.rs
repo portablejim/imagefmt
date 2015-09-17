@@ -274,17 +274,19 @@ impl TgaDataType {
 // TGA Encoder
 
 /// Writes an image and converts it to requested color type.
-pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
-                                                               data: &[u8],
-                                                         tgt_type: ColType)
-                                                          -> io::Result<()>
+pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
+                                                                      tgt_type: ColType,
+                                                              src_stride: Option<usize>)
+                                                                       -> io::Result<()>
 {
+    if src_fmt == ColFmt::Auto { return error("invalid format") }
+    let stride = src_stride.unwrap_or(w * src_fmt.bytes_pp());
+
     if w < 1 || h < 1 || 0xffff < w || 0xffff < h
-    || src_fmt.bytes_pp() * w * h != data.len() {
+    || (src_stride.is_none() && src_fmt.bytes_pp() * w * h != data.len())
+    || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.bytes_pp()) {
         return error("invalid dimensions or data length");
     }
-
-    if src_fmt == ColFmt::Auto { return error("invalid format") }
 
     let tgt_fmt = match tgt_type {
         ColType::Gray       => ColFmt::Y,
@@ -305,6 +307,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
         stream    : writer,
         w         : w,
         h         : h,
+        src_stride: stride,
         src_bytespp : src_fmt.bytes_pp(),
         tgt_bytespp : tgt_fmt.bytes_pp(),
         src_fmt   : src_fmt,
@@ -356,13 +359,13 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     let src_linesize = (ec.w * ec.src_bytespp) as usize;
     let tgt_linesize = (ec.w * ec.tgt_bytespp) as usize;
     let mut tgt_line = vec![0u8; tgt_linesize];
-    let mut si = ec.h as usize * src_linesize;
+    let mut si = ec.h as usize * ec.src_stride;
 
     let (convert, c0, c1, c2, c3) = try!(converter(ec.src_fmt, ec.tgt_fmt));
 
     if !ec.rle {
         for _ in (0 .. ec.h) {
-            si -= src_linesize; // origin at bottom
+            si -= ec.src_stride; // origin at bottom
             convert(&ec.data[si..si+src_linesize], &mut tgt_line[..],
                     c0, c1, c2, c3);
             try!(ec.stream.write_all(&tgt_line[..]));
@@ -376,7 +379,7 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
     let max_packets_per_line = (tgt_linesize+127) / 128;
     let mut cmp_buf = vec![0u8; tgt_linesize+max_packets_per_line];
     for _ in (0 .. ec.h) {
-        si -= src_linesize;
+        si -= ec.src_stride;
         convert(&ec.data[si .. si+src_linesize], &mut tgt_line[..],
                 c0, c1, c2, c3);
         let compressed_line = rle_compress(&tgt_line[..], &mut cmp_buf[..], ec.w, bytes_pp);
@@ -465,6 +468,7 @@ struct TgaEncoder<'r, R:'r> {
     stream        : &'r mut R,
     w             : usize,
     h             : usize,
+    src_stride    : usize,
     src_bytespp   : usize,
     tgt_bytespp   : usize,
     tgt_fmt       : ColFmt,

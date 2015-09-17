@@ -350,15 +350,18 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
 
 /// Writes an image and converts it to requested color type (grayscale not supported).
 pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
-                                                                      tgt_type: ColType)
+                                                                      tgt_type: ColType,
+                                                              src_stride: Option<usize>)
                                                                        -> io::Result<()>
 {
+    if src_fmt == ColFmt::Auto { return error("invalid format") }
+    let stride = src_stride.unwrap_or(w * src_fmt.bytes_pp());
+
     if w < 1 || h < 1 || 0x7fff < w || 0x7fff < h
-    || src_fmt.bytes_pp() * w * h != data.len() {
+    || (src_stride.is_none() && src_fmt.bytes_pp() * w * h != data.len())
+    || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.bytes_pp()) {
         return error("invalid dimensions or data length");
     }
-
-    if src_fmt == ColFmt::Auto { return error("invalid format") }
 
     let tgt_fmt = match tgt_type {
         ColType::Color      => ColFmt::BGR,
@@ -409,10 +412,10 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
 
     let mut tgt_line = vec![0u8; tgt_linesize + pad];
     let src_linesize = w * src_fmt.bytes_pp();
-    let mut si = h * src_linesize;
+    let mut si = h * stride;
 
     for _ in (0 .. h) {
-        si -= src_linesize;
+        si -= stride;
         convert(&data[si .. si + src_linesize], &mut tgt_line[..tgt_linesize],
                 c0, c1, c2, c3);
         try!(writer.write_all(&tgt_line));

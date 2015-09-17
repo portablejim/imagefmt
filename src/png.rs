@@ -537,26 +537,30 @@ pub struct ExtChunk {
 
 /// Writes an image and converts it to requested color type.
 #[inline]
-pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
-                                                                   data: &[u8],
-                                                             tgt_type: ColType)
-                                                              -> io::Result<()>
+pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
+                                                                      tgt_type: ColType,
+                                                              src_stride: Option<usize>)
+                                                                       -> io::Result<()>
 {
-    write_chunks(writer, w, h, src_fmt, data, tgt_type, &[])
+    write_chunks(writer, w, h, src_fmt, data, tgt_type, src_stride, &[])
 }
 
 /// Like `png::write` but also writes the given extension chunks.
 pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt,
-                                                                          data: &[u8],
-                                                                    tgt_type: ColType,
-                                                                  chunks: &[ExtChunk])
-                                                                     -> io::Result<()>
+                                                                      data: &[u8],
+                                                                tgt_type: ColType,
+                                                        src_stride: Option<usize>,
+                                                              chunks: &[ExtChunk])
+                                                                 -> io::Result<()>
 {
-    if w < 1 || h < 1 || src_fmt.bytes_pp() * w * h != data.len() {
-        return error("invalid dimensions or data length");
-    }
-
     if src_fmt == ColFmt::Auto { return error("invalid format") }
+    let stride = src_stride.unwrap_or(w * src_fmt.bytes_pp());
+
+    if w < 1 || h < 1
+    || (src_stride.is_none() && src_fmt.bytes_pp() * w * h != data.len())
+    || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.bytes_pp()) {
+        return error("invalid dimensions or data length")
+    }
 
     let tgt_fmt = match tgt_type {
         ColType::Gray       => ColFmt::Y,
@@ -578,6 +582,7 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
         w         : w,
         h         : h,
         src_bytespp : src_fmt.bytes_pp(),
+        src_stride: stride,
         src_fmt   : src_fmt,
         tgt_fmt   : tgt_fmt,
         data      : data,
@@ -645,6 +650,7 @@ struct PngEncoder<'r, W:'r> {
     w             : usize,
     h             : usize,
     src_bytespp   : usize,
+    src_stride    : usize,
     tgt_fmt       : ColFmt,
     src_fmt       : ColFmt,
     data          : &'r [u8],
@@ -664,7 +670,7 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
 
     let mut si = 0;
     let mut ti = 0;
-    while si < ec.h * src_linesize {
+    while si < ec.h * ec.src_stride {
         convert(&ec.data[si .. si+src_linesize], &mut cline[1 .. tgt_linesize],
                 c0, c1, c2, c3);
 
@@ -682,7 +688,7 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
         pline = cline;
         cline = swap;
 
-        si += src_linesize;
+        si += ec.src_stride;
         ti += tgt_linesize;
     }
 

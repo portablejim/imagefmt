@@ -28,7 +28,7 @@
 
 use std::ffi::OsStr;
 use std::fs::{File};
-use std::io::{self, Read, BufReader, BufWriter, ErrorKind, Seek, SeekFrom};
+use std::io::{self, Read, Write, BufReader, BufWriter, ErrorKind, Seek, SeekFrom};
 use std::path::Path;
 use std::fmt::{self, Debug};
 use std::cmp::min;
@@ -131,10 +131,32 @@ pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
                                                              -> io::Result<()>
         where P: AsRef<Path>
 {
+    let (mut writer, writefunc) = try!(writer_and_writefunc(filepath));
+    writefunc(&mut writer, w, h, src_fmt, data, tgt_type, None)
+}
+
+/// Writes a region of an image and converts it to requested color type.
+pub fn write_region<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
+                                                                   tgt_type: ColType,
+                                                                rx: usize, ry: usize,
+                                                                rw: usize, rh: usize)
+                                                                    -> io::Result<()>
+        where P: AsRef<Path>
+{
+    if rw == 0 || rh == 0 || rx + rw > w || ry + rh > h {
+        return error("invalid region");
+    }
+    let stride = w * src_fmt.bytes_pp();
+    let start = ry * stride + rx * src_fmt.bytes_pp();
+    let (mut writer, writefunc) = try!(writer_and_writefunc(filepath));
+    writefunc(&mut writer, rw, rh, src_fmt, &data[start..], tgt_type, Some(stride))
+}
+
+fn writer_and_writefunc<P>(filepath: P) -> io::Result<(BufWriter<File>, WriteFn)>
+        where P: AsRef<Path>
+{
     let filepath: &Path = filepath.as_ref();
-    type F = fn(&mut BufWriter<File>, usize, usize, ColFmt, &[u8], ColType)
-                                                         -> io::Result<()>;
-    let writefunc: F =
+    let writefunc: WriteFn =
         match filepath.extension().and_then(OsStr::to_str) {
             Some("png") if cfg!(feature = "png") => png::write,
             Some("tga") if cfg!(feature = "tga") => tga::write,
@@ -142,9 +164,13 @@ pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
             _ => return error("image type not supported for writing"),
         };
     let file = try!(File::create(filepath));
-    let writer = &mut BufWriter::new(file);
-    writefunc(writer, w, h, src_fmt, data, tgt_type)
+    let writer = BufWriter::new(file);
+    Ok((writer, writefunc))
 }
+
+type WriteFn =
+    fn(&mut BufWriter<File>, usize, usize, ColFmt, &[u8], ColType, Option<usize>)
+                                                               -> io::Result<()>;
 
 /// Converts the image into a new allocation.
 pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt)
@@ -688,7 +714,7 @@ macro_rules! dummy_mod {
             pub fn read_info<R: Read>(_: &mut R) -> io::Result<Info> { panic!("bug") }
             pub fn read<R: Read>(_: &mut R, _: ColFmt) -> io::Result<Image> { panic!("bug") }
             pub fn write<W: Write>(_: &mut W, _: usize, _: usize, _: ColFmt, _: &[u8],
-                                           _: ColType) -> io::Result<()> { panic!("bug") }
+                         _: ColType, _: Option<usize>) -> io::Result<()> { panic!("bug") }
         }
     }
 }
