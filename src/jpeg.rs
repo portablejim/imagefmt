@@ -1,28 +1,28 @@
 // Copyright (c) 2014-2015 Tero Hänninen, license: MIT
 
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 use std::mem::{zeroed};
 use super::{
-    Image, Info, ColFmt, ColType, error,
+    Image, Info, ColFmt, ColType,
     copy_memory, u16_from_be, IFRead,
 };
 
 // Baseline JPEG decoder
 
 /// Returns width, height and color type of the image.
-pub fn read_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
+pub fn read_info<R: Read+Seek>(reader: &mut R) -> ::Result<Info> {
     let mut marker = [0u8; 2];
 
     // SOI
     try!(reader.read_exact_(&mut marker));
     if &marker[0..2] != &[0xff, 0xd8_u8][..] {
-        return error("not JPEG");
+        return Err(::Error::InvalidData("not JPEG"))
     }
 
     loop {
         try!(reader.read_exact_(&mut marker));
 
-        if marker[0] != 0xff { return error("no marker"); }
+        if marker[0] != 0xff { return Err(::Error::InvalidData("no marker")) }
         while marker[1] == 0xff {
             try!(reader.read_exact_(&mut marker[1..2]));
         }
@@ -37,18 +37,18 @@ pub fn read_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
                     ct: match tmp[7] {
                            1 => ColType::Gray,
                            3 => ColType::Color,
-                           _ => return error("not valid baseline jpeg")
+                           _ => return Err(::Error::InvalidData("not baseline jpeg"))
                        },
                 });
             }
-            SOS | EOI => return error("no frame header"),
+            SOS | EOI => return Err(::Error::InvalidData("no frame header")),
             DRI | DHT | DQT | COM | APP0 ... APPF => {
                 let mut tmp: [u8; 2] = [0, 0];
                 try!(reader.read_exact_(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]) - 2;
                 try!(reader.seek(SeekFrom::Current(len as i64)));
             }
-            _ => return error("invalid / unsupported marker"),
+            _ => return Err(::Error::InvalidData("invalid / unsupported marker")),
         }
     }
 }
@@ -64,7 +64,7 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
 /// Reads an image and converts it to requested format.
 ///
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to `Y` or `RGB`.
-pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
 
     let dc = &mut JpegDecoder {
         stream      : reader,
@@ -91,13 +91,14 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
     try!(read_markers(dc));   // reads until first scan header
 
     if dc.eoi_reached {
-        return error("no image data");
+        return Err(::Error::InvalidData("no image data"))
     }
     dc.tgt_fmt =
         if req_fmt == ColFmt::Auto {
             match dc.num_comps {
-                1 => ColFmt::Y, 3 => ColFmt::RGB,
-                _ => return error("internal error")
+                1 => ColFmt::Y,
+                3 => ColFmt::RGB,
+                _ => return Err(::Error::Internal("wrong format"))
             }
         } else {
             req_fmt
@@ -167,19 +168,19 @@ struct Component {
     data     : Vec<u8>,      // reconstructed samples
 }
 
-fn read_markers<R: Read+Seek>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
+fn read_markers<R: Read+Seek>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut marker = [0u8; 2];
     // SOI
     try!(dc.stream.read_exact_(&mut marker));
     if &marker[0..2] != &[0xff, 0xd8_u8][..] {
-        return error("not JPEG");
+        return Err(::Error::InvalidData("not JPEG"))
     }
 
     let mut has_next_scan_header = false;
     while !has_next_scan_header && !dc.eoi_reached {
         try!(dc.stream.read_exact_(&mut marker));
 
-        if marker[0] != 0xff { return error("no marker"); }
+        if marker[0] != 0xff { return Err(::Error::InvalidData("no marker")) }
         while marker[1] == 0xff {
             try!(dc.stream.read_exact_(&mut marker[1..2]));
         }
@@ -190,14 +191,14 @@ fn read_markers<R: Read+Seek>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
             DQT => try!(read_quantization_tables(dc)),
             SOF0 => {
                 if dc.has_frame_header {
-                    return error("extra frame header");
+                    return Err(::Error::InvalidData("extra frame header"))
                 }
                 try!(read_frame_header(dc));
                 dc.has_frame_header = true;
             }
             SOS => {
                 if !dc.has_frame_header {
-                    return error("no frame header");
+                    return Err(::Error::InvalidData("no frame header"))
                 }
                 try!(read_scan_header(dc));
                 has_next_scan_header = true;
@@ -208,11 +209,11 @@ fn read_markers<R: Read+Seek>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
                 let mut tmp = [0u8; 2];
                 try!(dc.stream.read_exact_(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]);
-                if len < 2 { return error("invalid data length") }
+                if len < 2 { return Err(::Error::InvalidData("invalid data length")) }
                 try!(dc.stream.seek(SeekFrom::Current(len as i64 - 2)));
             }
-            SOF2 => return error("progressive jpeg not supported"),
-            _ => return error("unsupported marker"),
+            SOF2 => return Err(::Error::Unsupported("progressive jpeg")),
+            _ => return Err(::Error::Unsupported("unsupported marker")),
         }
     }
     Ok(())
@@ -240,7 +241,7 @@ const APPF: u8 = 0xef;    // application f segment
 const COM: u8 = 0xfe;     // comment
 const EOI: u8 = 0xd9;     // end of image
 
-fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
+fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 17];
     try!(dc.stream.read_exact_(&mut buf[0..2]));
     let mut len = u16_from_be(&buf[0..2]) as isize -2;
@@ -250,7 +251,7 @@ fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         let table_class = buf[0] >> 4;            // 0 = dc table, 1 = ac table
         let table_slot = (buf[0] & 0xf) as usize;  // must be 0 or 1 for baseline
         if 1 < table_slot || 1 < table_class {
-            return error("invalid / not supported");
+            return Err(::Error::InvalidData("invalid table slot or class"))
         }
 
         // compute total number of huffman codes
@@ -259,7 +260,7 @@ fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
             mt += buf[i] as usize;
         }
         if 256 < mt {
-            return error("invalid / not supported");
+            return Err(::Error::InvalidData("too many huffman codes"));
         }
 
         if table_class == 0 {
@@ -335,12 +336,12 @@ fn derive_mincode_maxcode_valptr(mincode: &mut[i16; 16], maxcode: &mut[i16; 16],
     }
 }
 
-fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
+fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 2];
     try!(dc.stream.read_exact_(&mut buf[0..2]));
     let mut len = u16_from_be(&buf[0..2]) as usize -2;
     if len % 65 != 0 {
-        return error("invalid / not supported");
+        return Err(::Error::InvalidData("qtable"))
     }
 
     while 0 < len {
@@ -348,7 +349,7 @@ fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> 
         let precision = buf[0] >> 4;  // 0 = 8 bit, 1 = 16 bit
         let table_slot = (buf[0] & 0xf) as usize;
         if 3 < table_slot || precision != 0 {   // only 8 bit for baseline
-            return error("invalid / not supported");
+            return Err(::Error::InvalidData("table slot or precision"))
         }
         try!(dc.stream.read_exact_(&mut dc.qtables[table_slot][0..64]));
         len -= 65;
@@ -356,7 +357,7 @@ fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> 
     Ok(())
 }
 
-fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
+fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 9];
     try!(dc.stream.read_exact_(&mut buf[0..8]));
     let len = u16_from_be(&buf[0..2]) as usize;
@@ -367,7 +368,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
 
     if precision != 8 || (dc.num_comps != 1 && dc.num_comps != 3) ||
        len != 8 + dc.num_comps*3 {
-        return error("invalid / not supported");
+        return Err(::Error::InvalidData("frame header"));
     }
 
     dc.hmax = 0;
@@ -383,7 +384,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         if i == 0 { dc.correct_comp_ids = ci == i+1; }
         if (dc.correct_comp_ids && ci != i+1)
         || (!dc.correct_comp_ids && ci != i) {
-            return error("invalid component id")
+            return Err(::Error::InvalidData("invalid component id"))
         }
 
         let sampling_factors = buf[i*3 + 1];
@@ -402,14 +403,14 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         if comp.sfy < 1 || 4 < comp.sfy ||
            comp.sfx < 1 || 4 < comp.sfx ||
            3 < comp.qtable {
-            return error("invalid / not supported");
+            return Err(::Error::InvalidData("component meta data"))
         }
 
         if dc.hmax < comp.sfx { dc.hmax = comp.sfx; }
         if dc.vmax < comp.sfy { dc.vmax = comp.sfy; }
         mcu_du += comp.sfx * comp.sfy;
     }
-    if 10 < mcu_du { return error("invalid / not supported"); }
+    if 10 < mcu_du { return Err(::Error::InvalidData("du count")) }
 
     for i in (0 .. dc.num_comps) {
         dc.comps[i].x = (dc.w as f64 * dc.comps[i].sfx as f64 / dc.hmax as f64).ceil() as usize;
@@ -424,14 +425,14 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     Ok(())
 }
 
-fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
+fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf: [u8; 3] = [0, 0, 0];
     try!(dc.stream.read_exact_(&mut buf));
     let len = u16_from_be(&buf[0..2]) as usize;
     let num_scan_comps = buf[2] as usize;
 
     if num_scan_comps != dc.num_comps || len != (6+num_scan_comps*2) {
-        return error("invalid / not supported");
+        return Err(::Error::InvalidData("scan header"))
     }
 
     let mut compbuf = vec![0u8; len-3];
@@ -441,14 +442,14 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
         let ci = compbuf[i*2] as usize - if dc.correct_comp_ids { 1 } else { 0 };
 
         if ci >= dc.num_comps {
-            return error("invalid / not supported");
+            return Err(::Error::InvalidData("component id"));
         }
 
         let tables = compbuf[i*2+1];
         dc.comps[ci].dc_table = (tables >> 4) as usize;
         dc.comps[ci].ac_table = (tables & 0xf) as usize;
         if 1 < dc.comps[ci].dc_table || 1 < dc.comps[ci].ac_table {
-            return error("invalid / not supported");
+            return Err(::Error::InvalidData("dc/ac table index"));
         }
     }
 
@@ -456,16 +457,16 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     Ok(())
 }
 
-fn read_restart_interval<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
+fn read_restart_interval<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf: [u8; 4] = [0, 0, 0, 0];
     try!(dc.stream.read_exact_(&mut buf));
     let len = u16_from_be(&buf[0..2]) as usize;
-    if len != 4 { return error("invalid / not supported"); }
+    if len != 4 { return Err(::Error::InvalidData("restart interval")) }
     dc.restart_interval = u16_from_be(&buf[2..4]) as usize;
     Ok(())
 }
 
-fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
+fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let (mut intervals, mut mcus) =
         if 0 < dc.restart_interval {
             let total_mcus = dc.num_mcu_x * dc.num_mcu_y;
@@ -532,11 +533,11 @@ fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> io::Result<()> {
     Ok(())
 }
 
-fn read_restart<R: Read>(stream: &mut R) -> io::Result<()> {
+fn read_restart<R: Read>(stream: &mut R) -> ::Result<()> {
     let mut buf: [u8; 2] = [0, 0];
     try!(stream.read_exact_(&mut buf));
     if buf[0] != 0xff || buf[1] < RST0 || RST7 < buf[1] {
-        return error("reset marker missing");
+        return Err(::Error::InvalidData("reset marker missing"))
     }
     Ok(())
 }
@@ -553,11 +554,8 @@ static DEZIGZAG: [u8; 64] = [
 ];
 
 // decode entropy, dequantize & dezigzag (section F.2)
-//fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp: &mut Component,
-//                                                     qtable: &[u8, ..64])
-//                                                 -> io::Result<[i16, ..64]>
 fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx: usize)
-                                                             -> io::Result<[i16; 64]>
+                                                               -> ::Result<[i16; 64]>
 {
     //let comp = &mut dc.comps[comp_idx];
     //let qtable = &dc.qtables[qtable_idx];
@@ -589,7 +587,7 @@ fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx: u
         k += rrrr as usize;
 
         if 63 < k {
-            return error("corrupt block");
+            return Err(::Error::InvalidData("corrupt block"))
         }
         res[DEZIGZAG[k] as usize] =
             (try!(receive_and_extend(dc, ssss)) * dc.qtables[qtable_idx][k] as isize) as i16;
@@ -599,8 +597,9 @@ fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx: u
     Ok(res)
 }
 
-//fn decode_huff<R: Read>(dc: &mut JpegDecoder<R>, tab: &HuffTab) -> io::Result<u8> {
-fn decode_huff<R: Read>(dc: &mut JpegDecoder<R>, tab_idx: usize, dctab: bool) -> io::Result<u8> {
+fn decode_huff<R: Read>(dc: &mut JpegDecoder<R>, tab_idx: usize, dctab: bool)
+                                                            -> ::Result<u8>
+{
     let (code, cb, bits_left) = try!(nextbit(dc.stream, dc.cb, dc.bits_left));
     dc.cb = cb;
     dc.bits_left = bits_left;
@@ -617,17 +616,17 @@ fn decode_huff<R: Read>(dc: &mut JpegDecoder<R>, tab_idx: usize, dctab: bool) ->
 
         i += 1;
         if tab.maxcode.len() <= i {
-            return error("corrupt huffman coding");
+            return Err(::Error::InvalidData("corrupt huffman coding"))
         }
     }
     let j = (tab.valptr[i] - tab.mincode[i] + code) as usize;
     if tab.values.len() <= j {
-        return error("corrupt huffman coding")
+        return Err(::Error::InvalidData("corrupt huffman coding"))
     }
     Ok(tab.values[j])
 }
 
-fn receive_and_extend<R: Read>(dc: &mut JpegDecoder<R>, s: u8) -> io::Result<isize> {
+fn receive_and_extend<R: Read>(dc: &mut JpegDecoder<R>, s: u8) -> ::Result<isize> {
     // receive
     let mut symbol = 0;
     for _ in (0 .. s) {
@@ -649,7 +648,7 @@ fn receive_and_extend<R: Read>(dc: &mut JpegDecoder<R>, s: u8) -> io::Result<isi
 
 // returns the bit and the new cb and bits_left
 fn nextbit<R: Read>(stream: &mut R, mut cb: u8, mut bits_left: usize)
-                                           -> io::Result<(u8, u8, usize)>
+                                         -> ::Result<(u8, u8, usize)>
 {
     if bits_left == 0 {
         cb = try!(stream.read_u8());
@@ -658,7 +657,7 @@ fn nextbit<R: Read>(stream: &mut R, mut cb: u8, mut bits_left: usize)
         if cb == 0xff {
             let b2 = try!(stream.read_u8());
             if b2 != 0x0 {
-                return error("unexpected marker")
+                return Err(::Error::InvalidData("unexpected marker"))
             }
         }
     }
@@ -669,7 +668,7 @@ fn nextbit<R: Read>(stream: &mut R, mut cb: u8, mut bits_left: usize)
     Ok((r, cb, bits_left))
 }
 
-fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
+fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> ::Result<Vec<u8>> {
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
     let mut result = vec![0u8; dc.w * dc.h * tgt_bytespp];
 
@@ -693,7 +692,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
                         (2, 1) => upsample_h2_v1,
                         (1, 2) => upsample_h1_v2,
                         (1, 1) => samples_h1_v1,
-                        (_, _) => return error("bug"),
+                        (_, _) => return Err(::Error::Internal("bug")),
                     };
 
                 let mut comp1 = vec![0u8; dc.w];
@@ -785,7 +784,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> io::Result<Vec<u8>> {
             }
             return Ok(result);
         },
-        _ => return error("internal error"),
+        _ => return Err(::Error::Internal("error")),
     }
 }
 

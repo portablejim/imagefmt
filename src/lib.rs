@@ -86,14 +86,14 @@ pub enum ColType {
 }
 
 /// Returns width, height and color type of the image.
-pub fn read_info<P: AsRef<Path>>(filepath: P) -> io::Result<Info> {
+pub fn read_info<P: AsRef<Path>>(filepath: P) -> ::Result<Info> {
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
     read_info_from(reader)
 }
 
 /// Like `read_info` but reads from a reader. If it fails, it seeks back to where started.
-pub fn read_info_from<R: Read+Seek>(r: &mut R) -> io::Result<Info> {
+pub fn read_info_from<R: Read+Seek>(r: &mut R) -> ::Result<Info> {
     let start = try!(r.seek(SeekFrom::Current(0)));
     let s = |r: &mut R| {
         let _ = r.seek(SeekFrom::Start(start));
@@ -103,32 +103,32 @@ pub fn read_info_from<R: Read+Seek>(r: &mut R) -> io::Result<Info> {
     if cfg!(feature = "jpeg") { match jpeg::read_info(r) { Ok(i) => return Ok(i), _ => {s(r)} } }
     if cfg!(feature = "bmp") { match bmp::read_info(r) { Ok(i) => return Ok(i), _ => {s(r)} } }
     if cfg!(feature = "tga") { match tga::read_info(r) { Ok(i) => return Ok(i), _ => {s(r)} } }
-    error("image type not recognized")
+    Err(::Error::Unsupported("image type not recognized"))
 }
 
 /// Reads an image and converts it to requested format.
 ///
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to one of `Y`, `YA`, `RGB`,
 /// `RGBA`.
-pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> ::Result<Image> {
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
     read_from(reader, req_fmt)
 }
 
 /// Like `read` but reads from a reader.
-pub fn read_from<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read_from<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
     if      cfg!(feature = "png") && png::detect(reader) { png::read(reader, req_fmt) }
     else if cfg!(feature = "jpeg") && jpeg::detect(reader) { jpeg::read(reader, req_fmt) }
     else if cfg!(feature = "bmp") && bmp::detect(reader) { bmp::read(reader, req_fmt) }
     else if cfg!(feature = "tga") && tga::detect(reader) { tga::read(reader, req_fmt) }
-    else { error("image type not recognized") }
+    else { Err(::Error::Unsupported("image type not recognized")) }
 }
 
 /// Writes an image and converts it to requested color type.
 pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
                                                             tgt_type: ColType)
-                                                             -> io::Result<()>
+                                                             -> ::Result<()>
         where P: AsRef<Path>
 {
     let (mut writer, writefunc) = try!(writer_and_writefunc(filepath));
@@ -140,11 +140,11 @@ pub fn write_region<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &
                                                                    tgt_type: ColType,
                                                                 rx: usize, ry: usize,
                                                                 rw: usize, rh: usize)
-                                                                    -> io::Result<()>
+                                                                    -> ::Result<()>
         where P: AsRef<Path>
 {
     if rw == 0 || rh == 0 || rx + rw > w || ry + rh > h {
-        return error("invalid region");
+        return Err(::Error::InvalidArg("invalid region"))
     }
     let stride = w * src_fmt.bytes_pp();
     let start = ry * stride + rx * src_fmt.bytes_pp();
@@ -152,7 +152,7 @@ pub fn write_region<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &
     writefunc(&mut writer, rw, rh, src_fmt, &data[start..], tgt_type, Some(stride))
 }
 
-fn writer_and_writefunc<P>(filepath: P) -> io::Result<(BufWriter<File>, WriteFn)>
+fn writer_and_writefunc<P>(filepath: P) -> ::Result<(BufWriter<File>, WriteFn)>
         where P: AsRef<Path>
 {
     let filepath: &Path = filepath.as_ref();
@@ -161,7 +161,7 @@ fn writer_and_writefunc<P>(filepath: P) -> io::Result<(BufWriter<File>, WriteFn)
             Some("png") if cfg!(feature = "png") => png::write,
             Some("tga") if cfg!(feature = "tga") => tga::write,
             Some("bmp") if cfg!(feature = "bmp") => bmp::write,
-            _ => return error("image type not supported for writing"),
+            _ => return Err(::Error::Unsupported("image type not supported for writing")),
         };
     let file = try!(File::create(filepath));
     let writer = BufWriter::new(file);
@@ -170,18 +170,18 @@ fn writer_and_writefunc<P>(filepath: P) -> io::Result<(BufWriter<File>, WriteFn)
 
 type WriteFn =
     fn(&mut BufWriter<File>, usize, usize, ColFmt, &[u8], ColType, Option<usize>)
-                                                               -> io::Result<()>;
+                                                               -> ::Result<()>;
 
 /// Converts the image into a new allocation.
 pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt)
-                                                           -> Result<Image, &str>
+                                                               -> ::Result<Image>
 {
     if w < 1 || h < 1 || src_fmt.bytes_pp() * w * h != data.len() {
-        return Err("invalid dimensions or data length");
+        return Err(::Error::InvalidArg("invalid dimensions or data length"))
     }
 
     if src_fmt == ColFmt::Auto {
-        return Err("can't convert from unknown source format")
+        return Err(::Error::InvalidArg("can't convert from unknown source format"))
     }
 
     if tgt_fmt == src_fmt || tgt_fmt == ColFmt::Auto {
@@ -195,8 +195,7 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
         })
     }
 
-    let (convert, c0, c1, c2, c3) =
-        try!(converter(src_fmt, tgt_fmt).map_err(|_| "no such converter"));
+    let (convert, c0, c1, c2, c3) = try!(converter(src_fmt, tgt_fmt));
 
     let src_linesize = w * src_fmt.bytes_pp();
     let tgt_linesize = w * tgt_fmt.bytes_pp();
@@ -222,7 +221,7 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
 impl Image {
     /// Writes an image and converts it to requested color type.
     #[inline]
-    pub fn write<P>(&self, filepath: P, tgt_type: ColType) -> io::Result<()>
+    pub fn write<P>(&self, filepath: P, tgt_type: ColType) -> ::Result<()>
             where P: AsRef<Path>
     {
         write(filepath, self.w, self.h, self.fmt, &self.buf, tgt_type)
@@ -230,7 +229,7 @@ impl Image {
 
     /// Converts the image into a new allocation.
     #[inline]
-    pub fn convert(&self, tgt_fmt: ColFmt) -> Result<Image, &str> {
+    pub fn convert(&self, tgt_fmt: ColFmt) -> ::Result<Image> {
         convert(self.w, self.h, self.fmt, &self.buf, tgt_fmt)
     }
 }
@@ -289,7 +288,7 @@ impl ColFmt {
 type LineConverter = fn(&[u8], &mut[u8], usize, usize, usize, usize);
 
 fn converter(src_fmt: ColFmt, tgt_fmt: ColFmt)
-        -> io::Result<(LineConverter, usize, usize, usize, usize)>
+        -> ::Result<(LineConverter, usize, usize, usize, usize)>
 {
     use self::ColFmt::*;
 
@@ -365,7 +364,7 @@ fn converter(src_fmt: ColFmt, tgt_fmt: ColFmt)
         (ABGR, RGBA)
         | (ABGR, BGRA)
         | (ABGR, ARGB)          => Ok((abgr_to_any_rgba, tri, tgi, tbi, tai)),
-        (Auto, _) | (_, Auto) => error("no such converter"),
+        (Auto, _) | (_, Auto) => Err(::Error::Internal("no such converter")),
     }
 }
 
@@ -626,7 +625,7 @@ impl<R: Read> IFRead for R {
         let mut buf = [0];
         match self.read(&mut buf) {
             Ok(n) if n == 1 => Ok(buf[0]),
-            _               => error("not enough data"),
+            _               => Err(io::Error::new(ErrorKind::Other, "not enough data")),
         }
     }
 
@@ -635,7 +634,7 @@ impl<R: Read> IFRead for R {
         while ready < buf.len() {
             let got = try!(self.read(&mut buf[ready..]));
             if got == 0 {
-                return error("not enough data");
+                return Err(io::Error::new(ErrorKind::Other, "not enough data"))
             }
             ready += got;
         }
@@ -692,17 +691,51 @@ fn copy_memory(src: &[u8], dst: &mut[u8]) {
     }
 }
 
-#[inline]
-fn error<T>(msg: &str) -> Result<T, io::Error> {
-    Err(io::Error::new(ErrorKind::Other, msg))
-}
-
 impl Debug for Image {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "Image {{ w: {:?}, h: {:?}, fmt: {:?}, buf: [{} bytes] }}",
                self.w, self.h, self.fmt, self.buf.len())
     }
 }
+
+// --------------------------------------------------
+
+/// The type returned from all the functions.
+pub type Result<T> = std::result::Result<T, ::Error>;
+
+/// Error.
+#[derive(Debug)]
+pub enum Error {
+    InvalidData(&'static str),
+    InvalidArg(&'static str),
+    Unsupported(&'static str),
+    Internal(&'static str),
+    Io(io::Error),
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Error {
+        Error::Io(e)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "{:?}", self)
+    }
+}
+
+impl std::error::Error for Error {
+    fn description(&self) -> &str {
+        use Error::*;
+        match *self {
+            InvalidArg(s) | InvalidData(s) | Unsupported(s) | Internal(s) => s,
+            Io(ref e) => e.description(),
+        }
+    }
+}
+
+// --------------------------------------------------
 
 macro_rules! dummy_mod {
     ($name:ident) => {
@@ -711,10 +744,10 @@ macro_rules! dummy_mod {
             use ::{Info, Image, ColFmt, ColType};
             use std::io::{self, Read, Write};
             pub fn detect<R: Read>(_: &mut R) -> bool { panic!("bug") }
-            pub fn read_info<R: Read>(_: &mut R) -> io::Result<Info> { panic!("bug") }
-            pub fn read<R: Read>(_: &mut R, _: ColFmt) -> io::Result<Image> { panic!("bug") }
+            pub fn read_info<R: Read>(_: &mut R) -> ::Result<Info> { panic!("bug") }
+            pub fn read<R: Read>(_: &mut R, _: ColFmt) -> ::Result<Image> { panic!("bug") }
             pub fn write<W: Write>(_: &mut W, _: usize, _: usize, _: ColFmt, _: &[u8],
-                         _: ColType, _: Option<usize>) -> io::Result<()> { panic!("bug") }
+                         _: ColType, _: Option<usize>) -> ::Result<()> { panic!("bug") }
         }
     }
 }

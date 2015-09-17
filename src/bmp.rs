@@ -1,14 +1,14 @@
 // Copyright (c) 2015 Tero Hänninen, license: MIT
 
-use std::io::{self, Read, Seek, SeekFrom, Write};
+use std::io::{Read, Write, Seek, SeekFrom};
 use super::{
-    Image, Info, ColFmt, ColType, error,
+    Image, Info, ColFmt, ColType,
     copy_memory, converter, IFRead,
     u32_from_le, i32_from_le, u16_from_le, u32_to_le, u16_to_le,
 };
 
 /// Returns width, height and color type of the image.
-pub fn read_info<R: Read+Seek>(reader: &mut R) -> io::Result<Info> {
+pub fn read_info<R: Read+Seek>(reader: &mut R) -> ::Result<Info> {
     let hdr = try!(read_header(reader));
 
     Ok(Info {
@@ -78,12 +78,12 @@ struct DibV5 {
 }
 
 /// Reads a BMP header.
-fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
+fn read_header<R: Read+Seek>(reader: &mut R) -> ::Result<BmpHeader> {
     let mut bmp_header = [0u8; 18]; // bmp header + size of dib header
     try!(reader.read_exact_(&mut bmp_header[..]));
 
     if &bmp_header[0..2] != [0x42, 0x4d] {
-        return error("corrupt bmp header");
+        return Err(::Error::InvalidData("corrupt bmp header"))
     }
 
     // the value of dib_size is actually part of the dib header
@@ -95,7 +95,7 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> io::Result<BmpHeader> {
         56 => 3,
         108 => 4,
         124 => 5,
-        _ => return error("unsupported dib version"),
+        _ => return Err(::Error::Unsupported("dib version")),
     };
     let mut dib_header = vec![0u8; dib_size-4];
     try!(reader.read_exact_(&mut dib_header[..]));
@@ -200,25 +200,29 @@ const CMP_BITS: u32       = 3;
 ///
 /// Passing `ColFmt::Auto` as req_fmt converts the data to `RGB` or `RGBA`. The DIB
 /// headers BITMAPV4HEADER and BITMAPV5HEADER are ignored if present.
-pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
     let hdr = try!(read_header(reader));
 
-    if hdr.width < 1 || hdr.height == 0 { return error("invalid dimensions") }
+    if hdr.width < 1 || hdr.height == 0 {
+        return Err(::Error::InvalidData("invalid dimensions"))
+    }
     if hdr.pixel_data_offset < (14 + hdr.dib_size)
     || hdr.pixel_data_offset > 0xffffff /* arbitrary */ {
-        return error("invalid pixel data offset")
+        return Err(::Error::InvalidData("invalid pixel data offset"))
     }
-    if hdr.planes != 1 { return error("not supported") }
+    if hdr.planes != 1 { return Err(::Error::Unsupported("planes != 1")) }
 
     let (bytes_pp, paletted, palette_length, rgb_masked) =
         if let Some(ref dv1) = hdr.dib_v1 {
-            if 256 < dv1.palette_length { return error("ivnalid palette length") }
+            if 256 < dv1.palette_length {
+                return Err(::Error::InvalidData("palette length"))
+            }
             if hdr.bits_pp <= 8
             && (dv1.palette_length == 0 || dv1.compression != CMP_RGB) {
-                 return error("invalid format")
+                 return Err(::Error::InvalidData("invalid format"))
             }
             if dv1.compression != CMP_RGB && dv1.compression != CMP_BITS {
-                 return error("unsupported compression")
+                 return Err(::Error::Unsupported("compression"))
             }
             let rgb_masked = dv1.compression == CMP_BITS;
 
@@ -226,20 +230,20 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
                 8   => (1, true,  dv1.palette_length, rgb_masked),
                 24  => (3, false, dv1.palette_length, rgb_masked),
                 32  => (4, false, dv1.palette_length, rgb_masked),
-                _   => return error("not supported (dv1)"),
+                _   => return Err(::Error::Unsupported("bit depth")),
             }
         } else {
             (1, true, 256, false)
         };
     let pe_fmt = if hdr.dib_v1.is_some() { ColFmt::BGRA } else { ColFmt::BGR };
 
-    fn mask_to_idx(mask: u32) -> io::Result<usize> {
+    fn mask_to_idx(mask: u32) -> ::Result<usize> {
         match mask {
             0xff00_0000 => Ok(3),
             0x00ff_0000 => Ok(2),
             0x0000_ff00 => Ok(1),
             0x0000_00ff => Ok(0),
-            _ => return error("unsupported mask")
+            _ => return Err(::Error::Unsupported("channel mask"))
         }
     }
 
@@ -250,7 +254,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
              try!(mask_to_idx(dv2.blue_mask)))
         }
         (false, _) => { (2, 1, 0) }
-        _ => return error("invalid format"),
+        _ => return Err(::Error::InvalidData("invalid format")),
     };
 
     let (alpha_masked, alphai) =
@@ -307,7 +311,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
             let mut di = 0;
             for &idx in src_line {
                 if idx as usize > palette_length {
-                    return error("invalid palette index");
+                    return Err(::Error::InvalidData("palette index"));
                 }
                 let idx = idx as usize * ps;
                 copy_memory(&palette[idx .. idx+ps], &mut depaletted_line[di .. di+ps]);
@@ -352,15 +356,15 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
 pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
                                                                       tgt_type: ColType,
                                                               src_stride: Option<usize>)
-                                                                       -> io::Result<()>
+                                                                        -> ::Result<()>
 {
-    if src_fmt == ColFmt::Auto { return error("invalid format") }
+    if src_fmt == ColFmt::Auto { return Err(::Error::InvalidArg("invalid format")) }
     let stride = src_stride.unwrap_or(w * src_fmt.bytes_pp());
 
     if w < 1 || h < 1 || 0x7fff < w || 0x7fff < h
     || (src_stride.is_none() && src_fmt.bytes_pp() * w * h != data.len())
     || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.bytes_pp()) {
-        return error("invalid dimensions or data length");
+        return Err(::Error::InvalidArg("dimensions or data length"))
     }
 
     let tgt_fmt = match tgt_type {
@@ -371,7 +375,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
                          } else {
                              ColFmt::BGR
                          },
-        _ => return error("unsupported target color type"),
+        _ => return Err(::Error::InvalidArg("unsupported target color type")),
     };
 
     let dib_size = 108;
@@ -380,7 +384,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
     let idat_offset = 14 + dib_size;       // bmp file header + dib header
     let filesize = idat_offset + h * (tgt_linesize + pad);
     if filesize > 0xffff_ffff {
-        return error("image too large")
+        return Err(::Error::InvalidData("image too large"))
     }
 
     let tgt_has_alpha = tgt_fmt.has_alpha() == Some(true);

@@ -1,9 +1,9 @@
 // Copyright (c) 2014-2015 Tero Hänninen, license: MIT
 
-use std::io::{self, Read, Write, Seek, SeekFrom};
+use std::io::{Read, Write, Seek, SeekFrom};
 use std::cmp::min;
 use super::{
-    Image, Info, ColFmt, ColType, error,
+    Image, Info, ColFmt, ColType,
     copy_memory, converter,
     u16_to_le, u16_from_le, IFRead,
 };
@@ -26,7 +26,7 @@ struct TgaHeader {
 }
 
 /// Returns width, height and color type of the image.
-pub fn read_info<R: Read>(reader: &mut R) -> io::Result<Info> {
+pub fn read_info<R: Read>(reader: &mut R) -> ::Result<Info> {
     let hdr = try!(read_header(reader));
     let TgaInfo { src_fmt, .. } = try!(parse_header(&hdr));
 
@@ -40,7 +40,7 @@ pub fn read_info<R: Read>(reader: &mut R) -> io::Result<Info> {
 /// Reads a TGA header.
 ///
 /// The fields are not parsed into enums or anything like that.
-fn read_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
+fn read_header<R: Read>(reader: &mut R) -> ::Result<TgaHeader> {
     let mut buf = [0u8; 18];
     try!(reader.read_exact_(&mut buf));
 
@@ -64,7 +64,7 @@ fn read_header<R: Read>(reader: &mut R) -> io::Result<TgaHeader> {
                                   hdr.palette_length > 0 ||
                                   hdr.palette_bits > 0))
     || !match hdr.data_type { 1...3 | 9...11 => true, _ => false } {
-        error("corrupt TGA header")
+        Err(::Error::InvalidData("corrupt TGA header"))
     } else {
         Ok(hdr)
     }
@@ -82,13 +82,13 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
 ///
 /// Passing `ColFmt::Auto` as req_fmt converts the data to one of `Y`, `YA`, `RGB`,
 /// `RGBA`.
-pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
     let hdr = try!(read_header(reader));
 
-    if 0 < hdr.palette_type { return error("paletted TGAs not supported"); }
-    if hdr.width < 1 || hdr.height < 1 { return error("invalid dimensions"); }
-    if 0 < (hdr.flags & 0xc0) { return error("interlaced TGAs not supported"); }
-    if 0 < (hdr.flags & 0x10) { return error("right-to-left TGAs not supported"); }
+    if 0 < hdr.palette_type { return Err(::Error::Unsupported("paletted TGAs not supported")) }
+    if hdr.width < 1 || hdr.height < 1 { return Err(::Error::InvalidData("invalid dimensions")) }
+    if 0 < (hdr.flags & 0xc0) { return Err(::Error::Unsupported("interlaced TGAs not supported")) }
+    if 0 < (hdr.flags & 0x10) { return Err(::Error::Unsupported("right-to-left TGAs not supported")) }
 
     let TgaInfo { src_fmt, rle } = try!(parse_header(&hdr));
 
@@ -100,7 +100,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
                 YA => YA,
                 BGR => RGB,
                 BGRA => RGBA,
-                _ => return error("not supported"),
+                _ => return Err(::Error::Internal("wrong format")),
             },
             _ => req_fmt,
         }
@@ -131,7 +131,7 @@ struct TgaInfo {
     rle       : bool,
 }
 
-fn parse_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
+fn parse_header(hdr: &TgaHeader) -> ::Result<TgaInfo> {
     use self::TgaDataType::*;
 
     let mut rle = false;
@@ -148,7 +148,7 @@ fn parse_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
         (Some(TrueColorRLE), 32, 0) => { rle = true; }  // again, 8 bits are present in some pics
         (Some(GrayRLE),       8, 0) => { rle = true; }
         (Some(GrayRLE),      16, 8) => { rle = true; }
-        _ => return error("data type not supported")
+        _ => return Err(::Error::Unsupported("data type"))
     }
 
     let src_fmt = match hdr.bits_pp as usize / 8 {
@@ -156,7 +156,7 @@ fn parse_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
         2 => ColFmt::YA,
         3 => ColFmt::BGR,
         4 => ColFmt::BGRA,
-        _ => return error("not supported"),
+        _ => return Err(::Error::Unsupported("format")),
     };
 
     Ok(TgaInfo {
@@ -165,7 +165,7 @@ fn parse_header(hdr: &TgaHeader) -> io::Result<TgaInfo> {
     })
 }
 
-fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> io::Result<Vec<u8>> {
+fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> ::Result<Vec<u8>> {
     let tgt_linesize = (dc.w * dc.tgt_fmt.bytes_pp()) as isize;
     let src_linesize = dc.w * dc.src_fmt.bytes_pp();
 
@@ -271,15 +271,15 @@ impl TgaDataType {
 pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
                                                                       tgt_type: ColType,
                                                               src_stride: Option<usize>)
-                                                                       -> io::Result<()>
+                                                                        -> ::Result<()>
 {
-    if src_fmt == ColFmt::Auto { return error("invalid format") }
+    if src_fmt == ColFmt::Auto { return Err(::Error::InvalidArg("invalid format")) }
     let stride = src_stride.unwrap_or(w * src_fmt.bytes_pp());
 
     if w < 1 || h < 1 || 0xffff < w || 0xffff < h
     || (src_stride.is_none() && src_fmt.bytes_pp() * w * h != data.len())
     || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.bytes_pp()) {
-        return error("invalid dimensions or data length");
+        return Err(::Error::InvalidArg("invalid dimensions or data length"))
     }
 
     let tgt_fmt = match tgt_type {
@@ -293,7 +293,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
             ColFmt::RGB  | ColFmt::BGR => ColFmt::BGR,
             ColFmt::RGBA | ColFmt::BGRA => ColFmt::BGRA,
             ColFmt::ARGB | ColFmt::ABGR => ColFmt::BGRA,
-            ColFmt::Auto => return error("invalid format"),
+            ColFmt::Auto => return Err(::Error::InvalidArg("invalid format")),
         },
     };
 
@@ -318,17 +318,18 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
           TRUEVISION-XFILE.\x00";
     try!(ec.stream.write_all(ftr));
 
-    ec.stream.flush()
+    try!(ec.stream.flush());
+    Ok(())
 }
 
-fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
+fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
     use self::TgaDataType::*;
     let (data_type, has_alpha) = match ec.tgt_fmt.bytes_pp() {
         1 => (if ec.rle { GrayRLE      } else { Gray      }, false),
         2 => (if ec.rle { GrayRLE      } else { Gray      }, true),
         3 => (if ec.rle { TrueColorRLE } else { TrueColor }, false),
         4 => (if ec.rle { TrueColorRLE } else { TrueColor }, true),
-        _ => return error("internal error")
+        _ => return Err(::Error::Internal("wrong format"))
     };
 
     let w = u16_to_le(ec.w as u16);
@@ -344,10 +345,11 @@ fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
         if has_alpha {8u8} else {0u8},  // flags
     ];
 
-    ec.stream.write_all(hdr)
+    try!(ec.stream.write_all(hdr));
+    Ok(())
 }
 
-fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> io::Result<()> {
+fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
     let src_linesize = ec.w * ec.src_fmt.bytes_pp();
     let tgt_linesize = ec.w * ec.tgt_fmt.bytes_pp();
     let mut tgt_line = vec![0u8; tgt_linesize];
@@ -466,4 +468,3 @@ struct TgaEncoder<'r, R:'r> {
     rle           : bool,          // run length compressed
     data          : &'r [u8],
 }
-

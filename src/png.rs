@@ -1,12 +1,12 @@
 // Copyright (c) 2014-2015 Tero Hänninen, license: MIT
 
 extern crate flate2;
-use std::io::{self, Read, Write, Seek, SeekFrom};
+use std::io::{Read, Write, Seek, SeekFrom};
 use std::iter::{repeat};
 use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
 use super::{
-    Image, Info, ColFmt, ColType, error,
+    Image, Info, ColFmt, ColType,
     copy_memory, converter,
     u32_to_be, u32_from_be, IFRead,
 };
@@ -27,7 +27,7 @@ static PNG_FILE_HEADER: [u8; 8] =
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 /// Returns width, height and color type of the image.
-pub fn read_info<R: Read>(reader: &mut R) -> io::Result<Info> {
+pub fn read_info<R: Read>(reader: &mut R) -> ::Result<Info> {
     let hdr = try!(read_header(reader));
 
     Ok(Info {
@@ -47,7 +47,7 @@ pub fn read_info<R: Read>(reader: &mut R) -> io::Result<Info> {
 /// Reads a PNG header.
 ///
 /// The fields are not parsed into enums or anything like that.
-fn read_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
+fn read_header<R: Read>(reader: &mut R) -> ::Result<PngHeader> {
     let mut buf = [0u8; 33];  // file header + IHDR
     try!(reader.read_exact_(&mut buf));
 
@@ -55,7 +55,7 @@ fn read_header<R: Read>(reader: &mut R) -> io::Result<PngHeader> {
        &buf[8..16] != b"\0\0\0\x0dIHDR" ||
        &buf[29..33] != &Crc32::new().put(&buf[12..29]).finish_be()[..]
     {
-        return error("corrupt png header");
+        return Err(::Error::InvalidData("corrupt png header"))
     }
 
     Ok(PngHeader {
@@ -84,7 +84,7 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to one of `Y`, `YA`, `RGB`,
 /// `RGBA`.  Paletted images are auto-depaletted.
 #[inline]
-pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> {
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
     let (image, _) = try!(read_chunks(reader, req_fmt, &[]));
     Ok(image)
 }
@@ -93,19 +93,23 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> io::Result<Image> 
 ///
 /// If the requested chunks are not present they are ignored.
 pub fn read_chunks<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
-                                          -> io::Result<(Image, Vec<ExtChunk>)>
+                                                      -> ::Result<(Image, Vec<ExtChunk>)>
 {
     let hdr = try!(read_header(reader));
 
-    if hdr.width < 1 || hdr.height < 1 { return error("invalid dimensions") }
-    if hdr.bit_depth != 8 { return error("only 8-bit images supported") }
+    if hdr.width < 1 || hdr.height < 1 {
+        return Err(::Error::InvalidData("invalid dimensions"))
+    }
+    if hdr.bit_depth != 8 {
+        return Err(::Error::Unsupported("only 8-bit images supported"))
+    }
     if hdr.compression_method != 0 || hdr.filter_method != 0 {
-        return error("not supported");
+        return Err(::Error::Unsupported("compression method"))
     }
 
     let ilace = match PngInterlace::from_u8(hdr.interlace_method) {
         Some(im) => im,
-        None => return error("unsupported interlace method"),
+        None => return Err(::Error::Unsupported("interlace method")),
     };
 
     let src_fmt = match hdr.color_type {
@@ -114,7 +118,7 @@ pub fn read_chunks<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, chunk_names: &
         3 => ColFmt::RGB,   // format of the palette
         4 => ColFmt::YA,
         6 => ColFmt::RGBA,
-        _ => return error("unsupported color type"),
+        _ => return Err(::Error::Unsupported("color type")),
     };
 
     let dc = &mut PngDecoder {
@@ -159,26 +163,26 @@ enum PngStage {
     //IendParsed,
 }
 
-fn read_chunkmeta<R: Read>(dc: &mut PngDecoder<R>) -> io::Result<usize> {
+fn read_chunkmeta<R: Read>(dc: &mut PngDecoder<R>) -> ::Result<usize> {
     try!(dc.stream.read_exact_(&mut dc.chunk_lentype[0..8]));
     let len = u32_from_be(&dc.chunk_lentype[0..4]) as usize;
-    if 0x7fff_ffff < len { return error("chunk too long"); }
+    if 0x7fff_ffff < len { return Err(::Error::InvalidData("chunk too long")) }
     dc.crc.put(&dc.chunk_lentype[4..8]);   // type
     Ok(len)
 }
 
 #[inline]
-fn readcheck_crc<R: Read>(dc: &mut PngDecoder<R>) -> io::Result<()> {
+fn readcheck_crc<R: Read>(dc: &mut PngDecoder<R>) -> ::Result<()> {
     let mut tmp = [0u8; 4];
     try!(dc.stream.read_exact_(&mut tmp));
     if &dc.crc.finish_be()[..] != &tmp[0..4] {
-        return error("corrupt chunk");
+        return Err(::Error::InvalidData("corrupt chunk"))
     }
     Ok(())
 }
 
 fn decode<R: Read+Seek>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
-                              -> io::Result<(Vec<u8>, Vec<ExtChunk>)>
+                                  -> ::Result<(Vec<u8>, Vec<ExtChunk>)>
 {
     use self::PngStage::*;
 
@@ -194,7 +198,7 @@ fn decode<R: Read+Seek>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
         match &dc.chunk_lentype[4..8] {
             b"IDAT" => {
                 if !(stage == IhdrParsed || (stage == PlteParsed && dc.src_indexed)) {
-                    return error("corrupt chunk stream");
+                    return Err(::Error::InvalidData("corrupt chunk stream"))
                 }
 
                 // also reads chunk_lentype for next chunk
@@ -205,7 +209,7 @@ fn decode<R: Read+Seek>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
             b"PLTE" => {
                 let entries = len / 3;
                 if stage != IhdrParsed || len % 3 != 0 || 256 < entries {
-                    return error("corrupt chunk stream");
+                    return Err(::Error::InvalidData("corrupt chunk stream"))
                 }
                 palette = vec![0u8; len];
                 try!(dc.stream.read_exact_(&mut palette));
@@ -215,12 +219,12 @@ fn decode<R: Read+Seek>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
             }
             b"IEND" => {
                 if stage != IdatParsed {
-                    return error("corrupt chunk stream");
+                    return Err(::Error::InvalidData("corrupt chunk stream"))
                 }
                 let mut crc = [0u8; 4];
                 try!(dc.stream.read_exact_(&mut crc));
                 if len != 0 || &crc[0..4] != &[0xae, 0x42, 0x60, 0x82][..] {
-                    return error("corrupt chunk");
+                    return Err(::Error::InvalidData("corrupt chunk"))
                 }
                 break;//stage = IendParsed;
             }
@@ -279,7 +283,7 @@ fn depalettize(src: &[u8], palette: &[u8], dst: &mut[u8]) {
 }
 
 fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &[u8])
-                                                               -> io::Result<Vec<u8>>
+                                                                 -> ::Result<Vec<u8>>
 {
     let filter_step = if dc.src_indexed { 1 } else { dc.src_fmt.bytes_pp() };
     let tgt_bytespp = dc.tgt_fmt.bytes_pp();
@@ -421,7 +425,9 @@ fn a7_red6_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { redy*2*dstw + r
 fn a7_red7_to_dst(redx:usize, redy:usize, dstw:usize) -> usize { (redy*2+1)*dstw + redx   }
 
 // will leave len to the length of next chunk after last idat chunk
-fn read_idat_chunks<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Result<(Vec<u8>)> {
+fn read_idat_chunks<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize)
+                                               -> ::Result<(Vec<u8>)>
+{
     let mut all: Vec<u8> = Vec::new();
     loop {
         all.extend(repeat(0).take(*len));
@@ -437,7 +443,7 @@ fn read_idat_chunks<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize) -> io::Res
     Ok(all)
 }
 
-fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> io::Result<()> {
+fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> ::Result<()> {
     match PngFilter::from_u8(ftype) {
         Some(PngFilter::None)
             => { }
@@ -483,7 +489,7 @@ fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> io::Result<(
                 }
             }
         }
-        None => return error("filter type not supported"),
+        None => return Err(::Error::InvalidData("invalid filter type")),
     }
     Ok(())
 }
@@ -540,7 +546,7 @@ pub struct ExtChunk {
 pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
                                                                       tgt_type: ColType,
                                                               src_stride: Option<usize>)
-                                                                       -> io::Result<()>
+                                                                         -> ::Result<()>
 {
     write_chunks(writer, w, h, src_fmt, data, tgt_type, src_stride, &[])
 }
@@ -551,15 +557,15 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
                                                                 tgt_type: ColType,
                                                         src_stride: Option<usize>,
                                                               chunks: &[ExtChunk])
-                                                                 -> io::Result<()>
+                                                                   -> ::Result<()>
 {
-    if src_fmt == ColFmt::Auto { return error("invalid format") }
+    if src_fmt == ColFmt::Auto { return Err(::Error::InvalidArg("invalid format")) }
     let stride = src_stride.unwrap_or(w * src_fmt.bytes_pp());
 
     if w < 1 || h < 1
     || (src_stride.is_none() && src_fmt.bytes_pp() * w * h != data.len())
     || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.bytes_pp()) {
-        return error("invalid dimensions or data length")
+        return Err(::Error::InvalidArg("invalid dimensions or data length"))
     }
 
     let tgt_fmt = match tgt_type {
@@ -573,7 +579,7 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
             ColFmt::RGB  | ColFmt::BGR => ColFmt::RGB,
             ColFmt::RGBA | ColFmt::BGRA => ColFmt::RGBA,
             ColFmt::ARGB | ColFmt::ABGR => ColFmt::RGBA,
-            ColFmt::Auto => return error("invalid format"),
+            ColFmt::Auto => return Err(::Error::InvalidArg("invalid format")),
         },
     };
 
@@ -596,10 +602,11 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
     try!(write_image_data(ec));
 
     let iend: &'static[u8] = b"\0\0\0\0IEND\xae\x42\x60\x82";
-    ec.stream.write_all(iend)
+    try!(ec.stream.write_all(iend));
+    Ok(())
 }
 
-fn write_header<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
+fn write_header<W: Write>(ec: &mut PngEncoder<W>) -> ::Result<()> {
     let mut crc = Crc32::new();
     let width = &u32_to_be(ec.w as u32)[..];
     let height = &u32_to_be(ec.h as u32)[..];
@@ -615,26 +622,31 @@ fn write_header<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
             ColFmt::YA => PngColortype::YA,
             ColFmt::RGB => PngColortype::RGB,
             ColFmt::RGBA => PngColortype::RGBA,
-            _ => return error("not supported"),
+            _ => return Err(::Error::Internal("wrong format")),
         } as u8,
         0, 0, 0     // compression, filter, interlace
     ];
     try!(ec.stream.write_all(&tmp));
     crc.put(&tmp);
 
-    ec.stream.write_all(&crc.finish_be()[..])
+    try!(ec.stream.write_all(&crc.finish_be()[..]));
+    Ok(())
 }
 
 fn write_custom_chunk<W: Write>(ec: &mut PngEncoder<W>, chunk: &ExtChunk)
-                                                        -> io::Result<()>
+                                                          -> ::Result<()>
 {
-    if chunk.name[0] < b'a' || b'z' < chunk.name[0] { return error("invalid chunk name"); }
+    if chunk.name[0] < b'a' || b'z' < chunk.name[0] {
+        return Err(::Error::InvalidArg("invalid chunk name"))
+    }
     for &b in &chunk.name[1..] {
         if b < b'A' || (b'Z' < b && b < b'a') || b'z' < b {
-            return error("invalid chunk name");
+            return Err(::Error::InvalidArg("invalid chunk name"));
         }
     }
-    if 0x7fff_ffff < chunk.data.len() { return error("chunk too long"); }
+    if 0x7fff_ffff < chunk.data.len() {
+        return Err(::Error::InvalidData("chunk too long"))
+    }
 
     try!(ec.stream.write_all(&u32_to_be(chunk.data.len() as u32)[..]));
     try!(ec.stream.write_all(&chunk.name[..]));
@@ -642,7 +654,8 @@ fn write_custom_chunk<W: Write>(ec: &mut PngEncoder<W>, chunk: &ExtChunk)
     let mut crc = Crc32::new();
     crc.put(&chunk.name[..]);
     crc.put(&chunk.data[..]);
-    ec.stream.write_all(&crc.finish_be()[..])
+    try!(ec.stream.write_all(&crc.finish_be()[..]));
+    Ok(())
 }
 
 struct PngEncoder<'r, W:'r> {
@@ -657,7 +670,7 @@ struct PngEncoder<'r, W:'r> {
     crc           : Crc32,
 }
 
-fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> io::Result<()> {
+fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> ::Result<()> {
     let (convert, c0, c1, c2, c3) = try!(converter(ec.src_fmt, ec.tgt_fmt));
 
     let filter_step = ec.tgt_fmt.bytes_pp();
