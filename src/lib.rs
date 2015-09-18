@@ -247,6 +247,7 @@ impl ColFmt {
         }
     }
 
+    /// Returns whether `self` has an alpha channel.
     pub fn has_alpha(self) -> Option<bool> {
         use ColFmt::*;
         match self {
