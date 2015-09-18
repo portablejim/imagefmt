@@ -698,7 +698,7 @@ fn error<T>(msg: &str) -> Result<T, io::Error> {
 }
 
 impl Debug for Image {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "Image {{ w: {:?}, h: {:?}, fmt: {:?}, buf: [{} bytes] }}",
                self.w, self.h, self.fmt, self.buf.len())
     }
