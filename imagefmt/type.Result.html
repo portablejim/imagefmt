@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `read` fn in crate `imagefmt`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, read">
+    <meta name="description" content="API documentation for the Rust `Result` type in crate `imagefmt`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Result">
 
-    <title>imagefmt::read - Rust</title>
+    <title>imagefmt::Result - Rust</title>
 
     <link rel="stylesheet" type="text/css" href="../main.css">
 
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='index.html'>imagefmt</a></p><script>window.sidebarCurrent = {name: 'read', ty: 'fn', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+        <p class='location'><a href='index.html'>imagefmt</a></p><script>window.sidebarCurrent = {name: 'Result', ty: 'type', relpath: ''};</script><script defer src="sidebar-items.js"></script>
     </section>
 
     <nav class="sub">
@@ -40,16 +40,13 @@
         </form>
     </nav>
 
-    <section id='main' class="content fn">
-<h1 class='fqn'><span class='in-band'>Function <a href='index.html'>imagefmt</a>::<wbr><a class='fn' href=''>read</a></span><span class='out-of-band'><span id='render-detail'>
+    <section id='main' class="content type">
+<h1 class='fqn'><span class='in-band'><a href='index.html'>imagefmt</a>::<wbr><a class='type' href=''>Result</a></span><span class='out-of-band'><span id='render-detail'>
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-18592' class='srclink' href='../src/imagefmt/lib.rs.html#113-117' title='goto source code'>[src]</a></span></h1>
-<pre class='rust fn'>pub fn read&lt;P: <a class='trait' href='http://doc.rust-lang.org/nightly/core/convert/trait.AsRef.html' title='core::convert::AsRef'>AsRef</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/std/path/struct.Path.html' title='std::path::Path'>Path</a>&gt;&gt;(filepath: P, req_fmt: <a class='enum' href='../imagefmt/enum.ColFmt.html' title='imagefmt::ColFmt'>ColFmt</a>) -&gt; <a class='type' href='../imagefmt/type.Result.html' title='imagefmt::Result'>Result</a>&lt;<a class='struct' href='../imagefmt/struct.Image.html' title='imagefmt::Image'>Image</a>&gt;</pre><div class='docblock'><p>Reads an image and converts it to requested format.</p>
-
-<p>Passing <code>ColFmt::Auto</code> as <code>req_fmt</code> converts the data to one of <code>Y</code>, <code>YA</code>, <code>RGB</code>,
-<code>RGBA</code>.</p>
+        </span><a id='src-22170' class='srclink' href='../src/imagefmt/lib.rs.html#705' title='goto source code'>[src]</a></span></h1>
+<pre class='rust typedef'>type Result&lt;T&gt; = <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;T, <a class='enum' href='../imagefmt/enum.Error.html' title='imagefmt::Error'>Error</a>&gt;;</pre><div class='docblock'><p>The type returned from all the functions.</p>
 </div></section>
     <section id='search' class="content hidden"></section>
 
