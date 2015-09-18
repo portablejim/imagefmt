@@ -743,7 +743,7 @@ macro_rules! dummy_mod {
         #[allow(dead_code)]
         mod $name {
             use ::{Info, Image, ColFmt, ColType};
-            use std::io::{self, Read, Write};
+            use std::io::{Read, Write};
             pub fn detect<R: Read>(_: &mut R) -> bool { panic!("bug") }
             pub fn read_info<R: Read>(_: &mut R) -> ::Result<Info> { panic!("bug") }
             pub fn read<R: Read>(_: &mut R, _: ColFmt) -> ::Result<Image> { panic!("bug") }
