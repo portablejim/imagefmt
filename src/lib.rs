@@ -284,6 +284,16 @@ impl ColFmt {
     }
 }
 
+impl ColType {
+    pub fn has_alpha(self) -> Option<bool> {
+        match self {
+            ColType::Gray      | ColType::Color      => Some(false),
+            ColType::GrayAlpha | ColType::ColorAlpha => Some(true),
+            ColType::Auto => None,
+        }
+    }
+}
+
 // ------------------------------------------------------------
 
 type LineConverter = fn(&[u8], &mut[u8], usize, usize, usize, usize);
