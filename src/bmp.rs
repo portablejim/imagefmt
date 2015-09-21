@@ -22,59 +22,36 @@ pub fn read_info<R: Read+Seek>(reader: &mut R) -> ::Result<Info> {
 }
 
 /// Header of a BMP image.
-#[derive(Debug)]
 struct BmpHeader {
     // BMP
-    pub file_size             : u32,
-    pub pixel_data_offset     : usize,
+    //file_size             : u32,
+    pixel_data_offset     : usize,
 
     // DIB
-    pub dib_size              : usize,
-    pub width                 : isize,
-    pub height                : isize,
-    pub planes                : u16,
-    pub bits_pp               : usize,
-    pub dib_v1                : Option<DibV1>,
-    pub dib_v2                : Option<DibV2>,
-    pub dib_v3_alpha_mask     : Option<u32>,
-    pub dib_v4                : Option<DibV4>,
-    pub dib_v5                : Option<DibV5>,
+    dib_size              : usize,
+    width                 : isize,
+    height                : isize,
+    planes                : u16,
+    bits_pp               : usize,
+    dib_v1                : Option<DibV1>,
+    dib_v2                : Option<DibV2>,
+    dib_v3_alpha_mask     : Option<u32>,
+    // dib_v4 and dib_v5 are ignored
 }
 
-/// Optional part of a BMP header.
-#[derive(Debug)]
 struct DibV1 {
-    pub compression           : u32,
-    pub idat_size             : usize,
-    pub pixels_per_meter_x    : usize,
-    pub pixels_per_meter_y    : usize,
-    pub palette_length        : usize,    // colors in color table
-    pub important_color_count : u32,
+    compression           : u32,
+    //idat_size             : usize,
+    //pixels_per_meter_x    : usize,
+    //pixels_per_meter_y    : usize,
+    palette_length        : usize,    // colors in color table
+    //important_color_count : u32,
 }
 
-/// Optional part of a BMP header.
-#[derive(Debug)]
 struct DibV2 {
-    pub red_mask              : u32,
-    pub green_mask            : u32,
-    pub blue_mask             : u32,
-}
-
-/// Optional part of a BMP header.
-#[derive(Debug)]
-struct DibV4 {
-    pub color_space_type      : u32,
-    pub color_space_endpoints : Vec<u8>,//[u8; 36],     // Vec for Debug
-    pub gamma_red             : u32,
-    pub gamma_green           : u32,
-    pub gamma_blue            : u32,
-}
-
-/// Optional part of a BMP header.
-#[derive(Debug)]
-struct DibV5 {
-    pub icc_profile_data      : u32,
-    pub icc_profile_size      : u32,
+    red_mask              : u32,
+    green_mask            : u32,
+    blue_mask             : u32,
 }
 
 /// Reads a BMP header.
@@ -114,7 +91,7 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> ::Result<BmpHeader> {
         };
 
     Ok(BmpHeader {
-        file_size             : u32_from_le(&bmp_header[2..6]),
+        //file_size             : u32_from_le(&bmp_header[2..6]),
         pixel_data_offset     : u32_from_le(&bmp_header[10..14]) as usize,
         width                 : width,
         height                : height,
@@ -125,11 +102,11 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> ::Result<BmpHeader> {
             if 1 <= dib_version {
                 Some(DibV1 {
                     compression           : u32_from_le(&dib_header[12..16]),
-                    idat_size             : u32_from_le(&dib_header[16..20]) as usize,
-                    pixels_per_meter_x    : u32_from_le(&dib_header[20..24]) as usize,
-                    pixels_per_meter_y    : u32_from_le(&dib_header[24..28]) as usize,
+                    //idat_size             : u32_from_le(&dib_header[16..20]) as usize,
+                    //pixels_per_meter_x    : u32_from_le(&dib_header[20..24]) as usize,
+                    //pixels_per_meter_y    : u32_from_le(&dib_header[24..28]) as usize,
                     palette_length        : u32_from_le(&dib_header[28..32]) as usize,
-                    important_color_count : u32_from_le(&dib_header[32..36]),
+                    //important_color_count : u32_from_le(&dib_header[32..36]),
                 })
             } else {
                 None
@@ -150,30 +127,6 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> ::Result<BmpHeader> {
             } else {
                 None
             },
-        dib_v4:
-            if 4 <= dib_version {
-                let mut color_space_endpoints = Vec::with_capacity(36);//[0u8; 36];
-                color_space_endpoints.extend((&dib_header[56..92]).iter().map(|&b| b));
-                //copy_memory(&dib_header[56..92], &mut color_space_endpoints[..]);
-                Some(DibV4 {
-                    color_space_type      : u32_from_le(&dib_header[52..56]),
-                    color_space_endpoints : color_space_endpoints,
-                    gamma_red             : u32_from_le(&dib_header[92..96]),
-                    gamma_green           : u32_from_le(&dib_header[96..100]),
-                    gamma_blue            : u32_from_le(&dib_header[100..104]),
-                })
-            } else {
-                None
-            },
-        dib_v5:
-            if 5 <= dib_version {
-                Some(DibV5 {
-                    icc_profile_data      : u32_from_le(&dib_header[108..112]),
-                    icc_profile_size      : u32_from_le(&dib_header[112..116]),
-                })
-            } else {
-                None
-            }
     })
 }
 
