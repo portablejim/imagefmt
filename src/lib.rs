@@ -738,10 +738,19 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {
     fn description(&self) -> &str {
-        use Error::*;
         match *self {
-            InvalidArg(s) | InvalidData(s) | Unsupported(s) | Internal(s) => s,
-            Io(ref e) => e.description(),
+            Error::InvalidArg(_) => "Invalid argument",
+            Error::InvalidData(_) => "Invalid data",
+            Error::Unsupported(_) => "Unsupported feature",
+            Error::Internal(_) => "Internal error",
+            Error::Io(ref e) => e.description(),
+        }
+    }
+
+    fn cause(&self) -> Option<&std::error::Error> {
+        match *self {
+            Error::Io(ref e) => Some(e),
+            _ => None,
         }
     }
 }
