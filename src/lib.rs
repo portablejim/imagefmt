@@ -42,6 +42,7 @@ use std::ptr;
 #[cfg(feature = "tga")] pub mod tga;
 #[cfg(feature = "bmp")] pub mod bmp;
 #[cfg(feature = "jpeg")] pub mod jpeg;
+#[cfg(test)] mod tests;
 
 /// Image struct returned from the read functions.
 #[derive(Clone)]
