@@ -25,6 +25,10 @@
 //!     let _info = imagefmt::read_info("hiisi.png").unwrap();
 //! }
 //! ```
+//! There are format specific functions that might offer more flexibility. When directly
+//! using the format specific write functions, set the last argument to `None` to write
+//! the whole image. To write only a region of the image, see source code for
+//! `write_region` for an example.
 
 use std::ffi::OsStr;
 use std::fs::{File};
@@ -56,7 +60,7 @@ pub struct Info {
     pub ct : ColType,
 }
 
-/// Color format.
+/// Color format – determines color type and channel order.
 ///
 /// `Auto` means automatic/infer
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -136,6 +140,9 @@ pub fn write<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
 }
 
 /// Writes a region of an image and converts it to requested color type.
+///
+/// The region is defined by the top-left coordinates `rx` and `ry` and the width and
+/// height `rw` and `rh`.
 pub fn write_region<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &[u8],
                                                                    tgt_type: ColType,
                                                                 rx: usize, ry: usize,
