@@ -603,6 +603,7 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
 
     let iend: &'static[u8] = b"\0\0\0\0IEND\xae\x42\x60\x82";
     try!(ec.stream.write_all(iend));
+    try!(ec.stream.flush());
     Ok(())
 }
 

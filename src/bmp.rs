@@ -378,5 +378,6 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
         try!(writer.write_all(&tgt_line));
     }
 
+    try!(writer.flush());
     Ok(())
 }
