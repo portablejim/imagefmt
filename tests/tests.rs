@@ -1,3 +1,6 @@
+extern crate imagefmt;
+use imagefmt::ColFmt;
+
 #[test]
 fn png_tga_bmp() {
     // The TGA and BMP files are not as varied in format as the PNG files, so
@@ -20,9 +23,9 @@ fn png_tga_bmp() {
     ];
 
     for name in &names {
-        let a = ::read(&format!("{}{}.png", png_path, name), ::ColFmt::RGBA).unwrap();
-        let b = ::read(&format!("{}{}.tga", tga_path, name), ::ColFmt::RGBA).unwrap();
-        let c = ::read(&format!("{}{}.bmp", bmp_path, name), ::ColFmt::RGBA).unwrap();
+        let a = imagefmt::read(&format!("{}{}.png", png_path, name), ColFmt::RGBA).unwrap();
+        let b = imagefmt::read(&format!("{}{}.tga", tga_path, name), ColFmt::RGBA).unwrap();
+        let c = imagefmt::read(&format!("{}{}.bmp", bmp_path, name), ColFmt::RGBA).unwrap();
         assert_eq!(a.w, b.w); assert_eq!(a.w, c.w);
         assert_eq!(a.h, b.h); assert_eq!(a.h, c.h);
         assert_eq!(a.buf.len(), b.buf.len()); assert_eq!(a.buf.len(), c.buf.len());
