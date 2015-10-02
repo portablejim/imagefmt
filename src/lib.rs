@@ -28,7 +28,8 @@
 //! There are format specific functions that might offer more flexibility. When directly
 //! using the format specific write functions, set the last argument to `None` to write
 //! the whole image. To write only a region of the image, see source code for
-//! `write_region` for an example.
+//! `write_region` for an example. Reading and writing in-memory images can be done using
+//! [`std::io::Cursor`](https://doc.rust-lang.org/std/io/struct.Cursor.html).
 
 use std::ffi::OsStr;
 use std::fs::{File};
@@ -121,6 +122,9 @@ pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> ::Result<Image> {
 }
 
 /// Like `read` but reads from a reader.
+///
+/// To read in-memory images use
+/// [`std::io::Cursor`](https://doc.rust-lang.org/std/io/struct.Cursor.html).
 pub fn read_from<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
     if      cfg!(feature = "png") && png::detect(reader) { png::read(reader, req_fmt) }
     else if cfg!(feature = "jpeg") && jpeg::detect(reader) { jpeg::read(reader, req_fmt) }
