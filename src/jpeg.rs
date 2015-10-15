@@ -426,7 +426,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 }
 
 fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
-    let mut buf: [u8; 3] = [0, 0, 0];
+    let mut buf = [0u8; 3];
     try!(dc.stream.read_exact_(&mut buf));
     let len = u16_from_be(&buf[0..2]) as usize;
     let num_scan_comps = buf[2] as usize;
@@ -439,7 +439,7 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     try!(dc.stream.read_exact_(&mut compbuf));
 
     for i in (0 .. num_scan_comps) {
-        let ci = compbuf[i*2] as usize - if dc.correct_comp_ids { 1 } else { 0 };
+        let ci = (compbuf[i*2] as i32 - if dc.correct_comp_ids { 1 } else { 0 }) as usize;
 
         if ci >= dc.num_comps {
             return Err(::Error::InvalidData("component id"));
@@ -458,7 +458,7 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 }
 
 fn read_restart_interval<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
-    let mut buf: [u8; 4] = [0, 0, 0, 0];
+    let mut buf = [0u8; 4];
     try!(dc.stream.read_exact_(&mut buf));
     let len = u16_from_be(&buf[0..2]) as usize;
     if len != 4 { return Err(::Error::InvalidData("restart interval")) }
@@ -535,7 +535,7 @@ fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 }
 
 fn read_restart<R: Read>(stream: &mut R) -> ::Result<()> {
-    let mut buf: [u8; 2] = [0, 0];
+    let mut buf = [0u8; 2];
     try!(stream.read_exact_(&mut buf));
     if buf[0] != 0xff || buf[1] < RST0 || RST7 < buf[1] {
         return Err(::Error::InvalidData("reset marker missing"))
