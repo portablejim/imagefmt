@@ -164,7 +164,7 @@ struct Component {
     qtable   : usize,
     ac_table : usize,
     dc_table : usize,
-    pred     : isize,          // dc prediction
+    pred     : i16,          // dc prediction
     data     : Vec<u8>,      // reconstructed samples
 }
 
@@ -565,10 +565,10 @@ fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx: u
     let dc_table_idx = dc.comps[comp_idx].dc_table;
     let ac_table_idx = dc.comps[comp_idx].ac_table;
     let t = try!(decode_huff(dc, dc_table_idx, true));
-    let diff: isize = if 0 < t { try!(receive_and_extend(dc, t)) } else { 0 };
+    let diff: i16 = if 0 < t { try!(receive_and_extend(dc, t)) } else { 0 };
 
     dc.comps[comp_idx].pred += diff;
-    res[0] = (dc.comps[comp_idx].pred * dc.qtables[qtable_idx][0] as isize) as i16;
+    res[0] = dc.comps[comp_idx].pred * dc.qtables[qtable_idx][0] as i16;
 
     let mut k = 1;
     while k < 64 {
@@ -590,7 +590,7 @@ fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx: u
             return Err(::Error::InvalidData("corrupt block"))
         }
         res[DEZIGZAG[k] as usize] =
-            (try!(receive_and_extend(dc, ssss)) * dc.qtables[qtable_idx][k] as isize) as i16;
+            try!(receive_and_extend(dc, ssss)) * dc.qtables[qtable_idx][k] as i16;
         k += 1;
     }
 
@@ -626,21 +626,19 @@ fn decode_huff<R: Read>(dc: &mut JpegDecoder<R>, tab_idx: usize, dctab: bool)
     Ok(tab.values[j])
 }
 
-fn receive_and_extend<R: Read>(dc: &mut JpegDecoder<R>, s: u8) -> ::Result<isize> {
+fn receive_and_extend<R: Read>(dc: &mut JpegDecoder<R>, s: u8) -> ::Result<i16> {
     // receive
     let mut symbol = 0;
     for _ in (0 .. s) {
         let (nb, cb, bits_left) = try!(nextbit(dc.stream, dc.cb, dc.bits_left));
         dc.cb = cb;
         dc.bits_left = bits_left;
-        symbol = (symbol << 1) + nb as isize;
-
-        //symbol = (symbol << 1) + try!(nextbit(dc)) as isize;
+        symbol = (symbol << 1) + nb as i16;
     }
     // extend
-    let vt = 1 << (s as usize - 1);
+    let vt = 1 << (s - 1);
     if symbol < vt {
-        Ok(symbol + (-1 << s as usize) + 1)
+        Ok(symbol + (-1 << s) + 1)
     } else {
         Ok(symbol)
     }
