@@ -476,6 +476,8 @@ fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
             (1, dc.num_mcu_x * dc.num_mcu_y)
         };
 
+    let mut block = [0i16; 64];
+
     for mcu_j in (0 .. dc.num_mcu_y) {
         for mcu_i in (0 .. dc.num_mcu_x) {
 
@@ -488,8 +490,7 @@ fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
                 for du_j in (0 .. comp_sfy) {
                     for du_i in (0 .. comp_sfx) {
                         // decode entropy, dequantize & dezigzag
-                        //let data = try!(decode_block(dc, comp, &dc.qtables[comp.qtable]));
-                        let data = try!(decode_block(dc, c, comp_qtab));
+                        try!(decode_block(dc, c, comp_qtab, &mut block));
 
                         // idct & level-shift
                         let outx = (mcu_i * comp_sfx + du_i) * 8;
@@ -499,7 +500,7 @@ fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
                         let offset = (outy * dst_stride + outx) as isize;
                         unsafe {
                             let dst = base.offset(offset);
-                            stbi_idct_block(dst, dst_stride, &data[..]);
+                            stbi_idct_block(dst, dst_stride, &block[..]);
                         }
                     }
                 }
@@ -554,21 +555,23 @@ static DEZIGZAG: [u8; 64] = [
 ];
 
 // decode entropy, dequantize & dezigzag (section F.2)
-fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx: usize)
-                                                               -> ::Result<[i16; 64]>
+fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx: usize,
+                                                                block: &mut[i16; 64])
+                                                                      -> ::Result<()>
 {
-    //let comp = &mut dc.comps[comp_idx];
-    //let qtable = &dc.qtables[qtable_idx];
+    let zeros = [0i16; 64];
+    unsafe {
+        use std::ptr;
+        ptr::copy(zeros.as_ptr(), block.as_mut_ptr(), 64);
+    }
 
-    let mut res: [i16; 64] = [0; 64];
-    //let t = try!(decode_huff(dc, dc.dc_tables[comp.dc_table]));
     let dc_table_idx = dc.comps[comp_idx].dc_table;
     let ac_table_idx = dc.comps[comp_idx].ac_table;
     let t = try!(decode_huff(dc, dc_table_idx, true));
     let diff: i16 = if 0 < t { try!(receive_and_extend(dc, t)) } else { 0 };
 
     dc.comps[comp_idx].pred += diff;
-    res[0] = dc.comps[comp_idx].pred * dc.qtables[qtable_idx][0] as i16;
+    block[0] = dc.comps[comp_idx].pred * dc.qtables[qtable_idx][0] as i16;
 
     let mut k = 1;
     while k < 64 {
@@ -589,12 +592,12 @@ fn decode_block<R: Read>(dc: &mut JpegDecoder<R>, comp_idx: usize, qtable_idx: u
         if 63 < k {
             return Err(::Error::InvalidData("corrupt block"))
         }
-        res[DEZIGZAG[k] as usize] =
+        block[DEZIGZAG[k] as usize] =
             try!(receive_and_extend(dc, ssss)) * dc.qtables[qtable_idx][k] as i16;
         k += 1;
     }
 
-    Ok(res)
+    Ok(())
 }
 
 fn decode_huff<R: Read>(dc: &mut JpegDecoder<R>, tab_idx: usize, dctab: bool)
