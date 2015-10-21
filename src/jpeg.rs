@@ -29,7 +29,7 @@ pub fn read_info<R: Read+Seek>(reader: &mut R) -> ::Result<Info> {
 
         match marker[1] {
             SOF0 | SOF2 => {
-                let mut tmp: [u8; 8] = [0,0,0,0, 0,0,0,0];
+                let mut tmp = [0u8; 8];
                 try!(reader.read_exact_(&mut tmp));
                 return Ok(Info {
                     w: u16_from_be(&tmp[5..7]) as usize,
@@ -43,10 +43,11 @@ pub fn read_info<R: Read+Seek>(reader: &mut R) -> ::Result<Info> {
             }
             SOS | EOI => return Err(::Error::InvalidData("no frame header")),
             DRI | DHT | DQT | COM | APP0 ... APPF => {
-                let mut tmp: [u8; 2] = [0, 0];
+                let mut tmp = [0u8; 2];
                 try!(reader.read_exact_(&mut tmp));
-                let len = u16_from_be(&mut tmp[..]) - 2;
-                try!(reader.seek(SeekFrom::Current(len as i64)));
+                let len = u16_from_be(&mut tmp[..]);
+                if len < 2 { return Err(::Error::InvalidData("marker length")) }
+                try!(reader.seek(SeekFrom::Current(len as i64 - 2)));
             }
             _ => return Err(::Error::InvalidData("invalid / unsupported marker")),
         }
@@ -244,7 +245,9 @@ const EOI: u8 = 0xd9;     // end of image
 fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 17];
     try!(dc.stream.read_exact_(&mut buf[0..2]));
-    let mut len = u16_from_be(&buf[0..2]) as isize -2;
+    let mut len = u16_from_be(&buf[0..2]) as isize;
+    if len < 2 { return Err(::Error::InvalidData("invalid data length (DHT)")) }
+    len -= 2;
 
     while 0 < len {
         try!(dc.stream.read_exact_(&mut buf[0..17]));  // info byte and BITS
@@ -339,7 +342,9 @@ fn derive_mincode_maxcode_valptr(mincode: &mut[i16; 16], maxcode: &mut[i16; 16],
 fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 2];
     try!(dc.stream.read_exact_(&mut buf[0..2]));
-    let mut len = u16_from_be(&buf[0..2]) as usize -2;
+    let mut len = u16_from_be(&buf[0..2]) as usize;
+    if len < 2 { return Err(::Error::InvalidData("invalid data length (DQT)")) }
+    len -= 2;
     if len % 65 != 0 {
         return Err(::Error::InvalidData("qtable"))
     }
