@@ -151,7 +151,6 @@ struct JpegDecoder<'r, R: Read + 'r> {
 
 struct HuffTab {
     values  : [u8; 256],
-    sizes   : [u8; 257],
     mincode : [i16; 16],
     maxcode : [i16; 16],
     valptr  : [i16; 16],
@@ -282,30 +281,31 @@ fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 fn derive_table(table: &mut HuffTab, num_values: &[u8]) {
     assert!(num_values.len() == 16);
 
-    let mut codes: [i16; 256] = [0; 256];
+    let mut codes = [0i16; 256];
+    let mut sizes = [0u8; 257];
 
     let mut k = 0;
     for i in (0..16) {
         for _j in (0 .. num_values[i]) {
-            table.sizes[k] = (i + 1) as u8;
+            sizes[k] = (i + 1) as u8;
             k += 1;
         }
     }
-    table.sizes[k] = 0;
+    sizes[k] = 0;
 
     k = 0;
     let mut code = 0_i16;
-    let mut si = table.sizes[k];
+    let mut si = sizes[k];
     loop {
-        while si == table.sizes[k] {
+        while si == sizes[k] {
             codes[k] = code;
             code += 1;
             k += 1;
         }
 
-        if table.sizes[k] == 0 { break; }
+        if sizes[k] == 0 { break; }
 
-        while si != table.sizes[k] {
+        while si != sizes[k] {
             code <<= 1;
             si += 1;
         }
