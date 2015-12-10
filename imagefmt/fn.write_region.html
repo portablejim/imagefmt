@@ -24,17 +24,17 @@
 
     
 
-    <section class="sidebar">
+    <nav class="sidebar">
         
         <p class='location'><a href='index.html'>imagefmt</a></p><script>window.sidebarCurrent = {name: 'write_region', ty: 'fn', relpath: ''};</script><script defer src="sidebar-items.js"></script>
-    </section>
+    </nav>
 
     <nav class="sub">
         <form class="search-form js-only">
             <div class="search-container">
                 <input class="search-input" name="search"
                        autocomplete="off"
-                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
                        type="search">
             </div>
         </form>
@@ -45,47 +45,59 @@
             <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
                 [<span class='inner'>&#x2212;</span>]
             </a>
-        </span><a id='src-18764' class='srclink' href='../src/imagefmt/lib.rs.html#139-153' title='goto source code'>[src]</a></span></h1>
-<pre class='rust fn'>pub fn write_region&lt;P&gt;(filepath: P, w: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, h: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, src_fmt: <a class='enum' href='../imagefmt/enum.ColFmt.html' title='imagefmt::ColFmt'>ColFmt</a>, data: <a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a><a href='http://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a href='http://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, tgt_type: <a class='enum' href='../imagefmt/enum.ColType.html' title='imagefmt::ColType'>ColType</a>, rx: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, ry: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, rw: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, rh: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='type' href='../imagefmt/type.Result.html' title='imagefmt::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt; <span class='where'>where P: <a class='trait' href='http://doc.rust-lang.org/nightly/core/convert/trait.AsRef.html' title='core::convert::AsRef'>AsRef</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/std/path/struct.Path.html' title='std::path::Path'>Path</a>&gt;</span></pre><div class='docblock'><p>Writes a region of an image and converts it to requested color type.</p>
+        </span><a id='src-18305' class='srclink' href='../src/imagefmt/lib.rs.html#150-164' title='goto source code'>[src]</a></span></h1>
+<pre class='rust fn'>pub fn write_region&lt;P&gt;(filepath: P, w: <a href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, h: <a href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, src_fmt: <a class='enum' href='../imagefmt/enum.ColFmt.html' title='imagefmt::ColFmt'>ColFmt</a>, data: <a href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a><a href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, tgt_type: <a class='enum' href='../imagefmt/enum.ColType.html' title='imagefmt::ColType'>ColType</a>, rx: <a href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, ry: <a href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, rw: <a href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, rh: <a href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='type' href='../imagefmt/type.Result.html' title='imagefmt::Result'>Result</a>&lt;<a href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt; <span class='where'>where P: <a class='trait' href='https://doc.rust-lang.org/nightly/core/convert/trait.AsRef.html' title='core::convert::AsRef'>AsRef</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/std/path/struct.Path.html' title='std::path::Path'>Path</a>&gt;</span></pre><div class='docblock'><p>Writes a region of an image and converts it to requested color type.</p>
+
+<p>The region is defined by the top-left coordinates <code>rx</code> and <code>ry</code> and the width and
+height <code>rw</code> and <code>rh</code>.</p>
 </div></section>
     <section id='search' class="content hidden"></section>
 
     <section class="footer"></section>
 
-    <div id="help" class="hidden">
-        <div class="shortcuts">
-            <h1>Keyboard shortcuts</h1>
-            <dl>
-                <dt>?</dt>
-                <dd>Show this help dialog</dd>
-                <dt>S</dt>
-                <dd>Focus the search field</dd>
-                <dt>&larrb;</dt>
-                <dd>Move up in search results</dd>
-                <dt>&rarrb;</dt>
-                <dd>Move down in search results</dd>
-                <dt>&#9166;</dt>
-                <dd>Go to active search result</dd>
-            </dl>
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code>)
+                </p>
+            </div>
         </div>
-        <div class="infos">
-            <h1>Search tricks</h1>
-            <p>
-                Prefix searches with a type followed by a colon (e.g.
-                <code>fn:</code>) to restrict the search to a given type.
-            </p>
-            <p>
-                Accepted types are: <code>fn</code>, <code>mod</code>,
-                <code>struct</code>, <code>enum</code>,
-                <code>trait</code>, <code>typedef</code> (or
-                <code>tdef</code>).
-            </p>
-            <p>
-                Search functions by type signature (e.g.
-                <code>vec -> usize</code>)
-            </p>
-        </div>
-    </div>
+    </aside>
 
     
 

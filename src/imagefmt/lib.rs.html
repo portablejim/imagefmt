@@ -24,17 +24,17 @@
 
     
 
-    <section class="sidebar">
+    <nav class="sidebar">
         
         
-    </section>
+    </nav>
 
     <nav class="sub">
         <form class="search-form js-only">
             <div class="search-container">
                 <input class="search-input" name="search"
                        autocomplete="off"
-                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
                        type="search">
             </div>
         </form>
@@ -799,6 +799,36 @@
 <span id="757">757</span>
 <span id="758">758</span>
 <span id="759">759</span>
+<span id="760">760</span>
+<span id="761">761</span>
+<span id="762">762</span>
+<span id="763">763</span>
+<span id="764">764</span>
+<span id="765">765</span>
+<span id="766">766</span>
+<span id="767">767</span>
+<span id="768">768</span>
+<span id="769">769</span>
+<span id="770">770</span>
+<span id="771">771</span>
+<span id="772">772</span>
+<span id="773">773</span>
+<span id="774">774</span>
+<span id="775">775</span>
+<span id="776">776</span>
+<span id="777">777</span>
+<span id="778">778</span>
+<span id="779">779</span>
+<span id="780">780</span>
+<span id="781">781</span>
+<span id="782">782</span>
+<span id="783">783</span>
+<span id="784">784</span>
+<span id="785">785</span>
+<span id="786">786</span>
+<span id="787">787</span>
+<span id="788">788</span>
+<span id="789">789</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright (c) 2014-2015 Tero Hänninen</span>
 <span class='comment'>//</span>
@@ -827,6 +857,11 @@
 <span class='doccomment'>//!     let _info = imagefmt::read_info(&quot;hiisi.png&quot;).unwrap();</span>
 <span class='doccomment'>//! }</span>
 <span class='doccomment'>//! ```</span>
+<span class='doccomment'>//! There are format specific functions that might offer more flexibility. When directly</span>
+<span class='doccomment'>//! using the format specific write functions, set the last argument to `None` to write</span>
+<span class='doccomment'>//! the whole image. To write only a region of the image, see source code for</span>
+<span class='doccomment'>//! `write_region` for an example. Reading and writing in-memory images can be done using</span>
+<span class='doccomment'>//! [`std::io::Cursor`](https://doc.rust-lang.org/std/io/struct.Cursor.html).</span>
 
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>ffi</span>::<span class='ident'>OsStr</span>;
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>fs</span>::{<span class='ident'>File</span>};
@@ -858,7 +893,7 @@
     <span class='kw'>pub</span> <span class='ident'>ct</span> : <span class='ident'>ColType</span>,
 }
 
-<span class='doccomment'>/// Color format.</span>
+<span class='doccomment'>/// Color format – determines color type and channel order.</span>
 <span class='doccomment'>///</span>
 <span class='doccomment'>/// `Auto` means automatic/infer</span>
 <span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Clone</span>, <span class='ident'>Copy</span>, <span class='ident'>Debug</span>, <span class='ident'>Eq</span>, <span class='ident'>PartialEq</span>)]</span>
@@ -919,6 +954,9 @@
 }
 
 <span class='doccomment'>/// Like `read` but reads from a reader.</span>
+<span class='doccomment'>///</span>
+<span class='doccomment'>/// To read in-memory images use</span>
+<span class='doccomment'>/// [`std::io::Cursor`](https://doc.rust-lang.org/std/io/struct.Cursor.html).</span>
 <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read_from</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>+</span><span class='ident'>Seek</span><span class='op'>&gt;</span>(<span class='ident'>reader</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>, <span class='ident'>req_fmt</span>: <span class='ident'>ColFmt</span>) <span class='op'>-&gt;</span> ::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Image</span><span class='op'>&gt;</span> {
     <span class='kw'>if</span>      <span class='macro'>cfg</span><span class='macro'>!</span>(<span class='ident'>feature</span> <span class='op'>=</span> <span class='string'>&quot;png&quot;</span>) <span class='op'>&amp;&amp;</span> <span class='ident'>png</span>::<span class='ident'>detect</span>(<span class='ident'>reader</span>) { <span class='ident'>png</span>::<span class='ident'>read</span>(<span class='ident'>reader</span>, <span class='ident'>req_fmt</span>) }
     <span class='kw'>else</span> <span class='kw'>if</span> <span class='macro'>cfg</span><span class='macro'>!</span>(<span class='ident'>feature</span> <span class='op'>=</span> <span class='string'>&quot;jpeg&quot;</span>) <span class='op'>&amp;&amp;</span> <span class='ident'>jpeg</span>::<span class='ident'>detect</span>(<span class='ident'>reader</span>) { <span class='ident'>jpeg</span>::<span class='ident'>read</span>(<span class='ident'>reader</span>, <span class='ident'>req_fmt</span>) }
@@ -938,6 +976,9 @@
 }
 
 <span class='doccomment'>/// Writes a region of an image and converts it to requested color type.</span>
+<span class='doccomment'>///</span>
+<span class='doccomment'>/// The region is defined by the top-left coordinates `rx` and `ry` and the width and</span>
+<span class='doccomment'>/// height `rw` and `rh`.</span>
 <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>write_region</span><span class='op'>&lt;</span><span class='ident'>P</span><span class='op'>&gt;</span>(<span class='ident'>filepath</span>: <span class='ident'>P</span>, <span class='ident'>w</span>: <span class='ident'>usize</span>, <span class='ident'>h</span>: <span class='ident'>usize</span>, <span class='ident'>src_fmt</span>: <span class='ident'>ColFmt</span>, <span class='ident'>data</span>: <span class='kw-2'>&amp;</span>[<span class='ident'>u8</span>],
                                                                    <span class='ident'>tgt_type</span>: <span class='ident'>ColType</span>,
                                                                 <span class='ident'>rx</span>: <span class='ident'>usize</span>, <span class='ident'>ry</span>: <span class='ident'>usize</span>,
@@ -1082,6 +1123,16 @@
             <span class='ident'>ColFmt</span>::<span class='ident'>ARGB</span> <span class='op'>=&gt;</span> (<span class='number'>0</span>, <span class='number'>1</span>, <span class='number'>2</span>, <span class='number'>3</span>, <span class='number'>0</span>),
             <span class='ident'>ColFmt</span>::<span class='ident'>ABGR</span> <span class='op'>=&gt;</span> (<span class='number'>0</span>, <span class='number'>3</span>, <span class='number'>2</span>, <span class='number'>1</span>, <span class='number'>0</span>),
             <span class='ident'>ColFmt</span>::<span class='ident'>Auto</span> <span class='op'>=&gt;</span> (<span class='number'>0</span>, <span class='number'>0</span>, <span class='number'>0</span>, <span class='number'>0</span>, <span class='number'>0</span>),
+        }
+    }
+}
+
+<span class='kw'>impl</span> <span class='ident'>ColType</span> {
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>has_alpha</span>(<span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>bool</span><span class='op'>&gt;</span> {
+        <span class='kw'>match</span> <span class='self'>self</span> {
+            <span class='ident'>ColType</span>::<span class='ident'>Gray</span>      <span class='op'>|</span> <span class='ident'>ColType</span>::<span class='ident'>Color</span>      <span class='op'>=&gt;</span> <span class='prelude-val'>Some</span>(<span class='boolval'>false</span>),
+            <span class='ident'>ColType</span>::<span class='ident'>GrayAlpha</span> <span class='op'>|</span> <span class='ident'>ColType</span>::<span class='ident'>ColorAlpha</span> <span class='op'>=&gt;</span> <span class='prelude-val'>Some</span>(<span class='boolval'>true</span>),
+            <span class='ident'>ColType</span>::<span class='ident'>Auto</span> <span class='op'>=&gt;</span> <span class='prelude-val'>None</span>,
         }
     }
 }
@@ -1530,10 +1581,19 @@
 
 <span class='kw'>impl</span> <span class='ident'>std</span>::<span class='ident'>error</span>::<span class='ident'>Error</span> <span class='kw'>for</span> <span class='ident'>Error</span> {
     <span class='kw'>fn</span> <span class='ident'>description</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='kw-2'>&amp;</span><span class='ident'>str</span> {
-        <span class='kw'>use</span> <span class='ident'>Error</span>::<span class='op'>*</span>;
         <span class='kw'>match</span> <span class='op'>*</span><span class='self'>self</span> {
-            <span class='ident'>InvalidArg</span>(<span class='ident'>s</span>) <span class='op'>|</span> <span class='ident'>InvalidData</span>(<span class='ident'>s</span>) <span class='op'>|</span> <span class='ident'>Unsupported</span>(<span class='ident'>s</span>) <span class='op'>|</span> <span class='ident'>Internal</span>(<span class='ident'>s</span>) <span class='op'>=&gt;</span> <span class='ident'>s</span>,
-            <span class='ident'>Io</span>(<span class='kw-2'>ref</span> <span class='ident'>e</span>) <span class='op'>=&gt;</span> <span class='ident'>e</span>.<span class='ident'>description</span>(),
+            <span class='ident'>Error</span>::<span class='ident'>InvalidArg</span>(_) <span class='op'>=&gt;</span> <span class='string'>&quot;Invalid argument&quot;</span>,
+            <span class='ident'>Error</span>::<span class='ident'>InvalidData</span>(_) <span class='op'>=&gt;</span> <span class='string'>&quot;Invalid data&quot;</span>,
+            <span class='ident'>Error</span>::<span class='ident'>Unsupported</span>(_) <span class='op'>=&gt;</span> <span class='string'>&quot;Unsupported feature&quot;</span>,
+            <span class='ident'>Error</span>::<span class='ident'>Internal</span>(_) <span class='op'>=&gt;</span> <span class='string'>&quot;Internal error&quot;</span>,
+            <span class='ident'>Error</span>::<span class='ident'>Io</span>(<span class='kw-2'>ref</span> <span class='ident'>e</span>) <span class='op'>=&gt;</span> <span class='ident'>e</span>.<span class='ident'>description</span>(),
+        }
+    }
+
+    <span class='kw'>fn</span> <span class='ident'>cause</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='kw-2'>&amp;</span><span class='ident'>std</span>::<span class='ident'>error</span>::<span class='ident'>Error</span><span class='op'>&gt;</span> {
+        <span class='kw'>match</span> <span class='op'>*</span><span class='self'>self</span> {
+            <span class='ident'>Error</span>::<span class='ident'>Io</span>(<span class='kw-2'>ref</span> <span class='ident'>e</span>) <span class='op'>=&gt;</span> <span class='prelude-val'>Some</span>(<span class='ident'>e</span>),
+            _ <span class='op'>=&gt;</span> <span class='prelude-val'>None</span>,
         }
     }
 }
@@ -1545,7 +1605,7 @@
         <span class='attribute'>#[<span class='ident'>allow</span>(<span class='ident'>dead_code</span>)]</span>
         <span class='kw'>mod</span> <span class='macro-nonterminal'>$</span><span class='macro-nonterminal'>name</span> {
             <span class='kw'>use</span> ::{<span class='ident'>Info</span>, <span class='ident'>Image</span>, <span class='ident'>ColFmt</span>, <span class='ident'>ColType</span>};
-            <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::{<span class='self'>self</span>, <span class='ident'>Read</span>, <span class='ident'>Write</span>};
+            <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::{<span class='ident'>Read</span>, <span class='ident'>Write</span>};
             <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>detect</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(_: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> <span class='ident'>bool</span> { <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;bug&quot;</span>) }
             <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read_info</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(_: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>) <span class='op'>-&gt;</span> ::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Info</span><span class='op'>&gt;</span> { <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;bug&quot;</span>) }
             <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>read</span><span class='op'>&lt;</span><span class='ident'>R</span>: <span class='ident'>Read</span><span class='op'>&gt;</span>(_: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>R</span>, _: <span class='ident'>ColFmt</span>) <span class='op'>-&gt;</span> ::<span class='prelude-ty'>Result</span><span class='op'>&lt;</span><span class='ident'>Image</span><span class='op'>&gt;</span> { <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;bug&quot;</span>) }
@@ -1565,40 +1625,49 @@
 
     <section class="footer"></section>
 
-    <div id="help" class="hidden">
-        <div class="shortcuts">
-            <h1>Keyboard shortcuts</h1>
-            <dl>
-                <dt>?</dt>
-                <dd>Show this help dialog</dd>
-                <dt>S</dt>
-                <dd>Focus the search field</dd>
-                <dt>&larrb;</dt>
-                <dd>Move up in search results</dd>
-                <dt>&rarrb;</dt>
-                <dd>Move down in search results</dd>
-                <dt>&#9166;</dt>
-                <dd>Go to active search result</dd>
-            </dl>
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code>)
+                </p>
+            </div>
         </div>
-        <div class="infos">
-            <h1>Search tricks</h1>
-            <p>
-                Prefix searches with a type followed by a colon (e.g.
-                <code>fn:</code>) to restrict the search to a given type.
-            </p>
-            <p>
-                Accepted types are: <code>fn</code>, <code>mod</code>,
-                <code>struct</code>, <code>enum</code>,
-                <code>trait</code>, <code>typedef</code> (or
-                <code>tdef</code>).
-            </p>
-            <p>
-                Search functions by type signature (e.g.
-                <code>vec -> usize</code>)
-            </p>
-        </div>
-    </div>
+    </aside>
 
     
 
