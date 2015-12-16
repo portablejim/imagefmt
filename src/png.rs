@@ -363,6 +363,9 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                 let tgt_px: A7IdxTranslator = A7_IDX_TRANSLATORS[pass];   // target pixel
                 let src_linesize = redw[pass] * filter_step;
 
+                // Reset pline/linebuf1 to zero for defiltering.
+                for b in &mut linebuf1[..] { *b = 0 }
+
                 for j in (0 .. redh[pass]) {
                     let (cline, pline) = if j & 1 == 0 {
                         (&mut linebuf0[0 .. src_linesize+1],
