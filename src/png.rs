@@ -364,7 +364,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                 let src_linesize = redw[pass] * filter_step;
 
                 for j in (0 .. redh[pass]) {
-                    let (cline, pline) = if j % 2 == 0 {
+                    let (cline, pline) = if j & 1 == 0 {
                         (&mut linebuf0[0 .. src_linesize+1],
                         &mut linebuf1[0 .. src_linesize+1])
                     } else {
