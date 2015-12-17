@@ -3,6 +3,7 @@
 extern crate flate2;
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::iter::{repeat};
+use std::mem;
 use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
 use super::{
@@ -329,9 +330,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
 
                 ti += tgt_linesize;
 
-                let swap = pline;
-                pline = cline;
-                cline = swap;
+                mem::swap(&mut cline, &mut pline);
             }
         },
         PngInterlace::Adam7 => {
@@ -357,24 +356,18 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
             let max_scanline_size = dc.w * filter_step;
             let mut linebuf0 = vec![0u8; max_scanline_size+1];
             let mut linebuf1 = vec![0u8; max_scanline_size+1];
-            let mut redlinebuf = vec![0u8; dc.w * tgt_bytespp];
+            let mut redline = vec![0u8; dc.w * tgt_bytespp];
 
             for pass in (0..7) {
                 let tgt_px: A7IdxTranslator = A7_IDX_TRANSLATORS[pass];   // target pixel
                 let src_linesize = redw[pass] * filter_step;
 
-                // Reset pline/linebuf1 to zero for defiltering.
-                for b in &mut linebuf1[..] { *b = 0 }
+                let mut cline = &mut linebuf0[0 .. src_linesize+1];
+                let mut pline = &mut linebuf1[0 .. src_linesize+1];
+                // Reset pline to zero for defiltering.
+                for b in &mut pline[..] { *b = 0 }
 
                 for j in (0 .. redh[pass]) {
-                    let (cline, pline) = if j & 1 == 0 {
-                        (&mut linebuf0[0 .. src_linesize+1],
-                        &mut linebuf1[0 .. src_linesize+1])
-                    } else {
-                        (&mut linebuf1[0 .. src_linesize+1],
-                        &mut linebuf0[0 .. src_linesize+1])
-                    };
-
                     try!(zlib.read_exact_(&mut cline[..]));
                     let filter_type: u8 = cline[0];
 
@@ -383,10 +376,10 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                     if dc.src_indexed {
                         depalettize(&cline[1..], &palette, &mut depaletted_line);
                         convert(&depaletted_line[0 .. src_linesize*3],
-                                &mut redlinebuf[0..redw[pass] * tgt_bytespp],
+                                &mut redline[0..redw[pass] * tgt_bytespp],
                                 c0, c1, c2, c3)
                     } else {
-                        convert(&cline[1..], &mut redlinebuf[0..redw[pass] * tgt_bytespp],
+                        convert(&cline[1..], &mut redline[0..redw[pass] * tgt_bytespp],
                                 c0, c1, c2, c3);
                     }
 
@@ -394,12 +387,13 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                     for i in (0 .. redw[pass]) {
                         let tgt = tgt_px(i, j, dc.w) * tgt_bytespp;
                         copy_memory(
-                            &redlinebuf[redi .. redi+tgt_bytespp],
+                            &redline[redi .. redi+tgt_bytespp],
                             &mut result[tgt .. tgt+tgt_bytespp]
                         );
                         redi += tgt_bytespp;
                     }
 
+                    mem::swap(&mut cline, &mut pline);
                 }
             }
         } // Adam7
@@ -701,9 +695,7 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> ::Result<()> {
 
         filtered_image[ti] = PngFilter::Paeth as u8;
 
-        let swap = pline;
-        pline = cline;
-        cline = swap;
+        mem::swap(&mut cline, &mut pline);
 
         si += ec.src_stride;
         ti += tgt_linesize;
