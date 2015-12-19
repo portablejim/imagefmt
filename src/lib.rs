@@ -53,6 +53,15 @@ pub struct Image {
     pub buf : Vec<u8>,
 }
 
+/// Image with 16-bit channels.
+#[derive(Clone)]
+pub struct Image16 {
+    pub w   : usize,
+    pub h   : usize,
+    pub fmt : ColFmt,
+    pub buf : Vec<u16>,
+}
+
 /// Holds basic info about an image.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Info {
@@ -307,10 +316,28 @@ impl ColType {
 
 // ------------------------------------------------------------
 
-type LineConverter = fn(&[u8], &mut[u8], usize, usize, usize, usize);
+trait Sample : Copy {
+    fn max_value() -> Self;
+    fn as_f32(self) -> f32;
+    fn from_f32(f32) -> Self;
+}
 
-fn converter(src_fmt: ColFmt, tgt_fmt: ColFmt)
-        -> ::Result<(LineConverter, usize, usize, usize, usize)>
+impl Sample for u8 {
+    #[inline] fn max_value() -> Self { Self::max_value() }
+    #[inline] fn as_f32(self) -> f32 { self as f32 }
+    #[inline] fn from_f32(s: f32) -> Self { s as Self }
+}
+
+impl Sample for u16 {
+    #[inline] fn max_value() -> Self { Self::max_value() }
+    #[inline] fn as_f32(self) -> f32 { self as f32 }
+    #[inline] fn from_f32(s: f32) -> Self { s as Self }
+}
+
+type LineConverter<T> = fn(&[T], &mut[T], usize, usize, usize, usize);
+
+fn converter<T: Sample>(src_fmt: ColFmt, tgt_fmt: ColFmt)
+        -> ::Result<(LineConverter<T>, usize, usize, usize, usize)>
 {
     use self::ColFmt::*;
 
@@ -390,20 +417,20 @@ fn converter(src_fmt: ColFmt, tgt_fmt: ColFmt)
     }
 }
 
-fn copy_line(src: &[u8], tgt: &mut[u8], _: usize, _: usize, _: usize, _: usize) {
+fn copy_line<T: Sample>(src: &[T], tgt: &mut[T], _: usize, _: usize, _: usize, _: usize) {
     copy_memory(src, tgt)
 }
 
-fn y_to_any_ya(src: &[u8], tgt: &mut[u8], yi: usize, _: usize, _: usize, ai: usize) {
+fn y_to_any_ya<T: Sample>(src: &[T], tgt: &mut[T], yi: usize, _: usize, _: usize, ai: usize) {
     let mut t = 0;
     for &sb in src {
         tgt[t+yi] = sb;
-        tgt[t+ai] = 255;
+        tgt[t+ai] = T::max_value();
         t += 2;
     }
 }
 
-fn y_to_any_rgb(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, _: usize) {
+fn y_to_any_rgb<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, _: usize) {
     let mut t = 0;
     for &sb in src {
         tgt[t+ri] = sb;
@@ -413,18 +440,18 @@ fn y_to_any_rgb(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, _: u
     }
 }
 
-fn y_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai: usize) {
+fn y_to_any_rgba<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, ai: usize) {
     let mut t = 0;
     for &sb in src {
         tgt[t+ri] = sb;
         tgt[t+gi] = sb;
         tgt[t+bi] = sb;
-        tgt[t+ai] = 255;
+        tgt[t+ai] = T::max_value();
         t += 4;
     }
 }
 
-fn ya_to_ay(src: &[u8], tgt: &mut[u8], _: usize, _: usize, _: usize, _: usize) {
+fn ya_to_ay<T: Sample>(src: &[T], tgt: &mut[T], _: usize, _: usize, _: usize, _: usize) {
     let mut st = 0;
     while st < src.len() {
         tgt[st  ] = src[st+1];
@@ -433,7 +460,7 @@ fn ya_to_ay(src: &[u8], tgt: &mut[u8], _: usize, _: usize, _: usize, _: usize) {
     }
 }
 
-fn any_ya_to_y(src: &[u8], tgt: &mut[u8], yi: usize, _: usize, _: usize, _: usize) {
+fn any_ya_to_y<T: Sample>(src: &[T], tgt: &mut[T], yi: usize, _: usize, _: usize, _: usize) {
     let mut s = 0;
     for tb in tgt {
         *tb = src[s+yi];
@@ -441,8 +468,8 @@ fn any_ya_to_y(src: &[u8], tgt: &mut[u8], yi: usize, _: usize, _: usize, _: usiz
     }
 }
 
-fn any_ya_to_any_rgb(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize,
-                                                                     sai: usize)
+fn any_ya_to_any_rgb<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize,
+                                                                            sai: usize)
 {
     let mut s = 0;
     let mut t = 0;
@@ -455,8 +482,8 @@ fn any_ya_to_any_rgb(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize,
     }
 }
 
-fn any_ya_to_any_rgba(src: &[u8], tgt: &mut[u8], syi: usize, sai: usize, tci: usize,
-                                                                         tai: usize)
+fn any_ya_to_any_rgba<T: Sample>(src: &[T], tgt: &mut[T], syi: usize, sai: usize, tci: usize,
+                                                                                tai: usize)
 {
     let mut s = 0;
     let mut t = 0;
@@ -470,8 +497,8 @@ fn any_ya_to_any_rgba(src: &[u8], tgt: &mut[u8], syi: usize, sai: usize, tci: us
     }
 }
 
-fn any_rgba_to_y(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize,
-                                                            channels: usize)
+fn any_rgba_to_y<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize,
+                                                                     channels: usize)
 {
     let mut s = 0;
     for tb in tgt {
@@ -480,20 +507,20 @@ fn any_rgba_to_y(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize,
     }
 }
 
-fn any_rgb_to_any_ya(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize,
-                                                                     tai: usize)
+fn any_rgb_to_any_ya<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize,
+                                                                            tai: usize)
 {
     let mut s = 0;
     let mut t = 0;
     while s < src.len() {
         tgt[t+1-tai] = luminance(src[s+ri], src[s+gi], src[s+bi]);
-        tgt[t+tai] = 255;
+        tgt[t+tai] = T::max_value();
         s += 3;
         t += 2;
     }
 }
 
-fn any_rgba_to_ya(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai: usize)
+fn any_rgba_to_ya<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, ai: usize)
 {
     let mut s = 0;
     let mut t = 0;
@@ -505,7 +532,7 @@ fn any_rgba_to_ya(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai
     }
 }
 
-fn any_rgba_to_ay(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai: usize)
+fn any_rgba_to_ay<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, ai: usize)
 {
     let mut s = 0;
     let mut t = 0;
@@ -517,7 +544,7 @@ fn any_rgba_to_ay(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai
     }
 }
 
-fn rgb_to_bgr(src: &[u8], tgt: &mut[u8], _: usize, _: usize, _: usize, _: usize)
+fn rgb_to_bgr<T: Sample>(src: &[T], tgt: &mut[T], _: usize, _: usize, _: usize, _: usize)
 {
     let mut st = 0;
     while st < src.len() {
@@ -528,7 +555,7 @@ fn rgb_to_bgr(src: &[u8], tgt: &mut[u8], _: usize, _: usize, _: usize, _: usize)
     }
 }
 
-fn rgb_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai: usize)
+fn rgb_to_any_rgba<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, ai: usize)
 {
     let mut s = 0;
     let mut t = 0;
@@ -536,13 +563,13 @@ fn rgb_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, a
         tgt[t+ri] = src[s  ];
         tgt[t+gi] = src[s+1];
         tgt[t+bi] = src[s+2];
-        tgt[t+ai] = 255;
+        tgt[t+ai] = T::max_value();
         s += 3;
         t += 4;
     }
 }
 
-fn bgr_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai: usize)
+fn bgr_to_any_rgba<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, ai: usize)
 {
     let mut s = 0;
     let mut t = 0;
@@ -550,13 +577,13 @@ fn bgr_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, a
         tgt[t+ri] = src[s+2];
         tgt[t+gi] = src[s+1];
         tgt[t+bi] = src[s  ];
-        tgt[t+ai] = 255;
+        tgt[t+ai] = T::max_value();
         s += 3;
         t += 4;
     }
 }
 
-fn any_rgba_to_rgb(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, _ai: usize)
+fn any_rgba_to_rgb<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, _ai: usize)
 {
     let mut s = 0;
     let mut t = 0;
@@ -569,7 +596,7 @@ fn any_rgba_to_rgb(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, _
     }
 }
 
-fn any_rgba_to_bgr(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, _: usize)
+fn any_rgba_to_bgr<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, _: usize)
 {
     let mut s = 0;
     let mut t = 0;
@@ -582,7 +609,7 @@ fn any_rgba_to_bgr(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, _
     }
 }
 
-fn rgba_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai: usize)
+fn rgba_to_any_rgba<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, ai: usize)
 {
     let mut st = 0;
     while st < src.len() {
@@ -594,7 +621,7 @@ fn rgba_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, 
     }
 }
 
-fn bgra_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai: usize)
+fn bgra_to_any_rgba<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, ai: usize)
 {
     let mut st = 0;
     while st < src.len() {
@@ -606,7 +633,7 @@ fn bgra_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, 
     }
 }
 
-fn argb_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai: usize)
+fn argb_to_any_rgba<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, ai: usize)
 {
     let mut st = 0;
     while st < src.len() {
@@ -618,7 +645,7 @@ fn argb_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, 
     }
 }
 
-fn abgr_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, ai: usize)
+fn abgr_to_any_rgba<T: Sample>(src: &[T], tgt: &mut[T], ri: usize, gi: usize, bi: usize, ai: usize)
 {
     let mut st = 0;
     while st < src.len() {
@@ -630,8 +657,8 @@ fn abgr_to_any_rgba(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize, 
     }
 }
 
-fn luminance(r: u8, g: u8, b: u8) -> u8 {
-    (0.21 * r as f32 + 0.64 * g as f32 + 0.15 * b as f32) as u8
+fn luminance<T: Sample>(r: T, g: T, b: T) -> T {
+    T::from_f32(0.21 * r.as_f32() + 0.64 * g.as_f32() + 0.15 * b.as_f32())
 }
 
 // ------------------------------------------------------------
@@ -706,7 +733,7 @@ fn i32_from_le(buf: &[u8]) -> i32 {
 }
 
 #[inline]
-fn copy_memory(src: &[u8], dst: &mut[u8]) {
+fn copy_memory<T>(src: &[T], dst: &mut[T]) {
     assert!(src.len() == dst.len());
     unsafe {
         ptr::copy(src.as_ptr(), dst.as_mut_ptr(), src.len());
@@ -716,6 +743,13 @@ fn copy_memory(src: &[u8], dst: &mut[u8]) {
 impl Debug for Image {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "Image {{ w: {:?}, h: {:?}, fmt: {:?}, buf: [{} bytes] }}",
+               self.w, self.h, self.fmt, self.buf.len())
+    }
+}
+
+impl Debug for Image16 {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write!(fmt, "Image16 {{ w: {:?}, h: {:?}, fmt: {:?}, buf: [{} * 2 bytes] }}",
                self.w, self.h, self.fmt, self.buf.len())
     }
 }

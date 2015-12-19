@@ -7,7 +7,7 @@ use std::mem;
 use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
 use super::{
-    Image, Info, ColFmt, ColType,
+    Image, Image16, Info, ColFmt, ColType,
     copy_memory, converter,
     u32_to_be, u32_from_be, IFRead,
 };
@@ -96,13 +96,43 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
 pub fn read_chunks<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
                                                       -> ::Result<(Image, Vec<ExtChunk>)>
 {
+    let dc = &mut try!(init_decoder(reader, req_fmt, 8));
+    let (buf, chunks) = try!(decode(dc, chunk_names));
+    Ok((Image {
+       w  : dc.w,
+       h  : dc.h,
+       fmt: dc.tgt_fmt,
+       buf: match buf { Buffer::Bpc8(b) => b, _ => return Err(::Error::Internal("bug")) }
+    }, chunks))
+}
+
+/// Returns an image with 16-bit channels and the requested extension chunks.
+///
+/// If the requested chunks are not present they are ignored. Images with less than 16
+/// bits per channel are converted to 16 bits.
+pub fn read16_chunks<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, chunks: &[[u8; 4]])
+                                                  -> ::Result<(Image16, Vec<ExtChunk>)>
+{
+    let dc = &mut try!(init_decoder(reader, req_fmt, 16));
+    let (buf, chunks) = try!(decode(dc, chunks));
+    Ok((Image16 {
+       w  : dc.w,
+       h  : dc.h,
+       fmt: dc.tgt_fmt,
+       buf: match buf { Buffer::Bpc16(b) => b, _ => return Err(::Error::Internal("bug")) }
+    }, chunks))
+}
+
+fn init_decoder<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, req_bpc: i32)
+                                                  -> ::Result<PngDecoder<R>>
+{
     let hdr = try!(read_header(reader));
 
     if hdr.width < 1 || hdr.height < 1 {
         return Err(::Error::InvalidData("invalid dimensions"))
     }
-    if hdr.bit_depth != 8 {
-        return Err(::Error::Unsupported("only 8-bit images supported"))
+    if (hdr.bit_depth != 8 && hdr.bit_depth != 16) || (req_bpc != 8 && req_bpc != 16) {
+        return Err(::Error::Unsupported("only 8-bit and 16-bit images supported"))
     }
     if hdr.compression_method != 0 || hdr.filter_method != 0 {
         return Err(::Error::Unsupported("compression method"))
@@ -122,25 +152,19 @@ pub fn read_chunks<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, chunk_names: &
         _ => return Err(::Error::Unsupported("color type")),
     };
 
-    let dc = &mut PngDecoder {
+    Ok(PngDecoder {
         stream      : reader,
         w           : hdr.width as usize,
         h           : hdr.height as usize,
         ilace       : ilace,
+        src_bpc     : hdr.bit_depth as i32,
+        tgt_bpc     : req_bpc,
         src_indexed : hdr.color_type == PngColortype::Idx as u8,
         src_fmt     : src_fmt,
         tgt_fmt     : if req_fmt == ColFmt::Auto { src_fmt } else { req_fmt },
         chunk_lentype : [0u8; 8],
         crc         : Crc32::new(),
-    };
-
-    let (buf, chunks) = try!(decode(dc, chunk_names));
-    Ok((Image {
-        w   : dc.w,
-        h   : dc.h,
-        fmt : dc.tgt_fmt,
-        buf : buf
-    }, chunks))
+    })
 }
 
 struct PngDecoder<'r, R:'r> {
@@ -148,6 +172,8 @@ struct PngDecoder<'r, R:'r> {
     w             : usize,
     h             : usize,
     ilace         : PngInterlace,
+    src_bpc       : i32,    // bits per channel
+    tgt_bpc       : i32,
     src_indexed   : bool,
     src_fmt       : ColFmt,
     tgt_fmt       : ColFmt,
@@ -183,11 +209,11 @@ fn readcheck_crc<R: Read>(dc: &mut PngDecoder<R>) -> ::Result<()> {
 }
 
 fn decode<R: Read+Seek>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
-                                  -> ::Result<(Vec<u8>, Vec<ExtChunk>)>
+                                  -> ::Result<(Buffer, Vec<ExtChunk>)>
 {
     use self::PngStage::*;
 
-    let mut result = Vec::<u8>::new();
+    let mut result = Buffer::Bpc8(Vec::<u8>::new());
     let mut chunks = Vec::<ExtChunk>::new();
     let mut palette = Vec::<u8>::new();
 
@@ -283,27 +309,42 @@ fn depalettize(src: &[u8], palette: &[u8], dst: &mut[u8]) {
     }
 }
 
-fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &[u8])
-                                                                 -> ::Result<Vec<u8>>
-{
-    let filter_step = if dc.src_indexed { 1 } else { dc.src_fmt.channels() };
-    let max_src_linesz = dc.w * filter_step;
-    let tgt_chans = dc.tgt_fmt.channels();
+enum Buffer {
+    Bpc8(Vec<u8>),
+    Bpc16(Vec<u16>),
+}
 
-    let mut result = vec![0u8; dc.h * dc.w * tgt_chans];
+fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &[u8])
+                                                                  -> ::Result<Buffer>
+{
+    let filter_step = match (dc.src_indexed, dc.src_bpc) {
+        (true, _) => 1,
+        (false, 8) => dc.src_fmt.channels(),
+        (false, 16) => dc.src_fmt.channels() * 2,
+        _ => return Err(::Error::Internal("unsupported bit depth"))
+    };
+    let max_src_linesz = dc.w * filter_step;
+    let src_chans = dc.src_fmt.channels();
+    let tgt_chans = dc.tgt_fmt.channels();
+    let srclen = dc.w * src_chans;
+    let tgtlen = dc.w * tgt_chans;
+
     let mut cline = vec![0u8; max_src_linesz+1];   // current line, incl. filter type byte
     let mut pline = vec![0u8; max_src_linesz+1];   // previous line
     let mut depaletted = if dc.src_indexed { vec![0u8; dc.w * 3] } else { Vec::new() };
+    let mut cline8  = if dc.tgt_bpc == 8 { vec![0u8; srclen] } else { Vec::new() };
+    let mut cline16 = if dc.tgt_bpc == 16 { vec![0u16; srclen] } else { Vec::new() };
+    let mut result8 = if dc.tgt_bpc == 8 { vec![0u8; dc.h * tgtlen] } else { Vec::new() };
+    let mut result16 = if dc.tgt_bpc == 16 { vec![0u16; dc.h*tgtlen] } else { Vec::new()};
 
-    let (convert, c0, c1, c2, c3) = try!(converter(dc.src_fmt, dc.tgt_fmt));
+    let (convert8, _0, _1, _2, _3) = try!(converter::<u8>(dc.src_fmt, dc.tgt_fmt));
+    let (convert16, c0, c1, c2, c3) = try!(converter::<u16>(dc.src_fmt, dc.tgt_fmt));
 
     let compressed_data = try!(read_idat_chunks(dc, len));
     let mut zlib = ZlibDecoder::new(&compressed_data[..]);
 
     match dc.ilace {
         PngInterlace::None => {
-            let tgt_linelen = dc.w * tgt_chans;
-
             let mut ti = 0;
             for _j in (0 .. dc.h) {
                 try!(zlib.read_exact_(&mut cline[..]));
@@ -311,14 +352,25 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
 
                 try!(recon(&mut cline[1..], &pline[1..], filter_type, filter_step));
 
-                if dc.src_indexed {
-                    depalettize(&cline[1..], &palette, &mut depaletted);
-                    convert(&depaletted, &mut result[ti..ti+tgt_linelen], c0, c1, c2, c3)
-                } else {
-                    convert(&cline[1..], &mut result[ti..ti+tgt_linelen], c0, c1, c2, c3);
+                {
+                    let bytes: &[u8] =
+                        if dc.src_indexed {
+                            depalettize(&cline[1..], &palette, &mut depaletted);
+                            &depaletted[..]
+                        } else {
+                            &cline[1..]
+                        };
+
+                    if dc.tgt_bpc == 8 {
+                        bpc8_from_bytes(&bytes, dc.src_bpc, &mut cline8);
+                        convert8(&cline8, &mut result8[ti..ti+tgtlen], c0, c1, c2, c3);
+                    } else {
+                        bpc16_from_bytes(&bytes, dc.src_bpc, &mut cline16);
+                        convert16(&cline16, &mut result16[ti..ti+tgtlen], c0, c1, c2, c3);
+                    }
                 }
 
-                ti += tgt_linelen;
+                ti += tgtlen;
 
                 mem::swap(&mut cline, &mut pline);
             }
@@ -343,7 +395,8 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                 (dc.h + 0) / 2,
             ];
 
-            let mut redline = vec![0u8; dc.w * tgt_chans];
+            let mut redline8  = if dc.tgt_bpc == 8 { vec![0u8; tgtlen] } else { Vec::new() };
+            let mut redline16 = if dc.tgt_bpc == 16 { vec![0u16; tgtlen] } else { Vec::new() };
 
             for pass in (0..7) {
                 let tgt_px    = A7_IDX_TRANSLATORS[pass];   // target pixel
@@ -358,22 +411,39 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
 
                     try!(recon(&mut cline[1..], &pline[1..], filter_type, filter_step));
 
-                    if dc.src_indexed {
-                        depalettize(&cline[1..], &palette, &mut depaletted);
-                        convert(&depaletted[0 .. redw[pass] * 3],
-                                &mut redline[0..redw[pass] * tgt_chans],
-                                c0, c1, c2, c3)
-                    } else {
-                        convert(&cline[1..], &mut redline[0..redw[pass] * tgt_chans],
-                                c0, c1, c2, c3);
-                    }
+                    {
+                        let bytes: &[u8] =
+                            if dc.src_indexed {
+                                depalettize(&cline[1..], &palette, &mut depaletted);
+                                &depaletted[..]
+                            } else {
+                                &cline[1..]
+                            };
 
-                    let mut redi = 0;
-                    for i in (0 .. redw[pass]) {
-                        let tgt = tgt_px(i, j, dc.w) * tgt_chans;
-                        copy_memory(&redline[redi .. redi+tgt_chans],
-                                    &mut result[tgt .. tgt+tgt_chans]);
-                        redi += tgt_chans;
+                        let mut redi = 0;
+                        if dc.tgt_bpc == 8 {
+                            bpc8_from_bytes(&bytes, dc.src_bpc, &mut cline8);
+                            convert8(&cline8[..redw[pass] * src_chans],
+                                     &mut redline8[0..redw[pass] * tgt_chans],
+                                     c0, c1, c2, c3);
+                            for i in (0 .. redw[pass]) {
+                                let tgt = tgt_px(i, j, dc.w) * tgt_chans;
+                                copy_memory(&redline8[redi .. redi+tgt_chans],
+                                            &mut result8[tgt .. tgt+tgt_chans]);
+                                redi += tgt_chans;
+                            }
+                        } else {
+                            bpc16_from_bytes(&bytes, dc.src_bpc, &mut cline16);
+                            convert16(&cline16[..redw[pass] * src_chans],
+                                      &mut redline16[0..redw[pass] * tgt_chans],
+                                      c0, c1, c2, c3);
+                            for i in (0 .. redw[pass]) {
+                                let tgt = tgt_px(i, j, dc.w) * tgt_chans;
+                                copy_memory(&redline16[redi .. redi+tgt_chans],
+                                            &mut result16[tgt .. tgt+tgt_chans]);
+                                redi += tgt_chans;
+                            }
+                        }
                     }
 
                     mem::swap(&mut cline, &mut pline);
@@ -382,7 +452,45 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
         } // Adam7
     }
 
-    return Ok(result);
+    Ok(if dc.tgt_bpc == 8 { Buffer::Bpc8(result8) } else { Buffer::Bpc16(result16) })
+}
+
+fn bpc8_from_bytes(src: &[u8], bpc: i32, tgt: &mut[u8]) {
+    match bpc {
+        8 => copy_memory(&src, &mut tgt[..src.len()]),  // This copy is unnecessary, but
+                                                        // it's hard to find nice way to
+                                                        // avoid it.
+        16 => {
+            let mut s = 0;
+            let mut t = 0;
+            while s < src.len() {
+                tgt[t] = src[s];    // truncate
+                s += 2;
+                t += 1;
+            }
+        }
+        _ => panic!("bug"),
+    }
+}
+
+fn bpc16_from_bytes(src: &[u8], bpc: i32, tgt: &mut[u16]) {
+    match bpc {
+        8 => {
+            for k in 0..src.len() {
+                tgt[k] = src[k] as u16 * 256 + 128;
+            }
+        }
+        16 => {
+            let mut s = 0;
+            let mut t = 0;
+            while s < src.len() {
+                tgt[t] = (src[s] as u16) << 8 | src[s+1] as u16;
+                s += 2;
+                t += 1;
+            }
+        }
+        _ => panic!("bug"),
+    }
 }
 
 type A7IdxTranslator = fn(redx: usize, redy: usize, dstw: usize) -> usize;
