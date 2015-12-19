@@ -157,8 +157,8 @@ pub fn write_region<P>(filepath: P, w: usize, h: usize, src_fmt: ColFmt, data: &
     if rw == 0 || rh == 0 || rx + rw > w || ry + rh > h {
         return Err(::Error::InvalidArg("invalid region"))
     }
-    let stride = w * src_fmt.bytes_pp();
-    let start = ry * stride + rx * src_fmt.bytes_pp();
+    let stride = w * src_fmt.channels();
+    let start = ry * stride + rx * src_fmt.channels();
     let (mut writer, writefunc) = try!(writer_and_writefunc(filepath));
     writefunc(&mut writer, rw, rh, src_fmt, &data[start..], tgt_type, Some(stride))
 }
@@ -187,7 +187,7 @@ type WriteFn =
 pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt)
                                                                -> ::Result<Image>
 {
-    if w < 1 || h < 1 || src_fmt.bytes_pp() * w * h != data.len() {
+    if w < 1 || h < 1 || src_fmt.channels() * w * h != data.len() {
         return Err(::Error::InvalidArg("invalid dimensions or data length"))
     }
 
@@ -208,17 +208,17 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
 
     let (convert, c0, c1, c2, c3) = try!(converter(src_fmt, tgt_fmt));
 
-    let src_linesize = w * src_fmt.bytes_pp();
-    let tgt_linesize = w * tgt_fmt.bytes_pp();
-    let mut result = vec![0u8; h * tgt_linesize];
+    let src_linesz = w * src_fmt.channels();
+    let tgt_linesz = w * tgt_fmt.channels();
+    let mut result = vec![0u8; h * tgt_linesz];
 
     let mut si = 0;
     let mut ti = 0;
     for _j in (0 .. h) {
-        convert(&data[si .. si+src_linesize], &mut result[ti .. ti+tgt_linesize],
+        convert(&data[si .. si+src_linesz], &mut result[ti .. ti+tgt_linesz],
                 c0, c1, c2, c3);
-        si += src_linesize;
-        ti += tgt_linesize;
+        si += src_linesz;
+        ti += tgt_linesz;
     }
 
     Ok(Image {
@@ -268,7 +268,7 @@ impl ColFmt {
         }
     }
 
-    fn bytes_pp(&self) -> usize {
+    fn channels(&self) -> usize {
         use self::ColFmt::*;
         match *self {
             Auto                      => 0,
@@ -342,7 +342,7 @@ fn converter(src_fmt: ColFmt, tgt_fmt: ColFmt)
         | (AY, BGRA)
         | (AY, ARGB)
         | (AY, ABGR)            => Ok((any_ya_to_any_rgba, syi, sai, tci, tai)),
-        (RGB, Y) | (BGR, Y)     => Ok((any_rgba_to_y, sri, sgi, sbi, src_fmt.bytes_pp())),
+        (RGB, Y) | (BGR, Y)     => Ok((any_rgba_to_y, sri, sgi, sbi, src_fmt.channels())),
         (RGB, YA) | (BGR, YA)
         | (RGB, AY) | (BGR, AY) => Ok((any_rgb_to_any_ya, sri, sgi, sbi, tai)),
         (RGB, BGR) | (BGR, RGB) => Ok((rgb_to_bgr, 0, 0, 0, 0)),
@@ -357,7 +357,7 @@ fn converter(src_fmt: ColFmt, tgt_fmt: ColFmt)
         (RGBA, Y)
         | (BGRA, Y)
         | (ARGB, Y)
-        | (ABGR, Y)             => Ok((any_rgba_to_y, sri, sgi, sbi, src_fmt.bytes_pp())),
+        | (ABGR, Y)             => Ok((any_rgba_to_y, sri, sgi, sbi, src_fmt.channels())),
         (RGBA, YA)
         | (BGRA, YA)
         | (ARGB, YA)
@@ -471,12 +471,12 @@ fn any_ya_to_any_rgba(src: &[u8], tgt: &mut[u8], syi: usize, sai: usize, tci: us
 }
 
 fn any_rgba_to_y(src: &[u8], tgt: &mut[u8], ri: usize, gi: usize, bi: usize,
-                                                            bytes_pp: usize)
+                                                            channels: usize)
 {
     let mut s = 0;
     for tb in tgt {
         *tb = luminance(src[s+ri], src[s+gi], src[s+bi]);
-        s += bytes_pp;
+        s += channels;
     }
 }
 

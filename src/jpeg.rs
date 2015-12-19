@@ -675,7 +675,7 @@ fn nextbit<R: Read>(stream: &mut R, mut cb: u8, mut bits_left: usize)
 }
 
 fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> ::Result<Vec<u8>> {
-    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
+    let tgt_bytespp = dc.tgt_fmt.channels();
     let mut result = vec![0u8; dc.w * dc.h * tgt_bytespp];
 
     let (yi, ri, gi, bi, ai) = dc.tgt_fmt.indices_yrgba();
@@ -871,7 +871,7 @@ fn upsample_luma<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], li: usize, ai: 
     let mut y0i = 0;
 
     let mut di = 0;
-    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
+    let tgt_bytespp = dc.tgt_fmt.channels();
 
     for _ in 0 .. dc.h {
         let mut x0 = x0_step * 0.5;
@@ -910,7 +910,7 @@ fn upsample<R: Read>(dc: &JpegDecoder<R>, result: &mut[u8], ri: usize, gi: usize
     let x2_step = dc.comps[2].sfx as f32 / dc.hmax as f32;
 
     let mut di = 0;
-    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
+    let tgt_bytespp = dc.tgt_fmt.channels();
 
     for _j in 0 .. dc.h {
         let mut x0 = x0_step * 0.5;

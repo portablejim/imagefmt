@@ -216,11 +216,11 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
                                        _ => (false, 0),
         };
 
-    let (palette, mut depaletted_line) =
+    let (palette, mut depaletted) =
         if paletted {
-            let mut palette = vec![0u8; palette_length * pe_fmt.bytes_pp()];
+            let mut palette = vec![0u8; palette_length * pe_fmt.channels()];
             try!(reader.read_exact_(&mut palette[..]));
-            (palette, vec![0u8; hdr.width as usize * pe_fmt.bytes_pp()])
+            (palette, vec![0u8; hdr.width as usize * pe_fmt.channels()])
         } else {
             (Vec::new(), Vec::new())
         };
@@ -238,56 +238,55 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
     let (convert, c0, c1, c2, c3) =
         try!(converter(if paletted { pe_fmt } else { ColFmt::BGRA }, tgt_fmt));
 
-    let src_linesize = hdr.width as usize * bytes_pp;  // without padding
-    let src_pad = 3 - ((src_linesize-1) % 4);
-    let tgt_bytespp = tgt_fmt.bytes_pp();
-    let tgt_linesize = (hdr.width as usize * tgt_bytespp) as isize;
+    let src_linesz = hdr.width as usize * bytes_pp;  // without padding
+    let src_pad = 3 - ((src_linesz-1) % 4);
+    let tgt_bytespp = tgt_fmt.channels();
+    let tgt_linesz = (hdr.width as usize * tgt_bytespp) as isize;
 
     let (tgt_stride, mut ti): (isize, isize) =
         if hdr.height < 0 {
-            (tgt_linesize, 0)
+            (tgt_linesz, 0)
         } else {
-            (-tgt_linesize, (hdr.height-1) * tgt_linesize)
+            (-tgt_linesz, (hdr.height-1) * tgt_linesz)
         };
 
-    let mut src_line_buf = vec![0u8; src_linesize + src_pad];
-    let mut bgra_line_buf = vec![0u8; if paletted { 0 } else { hdr.width as usize * 4 }];
+    let mut src_line = vec![0u8; src_linesz + src_pad];
+    let mut bgra_line = vec![0u8; if paletted { 0 } else { hdr.width as usize * 4 }];
     let mut result =
         vec![0u8; hdr.width as usize * hdr.height.abs() as usize * tgt_bytespp];
 
     for _ in (0 .. hdr.height.abs()) {
-        try!(reader.read_exact_(&mut src_line_buf[..]));
-        let src_line = &src_line_buf[..src_linesize];
+        try!(reader.read_exact_(&mut src_line[..]));
+        let src_line = &src_line[..src_linesz];
 
         if paletted {
-            let ps = pe_fmt.bytes_pp();
+            let ps = pe_fmt.channels();
             let mut di = 0;
             for &idx in src_line {
                 if idx as usize > palette_length {
                     return Err(::Error::InvalidData("palette index"));
                 }
                 let idx = idx as usize * ps;
-                copy_memory(&palette[idx .. idx+ps], &mut depaletted_line[di .. di+ps]);
+                copy_memory(&palette[idx .. idx+ps], &mut depaletted[di .. di+ps]);
                 if ps == 4 {
-                    depaletted_line[di+3] = 255;
+                    depaletted[di+3] = 255;
                 }
                 di += ps;
             }
-            convert(&depaletted_line, &mut result[ti as usize..(ti+tgt_linesize) as usize],
+            convert(&depaletted, &mut result[ti as usize..(ti+tgt_linesz) as usize],
                     c0, c1, c2, c3);
         } else {
             let mut si = 0;
             let mut di = 0;
             while si < src_line.len() {
-                bgra_line_buf[di + 0] = src_line[si + bluei];
-                bgra_line_buf[di + 1] = src_line[si + greeni];
-                bgra_line_buf[di + 2] = src_line[si + redi];
-                bgra_line_buf[di + 3] = if alpha_masked { src_line[si + alphai] }
-                                                   else { 255 };
+                bgra_line[di + 0] = src_line[si + bluei];
+                bgra_line[di + 1] = src_line[si + greeni];
+                bgra_line[di + 2] = src_line[si + redi];
+                bgra_line[di + 3] = if alpha_masked { src_line[si + alphai] } else { 255 };
                 si += bytes_pp;
                 di += 4;
             }
-            convert(&bgra_line_buf, &mut result[ti as usize..(ti+tgt_linesize) as usize],
+            convert(&bgra_line, &mut result[ti as usize..(ti+tgt_linesz) as usize],
                     c0, c1, c2, c3);
         }
 
@@ -312,11 +311,11 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
                                                                         -> ::Result<()>
 {
     if src_fmt == ColFmt::Auto { return Err(::Error::InvalidArg("invalid format")) }
-    let stride = src_stride.unwrap_or(w * src_fmt.bytes_pp());
+    let stride = src_stride.unwrap_or(w * src_fmt.channels());
 
     if w < 1 || h < 1 || 0x7fff < w || 0x7fff < h
-    || (src_stride.is_none() && src_fmt.bytes_pp() * w * h != data.len())
-    || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.bytes_pp()) {
+    || (src_stride.is_none() && src_fmt.channels() * w * h != data.len())
+    || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.channels()) {
         return Err(::Error::InvalidArg("dimensions or data length"))
     }
 
@@ -332,10 +331,10 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
     };
 
     let dib_size = 108;
-    let tgt_linesize = w * tgt_fmt.bytes_pp();
-    let pad = 3 - ((tgt_linesize-1) & 3);
+    let tgt_linesz = w * tgt_fmt.channels();
+    let pad = 3 - ((tgt_linesz-1) & 3);
     let idat_offset = 14 + dib_size;       // bmp file header + dib header
-    let filesize = idat_offset + h * (tgt_linesize + pad);
+    let filesize = idat_offset + h * (tgt_linesz + pad);
     if filesize > 0xffff_ffff {
         return Err(::Error::InvalidData("image too large"))
     }
@@ -350,7 +349,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
     try!(writer.write_all(&u32_to_le(w as u32)[..]));
     try!(writer.write_all(&u32_to_le(h as u32)[..]));       // positive -> bottom-up
     try!(writer.write_all(&u16_to_le(1)[..]));              // planes
-    try!(writer.write_all(&u16_to_le((tgt_fmt.bytes_pp() * 8) as u16)[..])); // bpp
+    try!(writer.write_all(&u16_to_le((tgt_fmt.channels() * 8) as u16)[..])); // bpp
     try!(writer.write_all(&u32_to_le(if tgt_has_alpha { CMP_BITS } else { CMP_RGB })));
     try!(writer.write_all(&[0u8; 5 * 4]));   // rest of DibV1
     if tgt_has_alpha {
@@ -367,13 +366,13 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
 
     let (convert, c0, c1, c2, c3) = try!(converter(src_fmt, tgt_fmt));
 
-    let mut tgt_line = vec![0u8; tgt_linesize + pad];
-    let src_linesize = w * src_fmt.bytes_pp();
+    let mut tgt_line = vec![0u8; tgt_linesz + pad];
+    let src_linesz = w * src_fmt.channels();
     let mut si = h * stride;
 
     for _ in (0 .. h) {
         si -= stride;
-        convert(&data[si .. si + src_linesize], &mut tgt_line[..tgt_linesize],
+        convert(&data[si .. si + src_linesz], &mut tgt_line[..tgt_linesz],
                 c0, c1, c2, c3);
         try!(writer.write_all(&tgt_line));
     }

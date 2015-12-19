@@ -166,25 +166,25 @@ fn parse_header(hdr: &TgaHeader) -> ::Result<TgaInfo> {
 }
 
 fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> ::Result<Vec<u8>> {
-    let tgt_linesize = (dc.w * dc.tgt_fmt.bytes_pp()) as isize;
-    let src_linesize = dc.w * dc.src_fmt.bytes_pp();
+    let tgt_linesz = (dc.w * dc.tgt_fmt.channels()) as isize;
+    let src_linesz = dc.w * dc.src_fmt.channels();
 
-    let mut src_line = vec![0u8; src_linesize];
-    let mut result = vec![0u8; dc.w * dc.h * dc.tgt_fmt.bytes_pp()];
+    let mut src_line = vec![0u8; src_linesz];
+    let mut result = vec![0u8; dc.h * dc.w * dc.tgt_fmt.channels()];
 
     let (tgt_stride, mut ti): (isize, isize) =
         if dc.origin_at_top {
-            (tgt_linesize, 0)
+            (tgt_linesz, 0)
         } else {
-            (-tgt_linesize, (dc.h-1) as isize * tgt_linesize)
+            (-tgt_linesz, (dc.h-1) as isize * tgt_linesz)
         };
 
     let (convert, c0, c1, c2, c3) = try!(converter(dc.src_fmt, dc.tgt_fmt));
 
     if !dc.rle {
         for _j in (0 .. dc.h) {
-            try!(dc.stream.read_exact_(&mut src_line[0..src_linesize]));
-            convert(&src_line[..], &mut result[ti as usize..(ti+tgt_linesize) as usize],
+            try!(dc.stream.read_exact_(&mut src_line[0..src_linesz]));
+            convert(&src_line[..], &mut result[ti as usize..(ti+tgt_linesz) as usize],
                     c0, c1, c2, c3);
             ti += tgt_stride;
         }
@@ -193,21 +193,21 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> ::Result<Vec<u8>> {
 
     // ---- RLE ----
 
-    let bytes_pp = dc.src_fmt.bytes_pp();
-    let mut rbuf = vec![0u8; src_linesize];
+    let bytes_pp = dc.src_fmt.channels();
+    let mut rbuf = vec![0u8; src_linesz];
     let mut plen = 0;    // packet length
     let mut its_rle = false;
 
     for _ in (0 .. dc.h) {
         // fill src_line with uncompressed data
-        let mut wanted: usize = src_linesize;
+        let mut wanted: usize = src_linesz;
         while 0 < wanted {
             if plen == 0 {
                 let hdr = try!(dc.stream.read_u8()) as usize;
                 its_rle = 0 < (hdr & 0x80);
                 plen = ((hdr & 0x7f) + 1) * bytes_pp;
             }
-            let gotten: usize = src_linesize - wanted;
+            let gotten: usize = src_linesz - wanted;
             let copysize: usize = min(plen, wanted);
             if its_rle {
                 try!(dc.stream.read_exact_(&mut rbuf[0..bytes_pp]));
@@ -223,7 +223,7 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> ::Result<Vec<u8>> {
             plen -= copysize;
         }
 
-        convert(&src_line[..], &mut result[ti as usize .. (ti+tgt_linesize) as usize],
+        convert(&src_line[..], &mut result[ti as usize .. (ti+tgt_linesz) as usize],
                 c0, c1, c2, c3);
         ti += tgt_stride;
     }
@@ -274,11 +274,11 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
                                                                         -> ::Result<()>
 {
     if src_fmt == ColFmt::Auto { return Err(::Error::InvalidArg("invalid format")) }
-    let stride = src_stride.unwrap_or(w * src_fmt.bytes_pp());
+    let stride = src_stride.unwrap_or(w * src_fmt.channels());
 
     if w < 1 || h < 1 || 0xffff < w || 0xffff < h
-    || (src_stride.is_none() && src_fmt.bytes_pp() * w * h != data.len())
-    || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.bytes_pp()) {
+    || (src_stride.is_none() && src_fmt.channels() * w * h != data.len())
+    || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.channels()) {
         return Err(::Error::InvalidArg("invalid dimensions or data length"))
     }
 
@@ -324,7 +324,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
 
 fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
     use self::TgaDataType::*;
-    let (data_type, has_alpha) = match ec.tgt_fmt.bytes_pp() {
+    let (data_type, has_alpha) = match ec.tgt_fmt.channels() {
         1 => (if ec.rle { GrayRLE      } else { Gray      }, false),
         2 => (if ec.rle { GrayRLE      } else { Gray      }, true),
         3 => (if ec.rle { TrueColorRLE } else { TrueColor }, false),
@@ -341,7 +341,7 @@ fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
         0, 0, 0, 0,
         w[0], w[1],
         h[0], h[1],
-        (ec.tgt_fmt.bytes_pp() * 8) as u8,
+        (ec.tgt_fmt.channels() * 8) as u8,
         if has_alpha {8u8} else {0u8},  // flags
     ];
 
@@ -350,9 +350,9 @@ fn write_header<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
 }
 
 fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
-    let src_linesize = ec.w * ec.src_fmt.bytes_pp();
-    let tgt_linesize = ec.w * ec.tgt_fmt.bytes_pp();
-    let mut tgt_line = vec![0u8; tgt_linesize];
+    let src_linesz = ec.w * ec.src_fmt.channels();
+    let tgt_linesz = ec.w * ec.tgt_fmt.channels();
+    let mut tgt_line = vec![0u8; tgt_linesz];
     let mut si = ec.h as usize * ec.src_stride;
 
     let (convert, c0, c1, c2, c3) = try!(converter(ec.src_fmt, ec.tgt_fmt));
@@ -360,7 +360,7 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
     if !ec.rle {
         for _ in (0 .. ec.h) {
             si -= ec.src_stride; // origin at bottom
-            convert(&ec.data[si..si+src_linesize], &mut tgt_line[..],
+            convert(&ec.data[si..si+src_linesz], &mut tgt_line[..],
                     c0, c1, c2, c3);
             try!(ec.stream.write_all(&tgt_line[..]));
         }
@@ -369,14 +369,14 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
 
     // ----- RLE -----
 
-    let max_packets_per_line = (tgt_linesize+127) / 128;
-    let mut cmp_buf = vec![0u8; tgt_linesize+max_packets_per_line];
+    let max_packets_per_line = (tgt_linesz+127) / 128;
+    let mut cmp_buf = vec![0u8; tgt_linesz+max_packets_per_line];
     for _ in (0 .. ec.h) {
         si -= ec.src_stride;
-        convert(&ec.data[si .. si+src_linesize], &mut tgt_line[..],
+        convert(&ec.data[si .. si+src_linesz], &mut tgt_line[..],
                 c0, c1, c2, c3);
         let compressed_line =
-            rle_compress(&tgt_line[..], &mut cmp_buf[..], ec.w, ec.tgt_fmt.bytes_pp());
+            rle_compress(&tgt_line[..], &mut cmp_buf[..], ec.w, ec.tgt_fmt.channels());
         try!(ec.stream.write_all(&compressed_line[..]));
     }
     return Ok(());

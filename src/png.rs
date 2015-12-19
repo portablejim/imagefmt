@@ -286,16 +286,14 @@ fn depalettize(src: &[u8], palette: &[u8], dst: &mut[u8]) {
 fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &[u8])
                                                                  -> ::Result<Vec<u8>>
 {
-    let filter_step = if dc.src_indexed { 1 } else { dc.src_fmt.bytes_pp() };
-    let tgt_bytespp = dc.tgt_fmt.bytes_pp();
-    let tgt_linesize = dc.w * tgt_bytespp;
+    let filter_step = if dc.src_indexed { 1 } else { dc.src_fmt.channels() };
+    let max_src_linesz = dc.w * filter_step;
+    let tgt_chans = dc.tgt_fmt.channels();
 
-    let mut result = vec![0u8; dc.w * dc.h * tgt_bytespp];
-    let mut depaletted_line = if dc.src_indexed {
-        vec![0u8; dc.w * 3]
-    } else {
-        Vec::new()
-    };
+    let mut result = vec![0u8; dc.h * dc.w * tgt_chans];
+    let mut cline = vec![0u8; max_src_linesz+1];   // current line, incl. filter type byte
+    let mut pline = vec![0u8; max_src_linesz+1];   // previous line
+    let mut depaletted = if dc.src_indexed { vec![0u8; dc.w * 3] } else { Vec::new() };
 
     let (convert, c0, c1, c2, c3) = try!(converter(dc.src_fmt, dc.tgt_fmt));
 
@@ -304,31 +302,23 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
 
     match dc.ilace {
         PngInterlace::None => {
-            let src_linesize = dc.w * filter_step;
-            let mut cline = vec![0u8; src_linesize+1];
-            let mut pline = vec![0u8; src_linesize+1];
+            let tgt_linelen = dc.w * tgt_chans;
 
             let mut ti = 0;
             for _j in (0 .. dc.h) {
                 try!(zlib.read_exact_(&mut cline[..]));
                 let filter_type: u8 = cline[0];
 
-                try!(recon(
-                    &mut cline[1 .. src_linesize+1], &pline[1 .. src_linesize+1],
-                    filter_type, filter_step
-                ));
+                try!(recon(&mut cline[1..], &pline[1..], filter_type, filter_step));
 
                 if dc.src_indexed {
-                    depalettize(&cline[1..], &palette, &mut depaletted_line);
-                    convert(&depaletted_line[0 .. src_linesize*3],
-                            &mut result[ti .. ti+tgt_linesize],
-                            c0, c1, c2, c3)
+                    depalettize(&cline[1..], &palette, &mut depaletted);
+                    convert(&depaletted, &mut result[ti..ti+tgt_linelen], c0, c1, c2, c3)
                 } else {
-                    convert(&cline[1..], &mut result[ti .. ti+tgt_linesize],
-                            c0, c1, c2, c3);
+                    convert(&cline[1..], &mut result[ti..ti+tgt_linelen], c0, c1, c2, c3);
                 }
 
-                ti += tgt_linesize;
+                ti += tgt_linelen;
 
                 mem::swap(&mut cline, &mut pline);
             }
@@ -353,19 +343,14 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                 (dc.h + 0) / 2,
             ];
 
-            let max_scanline_size = dc.w * filter_step;
-            let mut linebuf0 = vec![0u8; max_scanline_size+1];
-            let mut linebuf1 = vec![0u8; max_scanline_size+1];
-            let mut redline = vec![0u8; dc.w * tgt_bytespp];
+            let mut redline = vec![0u8; dc.w * tgt_chans];
 
             for pass in (0..7) {
-                let tgt_px: A7IdxTranslator = A7_IDX_TRANSLATORS[pass];   // target pixel
-                let src_linesize = redw[pass] * filter_step;
-
-                let mut cline = &mut linebuf0[0 .. src_linesize+1];
-                let mut pline = &mut linebuf1[0 .. src_linesize+1];
-                // Reset pline to zero for defiltering.
-                for b in &mut pline[..] { *b = 0 }
+                let tgt_px    = A7_IDX_TRANSLATORS[pass];   // target pixel
+                let redlinesz = redw[pass] * filter_step;
+                let mut cline = &mut cline[..redlinesz+1];
+                let mut pline = &mut pline[..redlinesz+1];
+                for b in &mut pline[..] { *b = 0 }  // For defiltering.
 
                 for j in (0 .. redh[pass]) {
                     try!(zlib.read_exact_(&mut cline[..]));
@@ -374,23 +359,21 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                     try!(recon(&mut cline[1..], &pline[1..], filter_type, filter_step));
 
                     if dc.src_indexed {
-                        depalettize(&cline[1..], &palette, &mut depaletted_line);
-                        convert(&depaletted_line[0 .. src_linesize*3],
-                                &mut redline[0..redw[pass] * tgt_bytespp],
+                        depalettize(&cline[1..], &palette, &mut depaletted);
+                        convert(&depaletted[0 .. redw[pass] * 3],
+                                &mut redline[0..redw[pass] * tgt_chans],
                                 c0, c1, c2, c3)
                     } else {
-                        convert(&cline[1..], &mut redline[0..redw[pass] * tgt_bytespp],
+                        convert(&cline[1..], &mut redline[0..redw[pass] * tgt_chans],
                                 c0, c1, c2, c3);
                     }
 
                     let mut redi = 0;
                     for i in (0 .. redw[pass]) {
-                        let tgt = tgt_px(i, j, dc.w) * tgt_bytespp;
-                        copy_memory(
-                            &redline[redi .. redi+tgt_bytespp],
-                            &mut result[tgt .. tgt+tgt_bytespp]
-                        );
-                        redi += tgt_bytespp;
+                        let tgt = tgt_px(i, j, dc.w) * tgt_chans;
+                        copy_memory(&redline[redi .. redi+tgt_chans],
+                                    &mut result[tgt .. tgt+tgt_chans]);
+                        redi += tgt_chans;
                     }
 
                     mem::swap(&mut cline, &mut pline);
@@ -557,11 +540,11 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
                                                                    -> ::Result<()>
 {
     if src_fmt == ColFmt::Auto { return Err(::Error::InvalidArg("invalid format")) }
-    let stride = src_stride.unwrap_or(w * src_fmt.bytes_pp());
+    let stride = src_stride.unwrap_or(w * src_fmt.channels());
 
     if w < 1 || h < 1
-    || (src_stride.is_none() && src_fmt.bytes_pp() * w * h != data.len())
-    || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.bytes_pp()) {
+    || (src_stride.is_none() && src_fmt.channels() * w * h != data.len())
+    || (src_stride.is_some() && data.len() < stride * (h-1) + w * src_fmt.channels()) {
         return Err(::Error::InvalidArg("invalid dimensions or data length"))
     }
 
@@ -584,7 +567,6 @@ pub fn write_chunks<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFm
         stream    : writer,
         w         : w,
         h         : h,
-        src_bytespp : src_fmt.bytes_pp(),
         src_stride: stride,
         src_fmt   : src_fmt,
         tgt_fmt   : tgt_fmt,
@@ -660,7 +642,6 @@ struct PngEncoder<'r, W:'r> {
     stream        : &'r mut W,
     w             : usize,
     h             : usize,
-    src_bytespp   : usize,
     src_stride    : usize,
     tgt_fmt       : ColFmt,
     src_fmt       : ColFmt,
@@ -671,26 +652,26 @@ struct PngEncoder<'r, W:'r> {
 fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> ::Result<()> {
     let (convert, c0, c1, c2, c3) = try!(converter(ec.src_fmt, ec.tgt_fmt));
 
-    let filter_step = ec.tgt_fmt.bytes_pp();
-    let tgt_linesize = ec.w * filter_step + 1;   // +1 for filter type
-    let mut cline = vec![0u8; tgt_linesize];
-    let mut pline = vec![0u8; tgt_linesize];
-    let mut filtered_image = vec![0u8; tgt_linesize * ec.h];
+    let fstep = ec.tgt_fmt.channels();   // filter step
+    let tgt_linesz = ec.w * fstep + 1;   // +1 for filter type
+    let mut cline = vec![0u8; tgt_linesz];
+    let mut pline = vec![0u8; tgt_linesz];
+    let mut filtered_image = vec![0u8; tgt_linesz * ec.h];
 
-    let src_linesize = ec.w * ec.src_bytespp;
+    let src_linesz = ec.w * ec.src_fmt.channels();
 
     let mut si = 0;
     let mut ti = 0;
     while si < ec.h * ec.src_stride {
-        convert(&ec.data[si .. si+src_linesize], &mut cline[1 .. tgt_linesize],
+        convert(&ec.data[si .. si+src_linesz], &mut cline[1 .. tgt_linesz],
                 c0, c1, c2, c3);
 
-        for i in (1 .. filter_step+1) {
+        for i in (1 .. fstep+1) {
             filtered_image[ti+i] = cline[i].wrapping_sub(paeth(0, pline[i], 0));
         }
-        for i in (filter_step+1 .. cline.len()) {
+        for i in (fstep+1 .. cline.len()) {
             filtered_image[ti+i] = cline[i]
-                .wrapping_sub(paeth(cline[i-filter_step], pline[i], pline[i-filter_step]));
+                .wrapping_sub(paeth(cline[i-fstep], pline[i], pline[i-fstep]));
         }
 
         filtered_image[ti] = PngFilter::Paeth as u8;
@@ -698,7 +679,7 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> ::Result<()> {
         mem::swap(&mut cline, &mut pline);
 
         si += ec.src_stride;
-        ti += tgt_linesize;
+        ti += tgt_linesz;
     }
 
     let mut zlibenc = ZlibEncoder::new(&filtered_image[..], Compression::Fast);
