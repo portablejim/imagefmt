@@ -182,7 +182,7 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> ::Result<Vec<u8>> {
     let (convert, c0, c1, c2, c3) = try!(converter(dc.src_fmt, dc.tgt_fmt));
 
     if !dc.rle {
-        for _j in (0 .. dc.h) {
+        for _j in 0 .. dc.h {
             try!(dc.stream.read_exact_(&mut src_line[0..src_linesz]));
             convert(&src_line[..], &mut result[ti as usize..(ti+tgt_linesz) as usize],
                     c0, c1, c2, c3);
@@ -198,7 +198,7 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> ::Result<Vec<u8>> {
     let mut plen = 0;    // packet length
     let mut its_rle = false;
 
-    for _ in (0 .. dc.h) {
+    for _ in 0 .. dc.h {
         // fill src_line with uncompressed data
         let mut wanted: usize = src_linesz;
         while 0 < wanted {
@@ -358,7 +358,7 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
     let (convert, c0, c1, c2, c3) = try!(converter(ec.src_fmt, ec.tgt_fmt));
 
     if !ec.rle {
-        for _ in (0 .. ec.h) {
+        for _ in 0 .. ec.h {
             si -= ec.src_stride; // origin at bottom
             convert(&ec.data[si..si+src_linesz], &mut tgt_line[..],
                     c0, c1, c2, c3);
@@ -371,7 +371,7 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
 
     let max_packets_per_line = (tgt_linesz+127) / 128;
     let mut cmp_buf = vec![0u8; tgt_linesz+max_packets_per_line];
-    for _ in (0 .. ec.h) {
+    for _ in 0 .. ec.h {
         si -= ec.src_stride;
         convert(&ec.data[si .. si+src_linesz], &mut tgt_line[..],
                 c0, c1, c2, c3);

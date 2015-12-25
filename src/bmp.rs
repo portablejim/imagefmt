@@ -255,7 +255,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
     let mut result =
         vec![0u8; hdr.width as usize * hdr.height.abs() as usize * tgt_bytespp];
 
-    for _ in (0 .. hdr.height.abs()) {
+    for _ in 0 .. hdr.height.abs() {
         try!(reader.read_exact_(&mut src_line[..]));
         let src_line = &src_line[..src_linesz];
 
@@ -370,7 +370,7 @@ pub fn write<W: Write>(writer: &mut W, w: usize, h: usize, src_fmt: ColFmt, data
     let src_linesz = w * src_fmt.channels();
     let mut si = h * stride;
 
-    for _ in (0 .. h) {
+    for _ in 0 .. h {
         si -= stride;
         convert(&data[si .. si + src_linesz], &mut tgt_line[..tgt_linesz],
                 c0, c1, c2, c3);

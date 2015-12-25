@@ -223,7 +223,7 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
 
     let mut si = 0;
     let mut ti = 0;
-    for _j in (0 .. h) {
+    for _j in 0 .. h {
         convert(&data[si .. si+src_linesz], &mut result[ti .. ti+tgt_linesz],
                 c0, c1, c2, c3);
         si += src_linesz;

@@ -346,7 +346,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
     match dc.ilace {
         PngInterlace::None => {
             let mut ti = 0;
-            for _j in (0 .. dc.h) {
+            for _j in 0 .. dc.h {
                 try!(zlib.read_exact_(&mut cline[..]));
                 let filter_type: u8 = cline[0];
 
@@ -398,14 +398,14 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
             let mut redline8  = if dc.tgt_bpc == 8 { vec![0u8; tgtlen] } else { Vec::new() };
             let mut redline16 = if dc.tgt_bpc == 16 { vec![0u16; tgtlen] } else { Vec::new() };
 
-            for pass in (0..7) {
+            for pass in 0..7 {
                 let tgt_px    = A7_IDX_TRANSLATORS[pass];   // target pixel
                 let redlinesz = redw[pass] * filter_step;
                 let mut cline = &mut cline[..redlinesz+1];
                 let mut pline = &mut pline[..redlinesz+1];
                 for b in &mut pline[..] { *b = 0 }  // For defiltering.
 
-                for j in (0 .. redh[pass]) {
+                for j in 0 .. redh[pass] {
                     try!(zlib.read_exact_(&mut cline[..]));
                     let filter_type: u8 = cline[0];
 
@@ -426,7 +426,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                             convert8(&cline8[..redw[pass] * src_chans],
                                      &mut redline8[0..redw[pass] * tgt_chans],
                                      c0, c1, c2, c3);
-                            for i in (0 .. redw[pass]) {
+                            for i in 0 .. redw[pass] {
                                 let tgt = tgt_px(i, j, dc.w) * tgt_chans;
                                 copy_memory(&redline8[redi .. redi+tgt_chans],
                                             &mut result8[tgt .. tgt+tgt_chans]);
@@ -437,7 +437,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                             convert16(&cline16[..redw[pass] * src_chans],
                                       &mut redline16[0..redw[pass] * tgt_chans],
                                       c0, c1, c2, c3);
-                            for i in (0 .. redw[pass]) {
+                            for i in 0 .. redw[pass] {
                                 let tgt = tgt_px(i, j, dc.w) * tgt_chans;
                                 copy_memory(&redline16[redi .. redi+tgt_chans],
                                             &mut result16[tgt .. tgt+tgt_chans]);
@@ -537,7 +537,7 @@ fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> ::Result<()>
             => { }
         Some(PngFilter::Sub) => {
             unsafe {
-                for k in (fstep .. cline.len()) {
+                for k in fstep .. cline.len() {
                     *cline.get_unchecked_mut(k) =
                         (*cline.get_unchecked(k))
                         .wrapping_add(*cline.get_unchecked(k-fstep));
@@ -556,7 +556,7 @@ fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> ::Result<()>
                 *c = c.wrapping_add(p / 2);
             }
             unsafe {
-                for k in (fstep .. cline.len()) {
+                for k in fstep .. cline.len() {
                     *cline.get_unchecked_mut(k) = (*cline.get_unchecked(k))
                         .wrapping_add(((*cline.get_unchecked(k-fstep) as u32
                                     + *pline.get_unchecked(k) as u32) / 2) as u8);
@@ -568,7 +568,7 @@ fn recon(cline: &mut[u8], pline: &[u8], ftype: u8, fstep: usize) -> ::Result<()>
                 *c = c.wrapping_add(paeth(0, p, 0));
             }
             unsafe {
-                for k in (fstep .. cline.len()) {
+                for k in fstep .. cline.len() {
                     *cline.get_unchecked_mut(k) =
                         (*cline.get_unchecked(k)).wrapping_add(
                             paeth(*cline.get_unchecked(k-fstep),
@@ -774,10 +774,10 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> ::Result<()> {
         convert(&ec.data[si .. si+src_linesz], &mut cline[1 .. tgt_linesz],
                 c0, c1, c2, c3);
 
-        for i in (1 .. fstep+1) {
+        for i in 1 .. fstep+1 {
             filtered_image[ti+i] = cline[i].wrapping_sub(paeth(0, pline[i], 0));
         }
-        for i in (fstep+1 .. cline.len()) {
+        for i in fstep+1 .. cline.len() {
             filtered_image[ti+i] = cline[i]
                 .wrapping_sub(paeth(cline[i-fstep], pline[i], pline[i-fstep]));
         }

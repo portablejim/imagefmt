@@ -258,7 +258,7 @@ fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 
         // compute total number of huffman codes
         let mut mt = 0;
-        for i in (1..17) {
+        for i in 1..17 {
             mt += buf[i] as usize;
         }
         if 256 < mt {
@@ -285,8 +285,8 @@ fn derive_table(table: &mut HuffTab, num_values: &[u8]) {
     let mut sizes = [0u8; 257];
 
     let mut k = 0;
-    for i in (0..16) {
-        for _j in (0 .. num_values[i]) {
+    for i in 0..16 {
+        for _j in 0 .. num_values[i] {
             sizes[k] = (i + 1) as u8;
             k += 1;
         }
@@ -321,14 +321,14 @@ fn derive_mincode_maxcode_valptr(mincode: &mut[i16; 16], maxcode: &mut[i16; 16],
                                  valptr:  &mut[i16; 16], codes: &[i16; 256],
                                  num_values: &[u8])
 {
-    for i in (0..16) {
+    for i in 0..16 {
         mincode[i] = -1;
         maxcode[i] = -1;
         valptr[i] = -1;
     }
 
     let mut j = 0;
-    for i in (0..16) {
+    for i in 0..16 {
         if num_values[i] != 0 {
             valptr[i] = j as i16;
             mincode[i] = codes[j];
@@ -381,7 +381,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut mcu_du = 0; // data units in one mcu
     try!(dc.stream.read_exact_(&mut buf[0 .. dc.num_comps*3]));
 
-    for i in (0 .. dc.num_comps) {
+    for i in 0 .. dc.num_comps {
         let ci = buf[i*3] as usize;
 
         // JFIF says ci should be i+1, but there are images where ci is i. Normalize ids
@@ -417,7 +417,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     }
     if 10 < mcu_du { return Err(::Error::InvalidData("du count")) }
 
-    for i in (0 .. dc.num_comps) {
+    for i in 0 .. dc.num_comps {
         dc.comps[i].x = (dc.w as f64 * dc.comps[i].sfx as f64 / dc.hmax as f64).ceil() as usize;
         dc.comps[i].y = (dc.h as f64 * dc.comps[i].sfy as f64 / dc.vmax as f64).ceil() as usize;
     }
@@ -443,7 +443,7 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut compbuf = vec![0u8; len-3];
     try!(dc.stream.read_exact_(&mut compbuf));
 
-    for i in (0 .. num_scan_comps) {
+    for i in 0 .. num_scan_comps {
         let ci = (compbuf[i*2] as i32 - if dc.correct_comp_ids { 1 } else { 0 }) as usize;
 
         if ci >= dc.num_comps {
@@ -483,17 +483,17 @@ fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 
     let mut block = [0i16; 64];
 
-    for mcu_j in (0 .. dc.num_mcu_y) {
-        for mcu_i in (0 .. dc.num_mcu_x) {
+    for mcu_j in 0 .. dc.num_mcu_y {
+        for mcu_i in 0 .. dc.num_mcu_x {
 
             // decode mcu
-            for c in (0 .. dc.num_comps) {
+            for c in 0 .. dc.num_comps {
                 let comp_sfx = dc.comps[c].sfx;
                 let comp_sfy = dc.comps[c].sfy;
                 let comp_qtab = dc.comps[c].qtable;
 
-                for du_j in (0 .. comp_sfy) {
-                    for du_i in (0 .. comp_sfx) {
+                for du_j in 0 .. comp_sfy {
+                    for du_i in 0 .. comp_sfx {
                         // decode entropy, dequantize & dezigzag
                         try!(decode_block(dc, c, comp_qtab, &mut block));
 
@@ -530,7 +530,7 @@ fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
                 // reset decoder
                 dc.cb = 0;
                 dc.bits_left = 0;
-                for k in (0 .. dc.num_comps) {
+                for k in 0 .. dc.num_comps {
                     dc.comps[k].pred = 0;
                 }
             }
@@ -637,7 +637,7 @@ fn decode_huff<R: Read>(dc: &mut JpegDecoder<R>, tab_idx: usize, dctab: bool)
 fn receive_and_extend<R: Read>(dc: &mut JpegDecoder<R>, s: u8) -> ::Result<i16> {
     // receive
     let mut symbol = 0;
-    for _ in (0 .. s) {
+    for _ in 0 .. s {
         let (nb, cb, bits_left) = try!(nextbit(dc.stream, dc.cb, dc.bits_left));
         dc.cb = cb;
         dc.bits_left = bits_left;
@@ -706,7 +706,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> ::Result<Vec<u8>> {
 
                 let mut s = 0;
                 let mut di = 0;
-                for j in (0 .. dc.h) {
+                for j in 0 .. dc.h {
                     let mi = j / dc.comps[0].sfy;
                     let si = if mi == 0 || mi >= (dc.h-1)/dc.comps[0].sfy { mi }
                                                          else { mi - 1 + s * 2 };
@@ -722,7 +722,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> ::Result<Vec<u8>> {
                              &dc.comps[2].data[cl1 .. cl1 + dc.comps[2].x],
                              &mut comp2[..]);
 
-                    for i in (0 .. dc.w) {
+                    for i in 0 .. dc.w {
                         let pixel = ycbcr_to_rgb(
                             dc.comps[0].data[j * dc.num_mcu_x * dc.comps[0].sfx * 8 + i],
                             comp1[i],
@@ -754,8 +754,8 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> ::Result<Vec<u8>> {
             let mut si = 0;
             let mut di = 0;
             if dc.tgt_fmt.has_alpha() == Some(true) {
-                for _j in (0 .. dc.h) {
-                    for i in (0 .. dc.w) {
+                for _j in 0 .. dc.h {
+                    for i in 0 .. dc.w {
                         result[di+yi] = comp.data[si+i];
                         result[di+ai] = 255;
                         di += 2;
@@ -763,7 +763,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> ::Result<Vec<u8>> {
                     si += dc.num_mcu_x * comp.sfx * 8;
                 }
             } else {    // FmtY
-                for _j in (0 .. dc.h) {
+                for _j in 0 .. dc.h {
                     copy_memory(&comp.data[si..si+dc.w], &mut result[di..di+dc.w]);
                     si += dc.num_mcu_x * comp.sfx * 8;
                     di += dc.w;
@@ -776,8 +776,8 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> ::Result<Vec<u8>> {
             let comp = &dc.comps[0];
             let mut si = 0;
             let mut di = 0;
-            for _j in (0 .. dc.h) {
-                for i in (0 .. dc.w) {
+            for _j in 0 .. dc.h {
+                for i in 0 .. dc.w {
                     result[di+ri] = comp.data[si+i];
                     result[di+gi] = comp.data[si+i];
                     result[di+bi] = comp.data[si+i];
@@ -810,7 +810,7 @@ fn upsample_h2_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
     result[1] = mix(line0[0], line0[1], line1[0], line1[1]);
 
     let mut di = 2;
-    for i in (1 .. line0.len()) {
+    for i in 1 .. line0.len() {
         result[di] = mix(line0[i], line0[i-1], line1[i], line1[i-1]);
         di += 1;
         if i == line0.len()-1 {
@@ -833,7 +833,7 @@ fn upsample_h2_v1(line0: &[u8], _line1: &[u8], result: &mut[u8]) {
                  + line0[1] as u32 * 1
                  + 2) / 4) as u8;
     let mut di = 2;
-    for i in (1 .. line0.len()) {
+    for i in 1 .. line0.len() {
         result[di] = (( line0[i-1] as u32 * 1
                       + line0[i+0] as u32 * 3
                       + 2) / 4) as u8;
@@ -850,7 +850,7 @@ fn upsample_h2_v1(line0: &[u8], _line1: &[u8], result: &mut[u8]) {
 }
 
 fn upsample_h1_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
-    for i in (0 .. result.len()) {
+    for i in 0 .. result.len() {
         result[i] = (( line0[i] as u32 * 3
                      + line1[i] as u32 * 1
                      + 2) / 4) as u8;
@@ -974,7 +974,7 @@ unsafe fn stbi_idct_block(mut dst: *mut u8, dst_stride: usize, data: &[i16]) {
     let mut v: [i32; 64] = [0; 64];
 
     // columns
-    for i in (0 .. 8) {
+    for i in 0 .. 8 {
         if d[i+ 8]==0 && d[i+16]==0 && d[i+24]==0 && d[i+32]==0 &&
            d[i+40]==0 && d[i+48]==0 && d[i+56]==0 {
             let dcterm = (d[i] as i32) << 2;
