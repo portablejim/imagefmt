@@ -25,11 +25,13 @@
 //!     let _info = imagefmt::read_info("hiisi.png").unwrap();
 //! }
 //! ```
-//! There are format specific functions that might offer more flexibility. When directly
-//! using the format specific write functions, set the last argument to `None` to write
-//! the whole image. To write only a region of the image, see source code for
-//! `write_region` for an example. Reading and writing in-memory images can be done using
-//! [`std::io::Cursor`](https://doc.rust-lang.org/std/io/struct.Cursor.html).
+//! There are also format specific read and write functions which are more flexible.  With
+//! the write functions, set the last argument to `None` to write the whole image or see
+//! source code for `write_region` for an example to write only a region.  Use
+//! [`std::io::Cursor`](https://doc.rust-lang.org/std/io/struct.Cursor.html) to read and
+//! write in-memory images.
+
+#![warn(trivial_numeric_casts)]
 
 use std::ffi::OsStr;
 use std::fs::{File};

@@ -353,7 +353,7 @@ fn write_image_data<W: Write>(ec: &mut TgaEncoder<W>) -> ::Result<()> {
     let src_linesz = ec.w * ec.src_fmt.channels();
     let tgt_linesz = ec.w * ec.tgt_fmt.channels();
     let mut tgt_line = vec![0u8; tgt_linesz];
-    let mut si = ec.h as usize * ec.src_stride;
+    let mut si = ec.h * ec.src_stride;
 
     let (convert, c0, c1, c2, c3) = try!(converter(ec.src_fmt, ec.tgt_fmt));
 
