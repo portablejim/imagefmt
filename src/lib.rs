@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2015 Tero Hänninen
+// Copyright (c) 2014-2016 Tero Hänninen
 //
 //! # Example
 //!
@@ -14,9 +14,6 @@
 //!     let pic = imagefmt::read("marbles.tga", ColFmt::Auto).unwrap();
 //!
 //!     // write image out as grayscale
-//!     pic.write("out.png", ColType::Gray).unwrap();
-//!
-//!     // there's also a free function that doesn't require an Image
 //!     imagefmt::write("out.tga", pic.w, pic.h, pic.fmt, &pic.buf,
 //!                                                  ColType::Gray)
 //!                                                      .unwrap();
@@ -238,22 +235,6 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
         fmt : tgt_fmt,
         buf : result,
     })
-}
-
-impl Image {
-    /// Writes an image and converts it to requested color type.
-    #[inline]
-    pub fn write<P>(&self, filepath: P, tgt_type: ColType) -> ::Result<()>
-            where P: AsRef<Path>
-    {
-        write(filepath, self.w, self.h, self.fmt, &self.buf, tgt_type)
-    }
-
-    /// Converts the image into a new allocation.
-    #[inline]
-    pub fn convert(&self, tgt_fmt: ColFmt) -> ::Result<Image> {
-        convert(self.w, self.h, self.fmt, &self.buf, tgt_fmt)
-    }
 }
 
 impl ColFmt {
