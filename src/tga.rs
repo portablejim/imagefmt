@@ -82,7 +82,7 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
 ///
 /// Passing `ColFmt::Auto` as req_fmt converts the data to one of `Y`, `YA`, `RGB`,
 /// `RGBA`.
-pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image<u8>> {
     let hdr = try!(read_header(reader));
 
     if 0 < hdr.palette_type { return Err(::Error::Unsupported("paletted TGAs not supported")) }
@@ -118,7 +118,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
         tgt_fmt        : tgt_fmt,
     };
 
-    Ok(Image {
+    Ok(Image::<u8> {
         w   : dc.w,
         h   : dc.h,
         fmt : dc.tgt_fmt,

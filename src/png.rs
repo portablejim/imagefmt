@@ -3,11 +3,11 @@
 extern crate flate2;
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::iter::{repeat};
-use std::mem;
+use std::mem::{self, size_of};
 use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
 use super::{
-    Image, Image16, Info, ColFmt, ColType,
+    Image, Info, ColFmt, ColType, Sample,
     copy_memory, converter,
     u32_to_be, u32_from_be, IFRead,
 };
@@ -85,45 +85,53 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to one of `Y`, `YA`, `RGB`,
 /// `RGBA`.  Paletted images are auto-depaletted.
 #[inline]
-pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
-    let (image, _) = try!(read_chunks(reader, req_fmt, &[]));
-    Ok(image)
+pub fn read<R, T>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image<T>>
+        where R: Read+Seek, T: Sample, Buffer: ToVec<T>
+{
+    Ok(try!(read_chunks(reader, req_fmt, &[])).0)
 }
 
 /// Like `png::read` but also returns the requested extension chunks.
 ///
 /// If the requested chunks are not present they are ignored.
-pub fn read_chunks<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
-                                                      -> ::Result<(Image, Vec<ExtChunk>)>
+pub fn read_chunks<R, T>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]])
+                                            -> ::Result<(Image<T>, Vec<ExtChunk>)>
+        where R: Read+Seek, T: Sample, Buffer: ToVec<T>
 {
-    let dc = &mut try!(init_decoder(reader, req_fmt, 8));
+    let dc = &mut try!(init_decoder(reader, req_fmt, size_of::<T>() * 8));
     let (buf, chunks) = try!(decode(dc, chunk_names));
     Ok((Image {
        w  : dc.w,
        h  : dc.h,
        fmt: dc.tgt_fmt,
-       buf: match buf { Buffer::Bpc8(b) => b, _ => return Err(::Error::Internal("bug")) }
+       buf: try!(buf.vec()),
     }, chunks))
 }
 
-/// Returns an image with 16-bit channels and the requested extension chunks.
-///
-/// If the requested chunks are not present they are ignored. Images with less than 16
-/// bits per channel are converted to 16 bits.
-pub fn read16_chunks<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, chunks: &[[u8; 4]])
-                                                  -> ::Result<(Image16, Vec<ExtChunk>)>
-{
-    let dc = &mut try!(init_decoder(reader, req_fmt, 16));
-    let (buf, chunks) = try!(decode(dc, chunks));
-    Ok((Image16 {
-       w  : dc.w,
-       h  : dc.h,
-       fmt: dc.tgt_fmt,
-       buf: match buf { Buffer::Bpc16(b) => b, _ => return Err(::Error::Internal("bug")) }
-    }, chunks))
+/// This is only public because it's used as a bound in pub items.
+pub trait ToVec<T: Sample> {
+    fn vec(self) -> ::Result<Vec<T>>;
 }
 
-fn init_decoder<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, req_bpc: i32)
+impl ToVec<u8> for Buffer {
+    fn vec(self) -> ::Result<Vec<u8>> {
+        match self {
+            Buffer::Bpc8(b) => Ok(b),
+            _ => return Err(::Error::Internal("bug")),
+        }
+    }
+}
+
+impl ToVec<u16> for Buffer {
+    fn vec(self) -> ::Result<Vec<u16>> {
+        match self {
+            Buffer::Bpc16(b) => Ok(b),
+            _ => return Err(::Error::Internal("bug")),
+        }
+    }
+}
+
+fn init_decoder<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, req_bpc: usize)
                                                   -> ::Result<PngDecoder<R>>
 {
     let hdr = try!(read_header(reader));
@@ -157,7 +165,7 @@ fn init_decoder<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, req_bpc: i32)
         w           : hdr.width as usize,
         h           : hdr.height as usize,
         ilace       : ilace,
-        src_bpc     : hdr.bit_depth as i32,
+        src_bpc     : hdr.bit_depth as usize,
         tgt_bpc     : req_bpc,
         src_indexed : hdr.color_type == PngColortype::Idx as u8,
         src_fmt     : src_fmt,
@@ -172,8 +180,8 @@ struct PngDecoder<'r, R:'r> {
     w             : usize,
     h             : usize,
     ilace         : PngInterlace,
-    src_bpc       : i32,    // bits per channel
-    tgt_bpc       : i32,
+    src_bpc       : usize,    // bits per channel
+    tgt_bpc       : usize,
     src_indexed   : bool,
     src_fmt       : ColFmt,
     tgt_fmt       : ColFmt,
@@ -455,7 +463,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
     Ok(if dc.tgt_bpc == 8 { Buffer::Bpc8(result8) } else { Buffer::Bpc16(result16) })
 }
 
-fn bpc8_from_bytes(src: &[u8], bpc: i32, tgt: &mut[u8]) {
+fn bpc8_from_bytes(src: &[u8], bpc: usize, tgt: &mut[u8]) {
     match bpc {
         8 => copy_memory(&src, &mut tgt[..src.len()]),  // This copy is unnecessary, but
                                                         // it's hard to find nice way to
@@ -473,7 +481,7 @@ fn bpc8_from_bytes(src: &[u8], bpc: i32, tgt: &mut[u8]) {
     }
 }
 
-fn bpc16_from_bytes(src: &[u8], bpc: i32, tgt: &mut[u16]) {
+fn bpc16_from_bytes(src: &[u8], bpc: usize, tgt: &mut[u16]) {
     match bpc {
         8 => {
             for k in 0..src.len() {

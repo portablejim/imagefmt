@@ -45,20 +45,11 @@ use std::ptr;
 
 /// Image struct returned from the read functions.
 #[derive(Clone)]
-pub struct Image {
+pub struct Image<T> {
     pub w   : usize,
     pub h   : usize,
     pub fmt : ColFmt,
-    pub buf : Vec<u8>,
-}
-
-/// Image with 16-bit channels.
-#[derive(Clone)]
-pub struct Image16 {
-    pub w   : usize,
-    pub h   : usize,
-    pub fmt : ColFmt,
-    pub buf : Vec<u16>,
+    pub buf : Vec<T>,
 }
 
 /// Holds basic info about an image.
@@ -123,7 +114,7 @@ pub fn read_info_from<R: Read+Seek>(r: &mut R) -> ::Result<Info> {
 ///
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to one of `Y`, `YA`, `RGB`,
 /// `RGBA`.
-pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> ::Result<Image> {
+pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> ::Result<Image<u8>> {
     let file = try!(File::open(filepath));
     let reader = &mut BufReader::new(file);
     read_from(reader, req_fmt)
@@ -133,7 +124,7 @@ pub fn read<P: AsRef<Path>>(filepath: P, req_fmt: ColFmt) -> ::Result<Image> {
 ///
 /// To read in-memory images use
 /// [`std::io::Cursor`](https://doc.rust-lang.org/std/io/struct.Cursor.html).
-pub fn read_from<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
+pub fn read_from<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image<u8>> {
     if      cfg!(feature = "png") && png::detect(reader) { png::read(reader, req_fmt) }
     else if cfg!(feature = "jpeg") && jpeg::detect(reader) { jpeg::read(reader, req_fmt) }
     else if cfg!(feature = "bmp") && bmp::detect(reader) { bmp::read(reader, req_fmt) }
@@ -192,8 +183,9 @@ type WriteFn =
                                                                -> ::Result<()>;
 
 /// Converts the image into a new allocation.
-pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt)
-                                                               -> ::Result<Image>
+pub fn convert<T>(w: usize, h: usize, src_fmt: ColFmt, data: &[T], tgt_fmt: ColFmt)
+                                                            -> ::Result<Image<T>>
+        where T: Sample
 {
     if w < 1 || h < 1 || src_fmt.channels() * w * h != data.len() {
         return Err(::Error::InvalidArg("invalid dimensions or data length"))
@@ -204,9 +196,9 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
     }
 
     if tgt_fmt == src_fmt || tgt_fmt == ColFmt::Auto {
-        let mut result = vec![0u8; data.len()];
+        let mut result = vec![T::zero(); data.len()];
         copy_memory(data, &mut result[..]);
-        return Ok(Image {
+        return Ok(Image::<T> {
             w   : w,
             h   : h,
             fmt : src_fmt,
@@ -214,11 +206,11 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
         })
     }
 
-    let (convert, c0, c1, c2, c3) = try!(converter(src_fmt, tgt_fmt));
+    let (convert, c0, c1, c2, c3) = try!(converter::<T>(src_fmt, tgt_fmt));
 
     let src_linesz = w * src_fmt.channels();
     let tgt_linesz = w * tgt_fmt.channels();
-    let mut result = vec![0u8; h * tgt_linesz];
+    let mut result = vec![T::zero(); h * tgt_linesz];
 
     let mut si = 0;
     let mut ti = 0;
@@ -229,7 +221,7 @@ pub fn convert(w: usize, h: usize, src_fmt: ColFmt, data: &[u8], tgt_fmt: ColFmt
         ti += tgt_linesz;
     }
 
-    Ok(Image {
+    Ok(Image::<T> {
         w   : w,
         h   : h,
         fmt : tgt_fmt,
@@ -299,19 +291,23 @@ impl ColType {
 
 // ------------------------------------------------------------
 
-trait Sample : Copy {
+/// This is only public because it's used as a bound in pub items.
+pub trait Sample : Copy {
+    fn zero() -> Self;
     fn max_value() -> Self;
     fn as_f32(self) -> f32;
     fn from_f32(f32) -> Self;
 }
 
 impl Sample for u8 {
+    #[inline] fn zero() -> Self { 0 }
     #[inline] fn max_value() -> Self { Self::max_value() }
     #[inline] fn as_f32(self) -> f32 { self as f32 }
     #[inline] fn from_f32(s: f32) -> Self { s as Self }
 }
 
 impl Sample for u16 {
+    #[inline] fn zero() -> Self { 0 }
     #[inline] fn max_value() -> Self { Self::max_value() }
     #[inline] fn as_f32(self) -> f32 { self as f32 }
     #[inline] fn from_f32(s: f32) -> Self { s as Self }
@@ -723,14 +719,14 @@ fn copy_memory<T>(src: &[T], dst: &mut[T]) {
     }
 }
 
-impl Debug for Image {
+impl Debug for Image<u8> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "Image {{ w: {:?}, h: {:?}, fmt: {:?}, buf: [{} bytes] }}",
                self.w, self.h, self.fmt, self.buf.len())
     }
 }
 
-impl Debug for Image16 {
+impl Debug for Image<u16> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "Image16 {{ w: {:?}, h: {:?}, fmt: {:?}, buf: [{} * 2 bytes] }}",
                self.w, self.h, self.fmt, self.buf.len())

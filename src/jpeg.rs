@@ -65,7 +65,7 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
 /// Reads an image and converts it to requested format.
 ///
 /// Passing `ColFmt::Auto` as `req_fmt` converts the data to `Y` or `RGB`.
-pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image<u8>> {
 
     let dc = &mut JpegDecoder {
         stream      : reader,
@@ -109,7 +109,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
         comp.data = vec![0u8; dc.num_mcu_x*comp.sfx*8*dc.num_mcu_y*comp.sfy*8];
     }
 
-    Ok(Image {
+    Ok(Image::<u8> {
         w   : dc.w,
         h   : dc.h,
         fmt : dc.tgt_fmt,

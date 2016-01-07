@@ -1,7 +1,7 @@
 extern crate imagefmt;
 use imagefmt::{Image, ColFmt};
 
-fn equal(pics: &[&Image]) -> bool {
+fn equal(pics: &[&Image<u8>]) -> bool {
     if pics.len() < 2 { assert!(false) }
     let a = pics[0];
     for &b in &pics[1..] {

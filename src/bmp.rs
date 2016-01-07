@@ -153,7 +153,7 @@ const CMP_BITS: u32       = 3;
 ///
 /// Passing `ColFmt::Auto` as req_fmt converts the data to `RGB` or `RGBA`. The DIB
 /// headers BITMAPV4HEADER and BITMAPV5HEADER are ignored if present.
-pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
+pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image<u8>> {
     let hdr = try!(read_header(reader));
 
     if hdr.width < 1 || hdr.height == 0 {
@@ -293,7 +293,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image> {
         ti += tgt_stride;
     }
 
-    Ok(Image {
+    Ok(Image::<u8> {
         w   : hdr.width as usize,
         h   : hdr.height.abs() as usize,
         fmt : tgt_fmt,
