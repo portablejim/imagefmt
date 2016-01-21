@@ -1,7 +1,7 @@
 extern crate imagefmt;
 use imagefmt::{Image, ColFmt};
 
-fn equal(pics: &[&Image<u8>]) -> bool {
+fn equal<T: PartialEq>(pics: &[&Image<T>]) -> bool {
     if pics.len() < 2 { assert!(false) }
     let a = pics[0];
     for &b in &pics[1..] {
@@ -44,43 +44,42 @@ fn png_tga_bmp() {
 #[test]
 fn conversions() {
     // Not exhaustive...
-
     let a = imagefmt::read("tests/pngsuite/basn6a08.png", ColFmt::RGBA).unwrap();
-    let b = imagefmt::convert(a.w, a.h, a.fmt, &a.buf, ColFmt::BGRA).unwrap();
-    let b = imagefmt::convert(b.w, b.h, b.fmt, &b.buf, ColFmt::ARGB).unwrap();
-    let b = imagefmt::convert(b.w, b.h, b.fmt, &b.buf, ColFmt::ABGR).unwrap();
-    let b = imagefmt::convert(b.w, b.h, b.fmt, &b.buf, ColFmt::RGBA).unwrap();
+    let b = a.convert(ColFmt::BGRA).unwrap();
+    let b = b.convert(ColFmt::ARGB).unwrap();
+    let b = b.convert(ColFmt::ABGR).unwrap();
+    let b = b.convert(ColFmt::RGBA).unwrap();
     assert!(equal(&[&a, &b]));
-    let c = imagefmt::convert(a.w, a.h, a.fmt, &a.buf, ColFmt::RGB).unwrap();
-    let d = imagefmt::convert(a.w, a.h, a.fmt, &a.buf, ColFmt::BGR).unwrap();
-    let e = imagefmt::convert(d.w, d.h, d.fmt, &d.buf, ColFmt::RGB).unwrap();
+    let c = a.convert(ColFmt::RGB).unwrap();
+    let d = a.convert(ColFmt::BGR).unwrap();
+    let e = d.convert(ColFmt::RGB).unwrap();
     assert!(equal(&[&c, &e]));
-    let ay = imagefmt::convert(a.w, a.h, a.fmt, &a.buf, ColFmt::AY).unwrap();
-    let ya = imagefmt::convert(b.w, b.h, b.fmt, &b.buf, ColFmt::YA).unwrap();
-    let b = imagefmt::convert(ya.w, ya.h, ya.fmt, &ya.buf, ColFmt::AY).unwrap();
+    let ay = a.convert(ColFmt::AY).unwrap();
+    let ya = b.convert(ColFmt::YA).unwrap();
+    let b = ya.convert(ColFmt::AY).unwrap();
     assert!(equal(&[&ay, &b]));
-    let b = imagefmt::convert(b.w, b.h, b.fmt, &b.buf, ColFmt::Y).unwrap();
-    let c = imagefmt::convert(c.w, c.h, c.fmt, &c.buf, ColFmt::Y).unwrap();
-    let d = imagefmt::convert(d.w, d.h, d.fmt, &d.buf, ColFmt::Y).unwrap();
-    let g = imagefmt::convert(a.w, a.h, a.fmt, &a.buf, ColFmt::Y).unwrap();
+    let b = b.convert(ColFmt::Y).unwrap();
+    let c = c.convert(ColFmt::Y).unwrap();
+    let d = d.convert(ColFmt::Y).unwrap();
+    let g = a.convert(ColFmt::Y).unwrap();
     assert!(equal(&[&b, &c, &d, &g]));
 
     // From gray to color+alpha.
-    let rgba = imagefmt::convert(g.w, g.h, g.fmt, &g.buf, ColFmt::RGBA).unwrap();
+    let rgba = g.convert(ColFmt::RGBA).unwrap();
     for &fmt in &[ColFmt::BGRA, ColFmt::ARGB, ColFmt::ABGR] {
-        let ca = imagefmt::convert(g.w, g.h, g.fmt, &g.buf, fmt).unwrap();
-        let ca = imagefmt::convert(ca.w, ca.h, ca.fmt, &ca.buf, ColFmt::RGBA).unwrap();
+        let ca = g.convert(fmt).unwrap();
+        let ca = ca.convert(ColFmt::RGBA).unwrap();
         assert!(equal(&[&ca, &rgba]));
     }
 
     // From gray+alpha to color+alpha.
-    let rgba0 = imagefmt::convert(ya.w, ya.h, ya.fmt, &ya.buf, ColFmt::RGBA).unwrap();
-    let rgba1 = imagefmt::convert(ay.w, ay.h, ay.fmt, &ay.buf, ColFmt::RGBA).unwrap();
+    let rgba0 = ya.convert(ColFmt::RGBA).unwrap();
+    let rgba1 = ay.convert(ColFmt::RGBA).unwrap();
     for &fmt in &[ColFmt::BGRA, ColFmt::ARGB, ColFmt::ABGR] {
-        let ca0 = imagefmt::convert(ya.w, ya.h, ya.fmt, &ya.buf, fmt).unwrap();
-        let ca0 = imagefmt::convert(ca0.w, ca0.h, ca0.fmt, &ca0.buf, ColFmt::RGBA).unwrap();
-        let ca1 = imagefmt::convert(ay.w, ay.h, ay.fmt, &ay.buf, fmt).unwrap();
-        let ca1 = imagefmt::convert(ca1.w, ca1.h, ca1.fmt, &ca1.buf, ColFmt::RGBA).unwrap();
+        let ca0 = ya.convert(fmt).unwrap();
+        let ca0 = ca0.convert(ColFmt::RGBA).unwrap();
+        let ca1 = ay.convert(fmt).unwrap();
+        let ca1 = ca1.convert(ColFmt::RGBA).unwrap();
         assert!(equal(&[&ca0, &ca1, &rgba0, &rgba1]));
     }
 }

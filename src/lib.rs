@@ -182,51 +182,51 @@ type WriteFn =
     fn(&mut BufWriter<File>, usize, usize, ColFmt, &[u8], ColType, Option<usize>)
                                                                -> ::Result<()>;
 
-/// Converts the image into a new allocation.
-pub fn convert<T>(w: usize, h: usize, src_fmt: ColFmt, data: &[T], tgt_fmt: ColFmt)
-                                                            -> ::Result<Image<T>>
-        where T: Sample
-{
-    if w < 1 || h < 1 || src_fmt.channels() * w * h != data.len() {
-        return Err(::Error::InvalidArg("invalid dimensions or data length"))
-    }
+impl<T: Sample> Image<T> {
+    /// Converts the image into a new allocation.
+    pub fn convert(&self, tgt_fmt: ColFmt) -> ::Result<Image<T>> {
+        if self.w < 1 || self.h < 1
+        || self.fmt.channels() * self.w * self.h != self.buf.len() {
+            return Err(::Error::InvalidArg("invalid dimensions or data length"))
+        }
 
-    if src_fmt == ColFmt::Auto {
-        return Err(::Error::InvalidArg("can't convert from unknown source format"))
-    }
+        if self.fmt == ColFmt::Auto {
+            return Err(::Error::InvalidArg("can't convert from unknown source format"))
+        }
 
-    if tgt_fmt == src_fmt || tgt_fmt == ColFmt::Auto {
-        let mut result = vec![T::zero(); data.len()];
-        copy_memory(data, &mut result[..]);
-        return Ok(Image::<T> {
-            w   : w,
-            h   : h,
-            fmt : src_fmt,
+        if tgt_fmt == self.fmt || tgt_fmt == ColFmt::Auto {
+            let mut result = vec![T::zero(); self.buf.len()];
+            copy_memory(&self.buf, &mut result[..]);
+            return Ok(Image::<T> {
+                w   : self.w,
+                h   : self.h,
+                fmt : self.fmt,
+                buf : result,
+            })
+        }
+
+        let (convert, c0, c1, c2, c3) = try!(converter::<T>(self.fmt, tgt_fmt));
+
+        let src_linesz = self.w * self.fmt.channels();
+        let tgt_linesz = self.w * tgt_fmt.channels();
+        let mut result = vec![T::zero(); self.h * tgt_linesz];
+
+        let mut si = 0;
+        let mut ti = 0;
+        for _ in 0 .. self.h {
+            convert(&self.buf[si .. si+src_linesz], &mut result[ti .. ti+tgt_linesz],
+                    c0, c1, c2, c3);
+            si += src_linesz;
+            ti += tgt_linesz;
+        }
+
+        Ok(Image::<T> {
+            w   : self.w,
+            h   : self.h,
+            fmt : tgt_fmt,
             buf : result,
         })
     }
-
-    let (convert, c0, c1, c2, c3) = try!(converter::<T>(src_fmt, tgt_fmt));
-
-    let src_linesz = w * src_fmt.channels();
-    let tgt_linesz = w * tgt_fmt.channels();
-    let mut result = vec![T::zero(); h * tgt_linesz];
-
-    let mut si = 0;
-    let mut ti = 0;
-    for _j in 0 .. h {
-        convert(&data[si .. si+src_linesz], &mut result[ti .. ti+tgt_linesz],
-                c0, c1, c2, c3);
-        si += src_linesz;
-        ti += tgt_linesz;
-    }
-
-    Ok(Image::<T> {
-        w   : w,
-        h   : h,
-        fmt : tgt_fmt,
-        buf : result,
-    })
 }
 
 impl ColFmt {
