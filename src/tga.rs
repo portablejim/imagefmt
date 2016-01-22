@@ -42,7 +42,7 @@ pub fn read_info<R: Read>(reader: &mut R) -> ::Result<Info> {
 /// The fields are not parsed into enums or anything like that.
 fn read_header<R: Read>(reader: &mut R) -> ::Result<TgaHeader> {
     let mut buf = [0u8; 18];
-    try!(reader.read_exact_(&mut buf));
+    try!(reader.read_exact(&mut buf));
 
     let hdr = TgaHeader {
         id_length      : buf[0],
@@ -183,7 +183,7 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> ::Result<Vec<u8>> {
 
     if !dc.rle {
         for _j in 0 .. dc.h {
-            try!(dc.stream.read_exact_(&mut src_line[0..src_linesz]));
+            try!(dc.stream.read_exact(&mut src_line[0..src_linesz]));
             convert(&src_line[..], &mut result[ti as usize..(ti+tgt_linesz) as usize],
                     c0, c1, c2, c3);
             ti += tgt_stride;
@@ -210,14 +210,14 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> ::Result<Vec<u8>> {
             let gotten: usize = src_linesz - wanted;
             let copysize: usize = min(plen, wanted);
             if its_rle {
-                try!(dc.stream.read_exact_(&mut rbuf[0..bytes_pp]));
+                try!(dc.stream.read_exact(&mut rbuf[0..bytes_pp]));
                 let mut p = gotten;
                 while p < gotten+copysize {
                     copy_memory(&rbuf[0..bytes_pp], &mut src_line[p..p+bytes_pp]);
                     p += bytes_pp;
                 }
             } else {    // it's raw
-                try!(dc.stream.read_exact_(&mut src_line[gotten..gotten+copysize]));
+                try!(dc.stream.read_exact(&mut src_line[gotten..gotten+copysize]));
             }
             wanted -= copysize;
             plen -= copysize;

@@ -644,7 +644,6 @@ fn luminance<T: Sample>(r: T, g: T, b: T) -> T {
 
 trait IFRead {
     fn read_u8(&mut self) -> io::Result<u8>;
-    fn read_exact_(&mut self, buf: &mut[u8]) -> io::Result<()>;
 }
 
 impl<R: Read> IFRead for R {
@@ -655,18 +654,6 @@ impl<R: Read> IFRead for R {
             Ok(n) if n == 1 => Ok(buf[0]),
             _               => Err(io::Error::new(ErrorKind::Other, "not enough data")),
         }
-    }
-
-    fn read_exact_(&mut self, buf: &mut[u8]) -> io::Result<()> {
-        let mut ready = 0;
-        while ready < buf.len() {
-            let got = try!(self.read(&mut buf[ready..]));
-            if got == 0 {
-                return Err(io::Error::new(ErrorKind::Other, "not enough data"))
-            }
-            ready += got;
-        }
-        Ok(())
     }
 }
 

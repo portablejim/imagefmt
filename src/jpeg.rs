@@ -14,23 +14,23 @@ pub fn read_info<R: Read+Seek>(reader: &mut R) -> ::Result<Info> {
     let mut marker = [0u8; 2];
 
     // SOI
-    try!(reader.read_exact_(&mut marker));
+    try!(reader.read_exact(&mut marker));
     if &marker[0..2] != &[0xff, 0xd8_u8][..] {
         return Err(::Error::InvalidData("not JPEG"))
     }
 
     loop {
-        try!(reader.read_exact_(&mut marker));
+        try!(reader.read_exact(&mut marker));
 
         if marker[0] != 0xff { return Err(::Error::InvalidData("no marker")) }
         while marker[1] == 0xff {
-            try!(reader.read_exact_(&mut marker[1..2]));
+            try!(reader.read_exact(&mut marker[1..2]));
         }
 
         match marker[1] {
             SOF0 | SOF2 => {
                 let mut tmp = [0u8; 8];
-                try!(reader.read_exact_(&mut tmp));
+                try!(reader.read_exact(&mut tmp));
                 return Ok(Info {
                     w: u16_from_be(&tmp[5..7]) as usize,
                     h: u16_from_be(&tmp[3..5]) as usize,
@@ -44,7 +44,7 @@ pub fn read_info<R: Read+Seek>(reader: &mut R) -> ::Result<Info> {
             SOS | EOI => return Err(::Error::InvalidData("no frame header")),
             DRI | DHT | DQT | COM | APP0 ... APPF => {
                 let mut tmp = [0u8; 2];
-                try!(reader.read_exact_(&mut tmp));
+                try!(reader.read_exact(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]);
                 if len < 2 { return Err(::Error::InvalidData("marker length")) }
                 try!(reader.seek(SeekFrom::Current(len as i64 - 2)));
@@ -171,18 +171,18 @@ struct Component {
 fn read_markers<R: Read+Seek>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut marker = [0u8; 2];
     // SOI
-    try!(dc.stream.read_exact_(&mut marker));
+    try!(dc.stream.read_exact(&mut marker));
     if &marker[0..2] != &[0xff, 0xd8_u8][..] {
         return Err(::Error::InvalidData("not JPEG"))
     }
 
     let mut has_next_scan_header = false;
     while !has_next_scan_header && !dc.eoi_reached {
-        try!(dc.stream.read_exact_(&mut marker));
+        try!(dc.stream.read_exact(&mut marker));
 
         if marker[0] != 0xff { return Err(::Error::InvalidData("no marker")) }
         while marker[1] == 0xff {
-            try!(dc.stream.read_exact_(&mut marker[1..2]));
+            try!(dc.stream.read_exact(&mut marker[1..2]));
         }
 
         //println!("marker: 0x{:x}", marker[1]);
@@ -207,7 +207,7 @@ fn read_markers<R: Read+Seek>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
             EOI => dc.eoi_reached = true,
             APP0 ... APPF | COM => {
                 let mut tmp = [0u8; 2];
-                try!(dc.stream.read_exact_(&mut tmp));
+                try!(dc.stream.read_exact(&mut tmp));
                 let len = u16_from_be(&mut tmp[..]);
                 if len < 2 { return Err(::Error::InvalidData("invalid data length")) }
                 try!(dc.stream.seek(SeekFrom::Current(len as i64 - 2)));
@@ -243,13 +243,13 @@ const EOI: u8 = 0xd9;     // end of image
 
 fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 17];
-    try!(dc.stream.read_exact_(&mut buf[0..2]));
+    try!(dc.stream.read_exact(&mut buf[0..2]));
     let mut len = u16_from_be(&buf[0..2]) as isize;
     if len < 2 { return Err(::Error::InvalidData("invalid data length (DHT)")) }
     len -= 2;
 
     while 0 < len {
-        try!(dc.stream.read_exact_(&mut buf[0..17]));  // info byte and BITS
+        try!(dc.stream.read_exact(&mut buf[0..17]));  // info byte and BITS
         let table_class = buf[0] >> 4;            // 0 = dc table, 1 = ac table
         let table_slot = (buf[0] & 0xf) as usize;  // must be 0 or 1 for baseline
         if 1 < table_slot || 1 < table_class {
@@ -266,10 +266,10 @@ fn read_huffman_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
         }
 
         if table_class == 0 {
-            try!(dc.stream.read_exact_(&mut dc.dc_tables[table_slot].values[0..mt]));
+            try!(dc.stream.read_exact(&mut dc.dc_tables[table_slot].values[0..mt]));
             derive_table(&mut dc.dc_tables[table_slot], &buf[1..17]);
         } else {
-            try!(dc.stream.read_exact_(&mut dc.ac_tables[table_slot].values[0..mt]));
+            try!(dc.stream.read_exact(&mut dc.ac_tables[table_slot].values[0..mt]));
             derive_table(&mut dc.ac_tables[table_slot], &buf[1..17]);
         }
 
@@ -341,7 +341,7 @@ fn derive_mincode_maxcode_valptr(mincode: &mut[i16; 16], maxcode: &mut[i16; 16],
 
 fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 2];
-    try!(dc.stream.read_exact_(&mut buf[0..2]));
+    try!(dc.stream.read_exact(&mut buf[0..2]));
     let mut len = u16_from_be(&buf[0..2]) as usize;
     if len < 2 { return Err(::Error::InvalidData("invalid data length (DQT)")) }
     len -= 2;
@@ -350,13 +350,13 @@ fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     }
 
     while 0 < len {
-        try!(dc.stream.read_exact_(&mut buf[0..1]));
+        try!(dc.stream.read_exact(&mut buf[0..1]));
         let precision = buf[0] >> 4;  // 0 = 8 bit, 1 = 16 bit
         let table_slot = (buf[0] & 0xf) as usize;
         if 3 < table_slot || precision != 0 {   // only 8 bit for baseline
             return Err(::Error::InvalidData("table slot or precision"))
         }
-        try!(dc.stream.read_exact_(&mut dc.qtables[table_slot][0..64]));
+        try!(dc.stream.read_exact(&mut dc.qtables[table_slot][0..64]));
         len -= 65;
     }
     Ok(())
@@ -364,7 +364,7 @@ fn read_quantization_tables<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 
 fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 9];
-    try!(dc.stream.read_exact_(&mut buf[0..8]));
+    try!(dc.stream.read_exact(&mut buf[0..8]));
     let len = u16_from_be(&buf[0..2]) as usize;
     let precision = buf[2];
     dc.h = u16_from_be(&buf[3..5]) as usize;
@@ -379,7 +379,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     dc.hmax = 0;
     dc.vmax = 0;
     let mut mcu_du = 0; // data units in one mcu
-    try!(dc.stream.read_exact_(&mut buf[0 .. dc.num_comps*3]));
+    try!(dc.stream.read_exact(&mut buf[0 .. dc.num_comps*3]));
 
     for i in 0 .. dc.num_comps {
         let ci = buf[i*3] as usize;
@@ -432,7 +432,7 @@ fn read_frame_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 
 fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 3];
-    try!(dc.stream.read_exact_(&mut buf));
+    try!(dc.stream.read_exact(&mut buf));
     let len = u16_from_be(&buf[0..2]) as usize;
     let num_scan_comps = buf[2] as usize;
 
@@ -441,7 +441,7 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     }
 
     let mut compbuf = vec![0u8; len-3];
-    try!(dc.stream.read_exact_(&mut compbuf));
+    try!(dc.stream.read_exact(&mut compbuf));
 
     for i in 0 .. num_scan_comps {
         let ci = (compbuf[i*2] as i32 - if dc.correct_comp_ids { 1 } else { 0 }) as usize;
@@ -464,7 +464,7 @@ fn read_scan_header<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 
 fn read_restart_interval<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
     let mut buf = [0u8; 4];
-    try!(dc.stream.read_exact_(&mut buf));
+    try!(dc.stream.read_exact(&mut buf));
     let len = u16_from_be(&buf[0..2]) as usize;
     if len != 4 { return Err(::Error::InvalidData("restart interval")) }
     dc.restart_interval = u16_from_be(&buf[2..4]) as usize;
@@ -541,7 +541,7 @@ fn decode_scan<R: Read>(dc: &mut JpegDecoder<R>) -> ::Result<()> {
 
 fn read_restart<R: Read>(stream: &mut R) -> ::Result<()> {
     let mut buf = [0u8; 2];
-    try!(stream.read_exact_(&mut buf));
+    try!(stream.read_exact(&mut buf));
     if buf[0] != 0xff || buf[1] < RST0 || RST7 < buf[1] {
         return Err(::Error::InvalidData("reset marker missing"))
     }

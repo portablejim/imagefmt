@@ -8,8 +8,7 @@ use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
 use super::{
     Image, Info, ColFmt, ColType, Sample,
-    copy_memory, converter,
-    u32_to_be, u32_from_be, IFRead,
+    copy_memory, converter, u32_to_be, u32_from_be,
 };
 
 /// Header of a PNG image.
@@ -50,7 +49,7 @@ pub fn read_info<R: Read>(reader: &mut R) -> ::Result<Info> {
 /// The fields are not parsed into enums or anything like that.
 fn read_header<R: Read>(reader: &mut R) -> ::Result<PngHeader> {
     let mut buf = [0u8; 33];  // file header + IHDR
-    try!(reader.read_exact_(&mut buf));
+    try!(reader.read_exact(&mut buf));
 
     if &buf[0..8] != &PNG_FILE_HEADER[..] ||
        &buf[8..16] != b"\0\0\0\x0dIHDR" ||
@@ -74,7 +73,7 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
     let mut buf = [0u8; 8];
     let start = match reader.seek(SeekFrom::Current(0))
         { Ok(s) => s, Err(_) => return false };
-    let result = reader.read_exact_(&mut buf).is_ok()
+    let result = reader.read_exact(&mut buf).is_ok()
               && &buf[0..8] == &PNG_FILE_HEADER[..];
     let _ = reader.seek(SeekFrom::Start(start));
     result
@@ -199,7 +198,7 @@ enum PngStage {
 }
 
 fn read_chunkmeta<R: Read>(dc: &mut PngDecoder<R>) -> ::Result<usize> {
-    try!(dc.stream.read_exact_(&mut dc.chunk_lentype[0..8]));
+    try!(dc.stream.read_exact(&mut dc.chunk_lentype[0..8]));
     let len = u32_from_be(&dc.chunk_lentype[0..4]) as usize;
     if 0x7fff_ffff < len { return Err(::Error::InvalidData("chunk too long")) }
     dc.crc.put(&dc.chunk_lentype[4..8]);   // type
@@ -209,7 +208,7 @@ fn read_chunkmeta<R: Read>(dc: &mut PngDecoder<R>) -> ::Result<usize> {
 #[inline]
 fn readcheck_crc<R: Read>(dc: &mut PngDecoder<R>) -> ::Result<()> {
     let mut tmp = [0u8; 4];
-    try!(dc.stream.read_exact_(&mut tmp));
+    try!(dc.stream.read_exact(&mut tmp));
     if &dc.crc.finish_be()[..] != &tmp[0..4] {
         return Err(::Error::InvalidData("corrupt chunk"))
     }
@@ -247,7 +246,7 @@ fn decode<R: Read+Seek>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                     return Err(::Error::InvalidData("corrupt chunk stream"))
                 }
                 palette = vec![0u8; len];
-                try!(dc.stream.read_exact_(&mut palette));
+                try!(dc.stream.read_exact(&mut palette));
                 dc.crc.put(&palette[..]);
                 try!(readcheck_crc(dc));
                 stage = PlteParsed;
@@ -257,7 +256,7 @@ fn decode<R: Read+Seek>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                     return Err(::Error::InvalidData("corrupt chunk stream"))
                 }
                 let mut crc = [0u8; 4];
-                try!(dc.stream.read_exact_(&mut crc));
+                try!(dc.stream.read_exact(&mut crc));
                 if len != 0 || &crc[0..4] != &[0xae, 0x42, 0x60, 0x82][..] {
                     return Err(::Error::InvalidData("corrupt chunk"))
                 }
@@ -268,7 +267,7 @@ fn decode<R: Read+Seek>(dc: &mut PngDecoder<R>, chunk_names: &[[u8; 4]])
                     let name = [dc.chunk_lentype[4], dc.chunk_lentype[5],
                                 dc.chunk_lentype[6], dc.chunk_lentype[7]];
                     let mut data = vec![0u8; len];
-                    try!(dc.stream.read_exact_(&mut data));
+                    try!(dc.stream.read_exact(&mut data));
                     dc.crc.put(&data[..]);
                     chunks.push(ExtChunk { name: name, data: data });
                     try!(readcheck_crc(dc));
@@ -355,7 +354,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
         PngInterlace::None => {
             let mut ti = 0;
             for _j in 0 .. dc.h {
-                try!(zlib.read_exact_(&mut cline[..]));
+                try!(zlib.read_exact(&mut cline[..]));
                 let filter_type: u8 = cline[0];
 
                 try!(recon(&mut cline[1..], &pline[1..], filter_type, filter_step));
@@ -414,7 +413,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                 for b in &mut pline[..] { *b = 0 }  // For defiltering.
 
                 for j in 0 .. redh[pass] {
-                    try!(zlib.read_exact_(&mut cline[..]));
+                    try!(zlib.read_exact(&mut cline[..]));
                     let filter_type: u8 = cline[0];
 
                     try!(recon(&mut cline[1..], &pline[1..], filter_type, filter_step));
@@ -528,7 +527,7 @@ fn read_idat_chunks<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize)
     loop {
         all.extend(repeat(0).take(*len));
         let start = all.len() - *len;
-        try!(dc.stream.read_exact_(&mut all[start..]));
+        try!(dc.stream.read_exact(&mut all[start..]));
         dc.crc.put(&all[start..]);
         try!(readcheck_crc(dc));
         *len = try!(read_chunkmeta(dc));    // next chunk's len and type

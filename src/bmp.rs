@@ -2,8 +2,7 @@
 
 use std::io::{Read, Write, Seek, SeekFrom};
 use super::{
-    Image, Info, ColFmt, ColType,
-    copy_memory, converter, IFRead,
+    Image, Info, ColFmt, ColType, copy_memory, converter,
     u32_from_le, i32_from_le, u16_from_le, u32_to_le, u16_to_le,
 };
 
@@ -57,7 +56,7 @@ struct DibV2 {
 /// Reads a BMP header.
 fn read_header<R: Read+Seek>(reader: &mut R) -> ::Result<BmpHeader> {
     let mut bmp_header = [0u8; 18]; // bmp header + size of dib header
-    try!(reader.read_exact_(&mut bmp_header[..]));
+    try!(reader.read_exact(&mut bmp_header[..]));
 
     if &bmp_header[0..2] != [0x42, 0x4d] {
         return Err(::Error::InvalidData("corrupt bmp header"))
@@ -75,7 +74,7 @@ fn read_header<R: Read+Seek>(reader: &mut R) -> ::Result<BmpHeader> {
         _ => return Err(::Error::Unsupported("dib version")),
     };
     let mut dib_header = vec![0u8; dib_size-4];
-    try!(reader.read_exact_(&mut dib_header[..]));
+    try!(reader.read_exact(&mut dib_header[..]));
 
     let (width, height, planes, bits_pp) =
         if dib_version == 0 {
@@ -135,7 +134,7 @@ pub fn detect<R: Read+Seek>(reader: &mut R) -> bool {
     let start = match reader.seek(SeekFrom::Current(0))
         { Ok(s) => s, Err(_) => return false };
     let result =
-        reader.read_exact_(&mut bmp_header[..]).is_ok()
+        reader.read_exact(&mut bmp_header[..]).is_ok()
         && &bmp_header[0..2] == [0x42, 0x4d]
         && match u32_from_le(&bmp_header[14..18]) {
             12 | 40 | 52 | 56 | 108 | 124 => true,
@@ -219,7 +218,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image<u8>
     let (palette, mut depaletted) =
         if paletted {
             let mut palette = vec![0u8; palette_length * pe_fmt.channels()];
-            try!(reader.read_exact_(&mut palette[..]));
+            try!(reader.read_exact(&mut palette[..]));
             (palette, vec![0u8; hdr.width as usize * pe_fmt.channels()])
         } else {
             (Vec::new(), Vec::new())
@@ -256,7 +255,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image<u8>
         vec![0u8; hdr.width as usize * hdr.height.abs() as usize * tgt_bytespp];
 
     for _ in 0 .. hdr.height.abs() {
-        try!(reader.read_exact_(&mut src_line[..]));
+        try!(reader.read_exact(&mut src_line[..]));
         let src_line = &src_line[..src_linesz];
 
         if paletted {
