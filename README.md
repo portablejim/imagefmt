@@ -3,6 +3,7 @@
 * [Documentation](http://lgvz.github.io/imagefmt/imagefmt/)
 * Returned data can be converted to Y, YA, RGB, RGBA, etc.
 * All formats are optional via Cargo features (all enabled by default)
+* Requires Rust 1.6 or newer
 
 | Format | Decoder                  | Encoder                           |
 | ---    | ---                      | ---                               |
