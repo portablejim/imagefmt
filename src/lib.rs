@@ -776,7 +776,7 @@ macro_rules! dummy_mod {
             use std::io::{Read, Write};
             pub fn detect<R: Read>(_: &mut R) -> bool { panic!("bug") }
             pub fn read_info<R: Read>(_: &mut R) -> ::Result<Info> { panic!("bug") }
-            pub fn read<R: Read>(_: &mut R, _: ColFmt) -> ::Result<Image> { panic!("bug") }
+            pub fn read<R: Read>(_: &mut R, _: ColFmt) -> ::Result<Image<u8>> { panic!("bug") }
             pub fn write<W: Write>(_: &mut W, _: usize, _: usize, _: ColFmt, _: &[u8],
                          _: ColType, _: Option<usize>) -> ::Result<()> { panic!("bug") }
         }
@@ -787,3 +787,4 @@ macro_rules! dummy_mod {
 #[cfg(not(feature = "tga"))] dummy_mod!(tga);
 #[cfg(not(feature = "bmp"))] dummy_mod!(bmp);
 #[cfg(not(feature = "jpeg"))] dummy_mod!(jpeg);
+#[cfg(debug_assertions)] dummy_mod!(_debug);
