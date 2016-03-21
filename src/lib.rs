@@ -292,6 +292,7 @@ impl ColType {
 // ------------------------------------------------------------
 
 /// This is only public because it's used as a bound in pub items.
+#[doc(hidden)]
 pub trait Sample : Copy {
     fn zero() -> Self;
     fn max_value() -> Self;

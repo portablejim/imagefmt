@@ -108,6 +108,7 @@ pub fn read_chunks<R, T>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]
 }
 
 /// This is only public because it's used as a bound in pub items.
+#[doc(hidden)]
 pub trait ToVec<T: Sample> {
     fn vec(self) -> ::Result<Vec<T>>;
 }
