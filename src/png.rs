@@ -6,10 +6,43 @@ use std::iter::{repeat};
 use std::mem::{self, size_of};
 use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
-use super::{
-    Image, Info, ColFmt, ColType, Sample,
+use {
+    Image, Info, ColFmt, ColType,
     copy_memory, converter, u32_to_be, u32_from_be,
 };
+use internal::Sample;
+use self::internal::{ToVec, Buffer};
+
+mod internal {
+    use ::internal::Sample;
+
+    pub enum Buffer {
+        Bpc8(Vec<u8>),
+        Bpc16(Vec<u16>),
+    }
+
+    pub trait ToVec<T: Sample> {
+        fn vec(self) -> ::Result<Vec<T>>;
+    }
+
+    impl ToVec<u8> for Buffer {
+        fn vec(self) -> ::Result<Vec<u8>> {
+            match self {
+                Buffer::Bpc8(b) => Ok(b),
+                _ => return Err(::Error::Internal("bug")),
+            }
+        }
+    }
+
+    impl ToVec<u16> for Buffer {
+        fn vec(self) -> ::Result<Vec<u16>> {
+            match self {
+                Buffer::Bpc16(b) => Ok(b),
+                _ => return Err(::Error::Internal("bug")),
+            }
+        }
+    }
+}
 
 /// Header of a PNG image.
 #[derive(Debug)]
@@ -105,30 +138,6 @@ pub fn read_chunks<R, T>(reader: &mut R, req_fmt: ColFmt, chunk_names: &[[u8; 4]
        fmt: dc.tgt_fmt,
        buf: try!(buf.vec()),
     }, chunks))
-}
-
-/// This is only public because it's used as a bound in pub items.
-#[doc(hidden)]
-pub trait ToVec<T: Sample> {
-    fn vec(self) -> ::Result<Vec<T>>;
-}
-
-impl ToVec<u8> for Buffer {
-    fn vec(self) -> ::Result<Vec<u8>> {
-        match self {
-            Buffer::Bpc8(b) => Ok(b),
-            _ => return Err(::Error::Internal("bug")),
-        }
-    }
-}
-
-impl ToVec<u16> for Buffer {
-    fn vec(self) -> ::Result<Vec<u16>> {
-        match self {
-            Buffer::Bpc16(b) => Ok(b),
-            _ => return Err(::Error::Internal("bug")),
-        }
-    }
 }
 
 fn init_decoder<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt, req_bpc: usize)
@@ -315,11 +324,6 @@ fn depalettize(src: &[u8], palette: &[u8], dst: &mut[u8]) {
         copy_memory(&palette[pidx..pidx+3], &mut dst[d..d+3]);
         d += 3;
     }
-}
-
-enum Buffer {
-    Bpc8(Vec<u8>),
-    Bpc16(Vec<u16>),
 }
 
 fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &[u8])

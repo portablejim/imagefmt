@@ -38,6 +38,8 @@ use std::fmt::{self, Debug};
 use std::cmp::min;
 use std::ptr;
 
+use internal::Sample;
+
 #[cfg(feature = "png")] pub mod png;
 #[cfg(feature = "tga")] pub mod tga;
 #[cfg(feature = "bmp")] pub mod bmp;
@@ -291,27 +293,28 @@ impl ColType {
 
 // ------------------------------------------------------------
 
-/// This is only public because it's used as a bound in pub items.
-#[doc(hidden)]
-pub trait Sample : Copy {
-    fn zero() -> Self;
-    fn max_value() -> Self;
-    fn as_f32(self) -> f32;
-    fn from_f32(f32) -> Self;
-}
+mod internal {
+    pub trait Sample : Copy {
+        fn zero() -> Self;
+        fn max_value() -> Self;
+        fn as_f32(self) -> f32;
+        fn from_f32(f32) -> Self;
+    }
 
-impl Sample for u8 {
-    #[inline] fn zero() -> Self { 0 }
-    #[inline] fn max_value() -> Self { Self::max_value() }
-    #[inline] fn as_f32(self) -> f32 { self as f32 }
-    #[inline] fn from_f32(s: f32) -> Self { s as Self }
-}
+    impl Sample for u8 {
+        #[inline] fn zero() -> Self { 0 }
+        #[inline] fn max_value() -> Self { Self::max_value() }
+        #[inline] fn as_f32(self) -> f32 { self as f32 }
+        #[inline] fn from_f32(s: f32) -> Self { s as Self }
+    }
 
-impl Sample for u16 {
-    #[inline] fn zero() -> Self { 0 }
-    #[inline] fn max_value() -> Self { Self::max_value() }
-    #[inline] fn as_f32(self) -> f32 { self as f32 }
-    #[inline] fn from_f32(s: f32) -> Self { s as Self }
+    impl Sample for u16 {
+        #[inline] fn zero() -> Self { 0 }
+        #[inline] fn max_value() -> Self { Self::max_value() }
+        #[inline] fn as_f32(self) -> f32 { self as f32 }
+        #[inline] fn from_f32(s: f32) -> Self { s as Self }
+    }
+
 }
 
 type LineConverter<T> = fn(&[T], &mut[T], usize, usize, usize, usize);
