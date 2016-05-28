@@ -2,7 +2,7 @@
 
 use std::io::{Read, Write, Seek, SeekFrom};
 use super::{
-    Image, Info, ColFmt, ColType, copy_memory, converter,
+    Image, Info, ColFmt, ColType, converter,
     u32_from_le, i32_from_le, u16_from_le, u32_to_le, u16_to_le,
 };
 
@@ -266,7 +266,7 @@ pub fn read<R: Read+Seek>(reader: &mut R, req_fmt: ColFmt) -> ::Result<Image<u8>
                     return Err(::Error::InvalidData("palette index"));
                 }
                 let idx = idx as usize * ps;
-                copy_memory(&palette[idx .. idx+ps], &mut depaletted[di .. di+ps]);
+                depaletted[di .. di+ps].copy_from_slice(&palette[idx .. idx+ps]);
                 if ps == 4 {
                     depaletted[di+3] = 255;
                 }

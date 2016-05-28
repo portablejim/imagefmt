@@ -36,7 +36,6 @@ use std::io::{self, Read, Write, BufReader, BufWriter, ErrorKind, Seek, SeekFrom
 use std::path::Path;
 use std::fmt::{self, Debug};
 use std::cmp::min;
-use std::ptr;
 
 use internal::Sample;
 
@@ -198,7 +197,7 @@ impl<T: Sample> Image<T> {
 
         if tgt_fmt == self.fmt || tgt_fmt == ColFmt::Auto {
             let mut result = vec![T::zero(); self.buf.len()];
-            copy_memory(&self.buf, &mut result[..]);
+            result.copy_from_slice(&self.buf);
             return Ok(Image::<T> {
                 w   : self.w,
                 h   : self.h,
@@ -401,7 +400,7 @@ fn converter<T: Sample>(src_fmt: ColFmt, tgt_fmt: ColFmt)
 }
 
 fn copy_line<T: Sample>(src: &[T], tgt: &mut[T], _: usize, _: usize, _: usize, _: usize) {
-    copy_memory(src, tgt)
+    tgt.copy_from_slice(src)
 }
 
 fn y_to_any_ya<T: Sample>(src: &[T], tgt: &mut[T], yi: usize, _: usize, _: usize, ai: usize) {
@@ -700,14 +699,6 @@ fn u32_from_le(buf: &[u8]) -> u32 {
 fn i32_from_le(buf: &[u8]) -> i32 {
     ((buf[3] as u32) << 24 | (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | buf[0] as u32)
         as i32
-}
-
-#[inline]
-fn copy_memory<T>(src: &[T], dst: &mut[T]) {
-    assert!(src.len() == dst.len());
-    unsafe {
-        ptr::copy(src.as_ptr(), dst.as_mut_ptr(), src.len());
-    }
 }
 
 impl Debug for Image<u8> {

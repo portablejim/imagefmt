@@ -3,8 +3,7 @@
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::cmp::min;
 use super::{
-    Image, Info, ColFmt, ColType,
-    copy_memory, converter,
+    Image, Info, ColFmt, ColType, converter,
     u16_to_le, u16_from_le, IFRead,
 };
 
@@ -213,7 +212,7 @@ fn decode<R: Read>(dc: &mut TgaDecoder<R>) -> ::Result<Vec<u8>> {
                 try!(dc.stream.read_exact(&mut rbuf[0..bytes_pp]));
                 let mut p = gotten;
                 while p < gotten+copysize {
-                    copy_memory(&rbuf[0..bytes_pp], &mut src_line[p..p+bytes_pp]);
+                    src_line[p..p+bytes_pp].copy_from_slice(&rbuf[0..bytes_pp]);
                     p += bytes_pp;
                 }
             } else {    // it's raw
@@ -408,10 +407,8 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
             if 128 <= rawlen {  // full packet, need to store it
                 let copysize = 128 * bytes_pp;
                 cmp_buf[cmp_i] = 0x7f; cmp_i += 1;  // packet header
-                copy_memory(
-                    &line[raw_i..raw_i+copysize],
-                    &mut cmp_buf[cmp_i..cmp_i+copysize]
-                );
+                cmp_buf[cmp_i..cmp_i+copysize]
+                    .copy_from_slice(&line[raw_i..raw_i+copysize]);
                 cmp_i += copysize;
                 raw_i += copysize;
                 rawlen -= 128;
@@ -423,10 +420,8 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
                 let copysize = rawlen * bytes_pp;
                 cmp_buf[cmp_i] = (rawlen-1) as u8;    // packet header
                 cmp_i += 1;
-                copy_memory(
-                    &line[raw_i..raw_i+copysize],
-                    &mut cmp_buf[cmp_i..cmp_i+copysize]
-                );
+                cmp_buf[cmp_i..cmp_i+copysize]
+                    .copy_from_slice(&line[raw_i..raw_i+copysize]);
                 cmp_i += copysize;
                 rawlen = 0;
             }
@@ -434,10 +429,8 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
             // store RLE packet
             cmp_buf[cmp_i] = (0x80 | (runlen-1)) as u8;   // packet header
             cmp_i += 1;
-            copy_memory(
-                &px[0..bytes_pp],
-                &mut cmp_buf[cmp_i..cmp_i+bytes_pp]
-            );
+            cmp_buf[cmp_i..cmp_i+bytes_pp]
+                .copy_from_slice(&px[0..bytes_pp]);
             cmp_i += bytes_pp;
             raw_i = i;
         }
@@ -448,10 +441,8 @@ fn rle_compress<'a>(line: &[u8], cmp_buf: &'a mut[u8], w: usize, bytes_pp: usize
         let copysize = rawlen * bytes_pp;
         cmp_buf[cmp_i] = (rawlen-1) as u8;    // packet header
         cmp_i += 1;
-        copy_memory(
-            &line[raw_i..raw_i+copysize],
-            &mut cmp_buf[cmp_i..cmp_i+copysize]
-        );
+        cmp_buf[cmp_i..cmp_i+copysize]
+            .copy_from_slice(&line[raw_i..raw_i+copysize]);
         cmp_i += copysize;
     }
 

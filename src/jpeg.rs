@@ -4,7 +4,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::mem::{zeroed};
 use super::{
     Image, Info, ColFmt, ColType,
-    copy_memory, u16_from_be, IFRead,
+    u16_from_be, IFRead,
 };
 
 // Baseline JPEG decoder
@@ -764,7 +764,7 @@ fn reconstruct<R: Read>(dc: &JpegDecoder<R>) -> ::Result<Vec<u8>> {
                 }
             } else {    // FmtY
                 for _j in 0 .. dc.h {
-                    copy_memory(&comp.data[si..si+dc.w], &mut result[di..di+dc.w]);
+                    result[di..di+dc.w].copy_from_slice(&comp.data[si..si+dc.w]);
                     si += dc.num_mcu_x * comp.sfx * 8;
                     di += dc.w;
                 }
@@ -858,7 +858,7 @@ fn upsample_h1_v2(line0: &[u8], line1: &[u8], result: &mut[u8]) {
 }
 
 fn samples_h1_v1(line0: &[u8], _line1: &[u8], result: &mut[u8]) {
-    copy_memory(line0, result)
+    result.copy_from_slice(line0)
 }
 
 // Nearest neighbor.

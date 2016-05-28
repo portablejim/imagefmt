@@ -8,7 +8,7 @@ use self::flate2::read::{ZlibDecoder, ZlibEncoder};
 use self::flate2::Compression;
 use {
     Image, Info, ColFmt, ColType,
-    copy_memory, converter, u32_to_be, u32_from_be,
+    converter, u32_to_be, u32_from_be,
 };
 use internal::Sample;
 use self::internal::{ToVec, Buffer};
@@ -321,7 +321,7 @@ fn depalettize(src: &[u8], palette: &[u8], dst: &mut[u8]) {
     let mut d = 0;
     for &pi in src {
         let pidx = pi as usize * 3;
-        copy_memory(&palette[pidx..pidx+3], &mut dst[d..d+3]);
+        dst[d..d+3].copy_from_slice(&palette[pidx..pidx+3]);
         d += 3;
     }
 }
@@ -440,8 +440,8 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                                      c0, c1, c2, c3);
                             for i in 0 .. redw[pass] {
                                 let tgt = tgt_px(i, j, dc.w) * tgt_chans;
-                                copy_memory(&redline8[redi .. redi+tgt_chans],
-                                            &mut result8[tgt .. tgt+tgt_chans]);
+                                result8[tgt .. tgt+tgt_chans]
+                                    .copy_from_slice(&redline8[redi .. redi+tgt_chans]);
                                 redi += tgt_chans;
                             }
                         } else {
@@ -451,8 +451,8 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
                                       c0, c1, c2, c3);
                             for i in 0 .. redw[pass] {
                                 let tgt = tgt_px(i, j, dc.w) * tgt_chans;
-                                copy_memory(&redline16[redi .. redi+tgt_chans],
-                                            &mut result16[tgt .. tgt+tgt_chans]);
+                                result16[tgt .. tgt+tgt_chans]
+                                    .copy_from_slice(&redline16[redi .. redi+tgt_chans]);
                                 redi += tgt_chans;
                             }
                         }
@@ -469,9 +469,9 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
 
 fn bpc8_from_bytes(src: &[u8], bpc: usize, tgt: &mut[u8]) {
     match bpc {
-        8 => copy_memory(&src, &mut tgt[..src.len()]),  // This copy is unnecessary, but
-                                                        // it's hard to find nice way to
-                                                        // avoid it.
+        8 => tgt[..src.len()].copy_from_slice(&src),  // This copy is unnecessary, but
+                                                      // it's hard to find nice way to
+                                                      // avoid it.
         16 => {
             let mut s = 0;
             let mut t = 0;
