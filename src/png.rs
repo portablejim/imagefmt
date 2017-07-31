@@ -802,7 +802,7 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> ::Result<()> {
         ti += tgt_linesz;
     }
 
-    let mut zlibenc = ZlibEncoder::new(&filtered_image[..], Compression::Fast);
+    let mut zlibenc = ZlibEncoder::new(&filtered_image[..], Compression::Best);
     let mut compressed = [0u8; 1024*32];
 
     loop {
