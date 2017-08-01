@@ -1,11 +1,10 @@
 // Copyright (c) 2014-2015 Tero Hänninen, license: MIT
 
-extern crate flate2;
 extern crate deflate;
+extern crate inflate;
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::iter::{repeat};
 use std::mem::{self, size_of};
-use self::flate2::read::ZlibDecoder;
 use {
     Image, Info, ColFmt, ColType,
     converter, u32_to_be, u32_from_be,
@@ -353,7 +352,7 @@ fn read_idat_stream<R: Read>(dc: &mut PngDecoder<R>, len: &mut usize, palette: &
     let (convert16, c0, c1, c2, c3) = try!(converter::<u16>(dc.src_fmt, dc.tgt_fmt));
 
     let compressed_data = try!(read_idat_chunks(dc, len));
-    let mut zlib = ZlibDecoder::new(&compressed_data[..]);
+    let mut zlib = &*inflate::inflate_bytes_zlib(&compressed_data[..]).expect("Error decoding stream");
 
     match dc.ilace {
         PngInterlace::None => {
