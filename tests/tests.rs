@@ -1,5 +1,5 @@
 extern crate imagefmt;
-use imagefmt::{Image, ColFmt};
+use imagefmt::{Image, ColFmt, ColType};
 
 fn equal<T: PartialEq>(pics: &[&Image<T>]) -> bool {
     if pics.len() < 2 { assert!(false) }
@@ -39,6 +39,14 @@ fn png_tga_bmp() {
         let c = imagefmt::read(&format!("{}{}.bmp", bmp_path, name), ColFmt::RGBA).unwrap();
         assert!(equal(&[&a, &b, &c]));
     }
+}
+
+#[test]
+fn png_save() {
+    let a = imagefmt::read("tests/pngsuite/basn6a08.png", ColFmt::RGBA).unwrap();
+    imagefmt::write("tests/temp/testa.png", a.w, a.h, ColFmt::RGBA, &a.buf, ColType::ColorAlpha).unwrap();
+    let b = imagefmt::read("tests/temp/testa.png", ColFmt::RGBA).unwrap();
+    assert!(equal(&[&a, &b]));
 }
 
 #[test]
