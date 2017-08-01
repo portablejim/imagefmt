@@ -1,11 +1,11 @@
 // Copyright (c) 2014-2015 Tero Hänninen, license: MIT
 
 extern crate flate2;
+extern crate deflate;
 use std::io::{Read, Write, Seek, SeekFrom};
 use std::iter::{repeat};
 use std::mem::{self, size_of};
-use self::flate2::read::{ZlibDecoder, ZlibEncoder};
-use self::flate2::Compression;
+use self::flate2::read::ZlibDecoder;
 use {
     Image, Info, ColFmt, ColType,
     converter, u32_to_be, u32_from_be,
@@ -802,18 +802,17 @@ fn write_image_data<W: Write>(ec: &mut PngEncoder<W>) -> ::Result<()> {
         ti += tgt_linesz;
     }
 
-    let mut zlibenc = ZlibEncoder::new(&filtered_image[..], Compression::Fast);
-    let mut compressed = [0u8; 1024*32];
+    let mut zlibenc = deflate::write::ZlibEncoder::new(Vec::new(), deflate::Compression::Fast);
+    zlibenc.write_all(&filtered_image).expect("Write error");
+    let compressed = zlibenc.finish().expect("Failed to finish the encoding");
 
-    loop {
-        let n = try!(zlibenc.read(&mut compressed[..]));
-        if n == 0 { break }
+    for idat_chunk in compressed.chunks(1024*32) {
         ec.crc.put(b"IDAT");
-        ec.crc.put(&compressed[..n]);
+        ec.crc.put(&compressed);
         let crc = &ec.crc.finish_be();
-        try!(ec.stream.write_all(&u32_to_be(n as u32)[..]));
+        try!(ec.stream.write_all(&u32_to_be(idat_chunk.len() as u32)));
         try!(ec.stream.write_all(b"IDAT"));
-        try!(ec.stream.write_all(&compressed[..n]));
+        try!(ec.stream.write_all(&compressed));
         try!(ec.stream.write_all(crc));
     }
 
